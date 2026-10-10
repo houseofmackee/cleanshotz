@@ -845,7 +845,7 @@ impl EditorController {
             separator();
             item("Save as Preset…", BG_SAVE);
             if let Some(i) = saved_index {
-                item(&format!("Delete “{}”", presets[i].name), BG_DELETE);
+                item(&t!("Delete “{name}”", name = presets[i].name), BG_DELETE);
             }
         }
         popup.selectItemWithTag(selected);
@@ -1000,19 +1000,20 @@ impl EditorController {
         let base = &self.ivars().base;
         let count = session.doc.annotations.len();
         let annotations = match count {
-            0 => "no annotations".to_string(),
-            1 => "1 annotation".to_string(),
-            n => format!("{n} annotations"),
+            0 => t!("no annotations"),
+            1 => t!("1 annotation"),
+            n => t!("{n} annotations", n),
         };
         crate::ui::access::describe(
             canvas,
             // SAFETY: reading an AppKit constant.
             unsafe { objc2_app_kit::NSAccessibilityImageRole },
-            &format!(
-                "Image, {} by {} points, {annotations}. Tool: {}",
-                base.width.round(),
-                base.height.round(),
-                session.tool.title()
+            &t!(
+                "Image, {width} by {height} points, {annotations}. Tool: {tool}",
+                width = base.width.round(),
+                height = base.height.round(),
+                annotations,
+                tool = crate::i18n::tr(session.tool.title()),
             ),
             Some(&t!(
                 "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions."
@@ -1339,9 +1340,9 @@ impl EditorController {
                         let n = editor.ivars().session.borrow_mut().add_redactions(&rects);
                         editor.refresh();
                         let message = match n {
-                            0 => "No sensitive info found".to_string(),
-                            1 => "Redacted 1 item".to_string(),
-                            n => format!("Redacted {n} items"),
+                            0 => t!("No sensitive info found"),
+                            1 => t!("Redacted 1 item"),
+                            n => t!("Redacted {n} items", n),
                         };
                         crate::ui::toast::show(mtm, &message);
                     }

@@ -301,8 +301,11 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   through the accessibility API.
 - Localization: `i18n::tr` looks text up by its English wording; alerts,
   toasts, menus, Settings and tool names translate where they are shown,
-  and `t!` marks the rest. `cargo xtask strings` extracts the template.
-  Runtime-assembled messages are not translated yet.
+  and `t!` marks the rest. Messages assembled at runtime use `t!` with
+  named placeholders (`t!("{n} captures", n)`), filled in after
+  translation; dates and file sizes use the system formatters. `cargo
+  xtask strings` extracts the template. Error details from the CLI, URL
+  scheme, pipelines and uploads stay English.
 - Performance (release build, measured): idle 0% CPU with no idle
   wakeups; ready about 0.15 s after launch; a full-resolution fullscreen
   capture is saved in about 0.28 s (mostly PNG encoding); memory stays

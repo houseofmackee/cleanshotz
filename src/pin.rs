@@ -139,10 +139,10 @@ fn describe_pin(view: &PinView, id: u64, size: NSSize) {
         view,
         // SAFETY: reading an AppKit constant.
         unsafe { objc2_app_kit::NSAccessibilityImageRole },
-        &format!(
-            "Pinned screenshot, {} by {} points",
-            size.width.round(),
-            size.height.round()
+        &t!(
+            "Pinned screenshot, {width} by {height} points",
+            width = size.width.round(),
+            height = size.height.round(),
         ),
         Some(&t!(
             "Floats above other windows. Drag to move; use the actions to copy, zoom or close."

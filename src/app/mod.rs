@@ -209,7 +209,7 @@ impl AppDelegate {
                 Ok(()) => tracing::info!(?action, shortcut = text, "hotkey registered"),
                 Err(e) => {
                     tracing::warn!(?action, shortcut = text, error = %e, "hotkey not registered");
-                    errors.push(format!("{} ({text}): {e}", action.title()));
+                    errors.push(format!("{} ({text}): {e}", crate::i18n::tr(action.title())));
                 }
             }
         }
@@ -220,9 +220,9 @@ impl AppDelegate {
         alert::show(
             self.mtm(),
             "Some shortcuts could not be registered",
-            &format!(
-                "{}\n\nChoose other shortcuts in Settings > Shortcuts.",
-                errors.join("\n")
+            &t!(
+                "{errors}\n\nChoose other shortcuts in Settings > Shortcuts.",
+                errors = errors.join("\n")
             ),
             &["OK"],
         );
@@ -284,7 +284,10 @@ impl AppDelegate {
                 alert::show(
                     self.mtm(),
                     "Settings were not reloaded",
-                    &format!("{e}\n\nThe previous settings are still in use."),
+                    &t!(
+                        "{error}\n\nThe previous settings are still in use.",
+                        error = e
+                    ),
                     &["OK"],
                 );
             }

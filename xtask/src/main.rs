@@ -512,7 +512,8 @@ fn strings() -> Result<()> {
     let mut out = String::from(
         "/* The English text CleanShotZ shows, collected by `cargo xtask strings`.\n   \
          To translate: copy this file to resources/<language>.lproj/Localizable.strings\n   \
-         (for example de.lproj) and translate the right-hand sides. */\n",
+         (for example de.lproj) and translate the right-hand sides. Keep each\n   \
+         {placeholder} as it is; they may move within the sentence. */\n",
     );
     for (text, sources) in &found {
         let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
@@ -549,6 +550,13 @@ fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
 /// matches the .strings format for the escapes used (`\"`, `\\`, `\n`).
 fn extract_strings(source: &str, titles: bool) -> Vec<String> {
     let source = source.split("#[cfg(test)]").next().unwrap_or(source);
+    // Comments hold examples, not text the app shows.
+    let source: String = source
+        .lines()
+        .filter(|line| !line.trim_start().starts_with("//"))
+        .collect::<Vec<_>>()
+        .join("\n");
+    let source = source.as_str();
     let mut out = Vec::new();
     // Whole names only: `t!(` must not match the end of `format!(`.
     let calls = |pattern: &str| -> Vec<usize> {

@@ -270,8 +270,8 @@ impl HistoryWindow {
             .collect();
         if let Some(count) = ivars.count.get() {
             let text = match items.len() {
-                1 => "1 capture".to_string(),
-                n => format!("{n} captures"),
+                1 => t!("1 capture"),
+                n => t!("{n} captures", n),
             };
             count.setStringValue(&NSString::from_str(&text));
         }
@@ -513,17 +513,11 @@ impl HistoryWindow {
                     &NSColor::whiteColor(),
                 );
             }
-            let when = chrono::DateTime::from_timestamp(item.entry.created, 0)
-                .map(|t| {
-                    t.with_timezone(&chrono::Local)
-                        .format("%b %-d, %H:%M")
-                        .to_string()
-                })
-                .unwrap_or_default();
+            let when = crate::i18n::date(item.entry.created, true);
             let label = if item.exists {
                 when
             } else {
-                format!("{when} · file missing")
+                t!("{when} · file missing", when)
             };
             draw::draw_text(
                 &label,
@@ -668,34 +662,27 @@ impl HistoryWindow {
     }
 }
 
-/// Copies an entry: screenshots as PNG data, recordings as files.
 /// What VoiceOver says for a history item: kind, size or length, date.
 fn item_label(item: &Item) -> String {
     let e = &item.entry;
-    let when = chrono::DateTime::from_timestamp(e.created, 0)
-        .map(|t| {
-            t.with_timezone(&chrono::Local)
-                .format("%-d %B %Y at %H:%M")
-                .to_string()
-        })
-        .unwrap_or_default();
-    let what = match e.kind {
-        Kind::Image => format!("Screenshot, {} by {} pixels", e.width, e.height),
-        Kind::Video | Kind::Gif => {
-            let kind = if e.kind == Kind::Gif {
-                "GIF"
-            } else {
-                "Recording"
-            };
-            let length = e
-                .duration
-                .map(|d| format!(", {}", crate::quick_access::format_duration(d)))
-                .unwrap_or_default();
-            format!("{kind}{length}")
-        }
+    let when = crate::i18n::date(e.created, false);
+    let length = || e.duration.map(crate::quick_access::format_duration);
+    let what = match (e.kind, length()) {
+        (Kind::Image, _) => t!(
+            "Screenshot, {width} by {height} pixels",
+            width = e.width,
+            height = e.height
+        ),
+        (Kind::Gif, Some(length)) => t!("GIF, {length}", length),
+        (Kind::Gif, None) => t!("GIF"),
+        (Kind::Video, Some(length)) => t!("Recording, {length}", length),
+        (Kind::Video, None) => t!("Recording"),
     };
-    let missing = if item.exists { "" } else { ", file missing" };
-    format!("{what}, {when}{missing}")
+    if item.exists {
+        t!("{what}, {when}", what, when)
+    } else {
+        t!("{what}, {when}, file missing", what, when)
+    }
 }
 
 fn copy(entry: &Entry) {

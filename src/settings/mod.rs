@@ -235,7 +235,12 @@ fn recorded(_mtm: MainThreadMarker, action: Action, outcome: Outcome) {
             });
             let note = taken_from
                 .iter()
-                .map(|a| format!("Removed it from {}.", a.title()))
+                .map(|a| {
+                    t!(
+                        "Removed it from {action}.",
+                        action = crate::i18n::tr(a.title())
+                    )
+                })
                 .collect::<Vec<_>>()
                 .join(" ");
             (errors, note)

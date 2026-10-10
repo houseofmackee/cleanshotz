@@ -1,9 +1,16 @@
 /* The English text CleanShotZ shows, collected by `cargo xtask strings`.
    To translate: copy this file to resources/<language>.lproj/Localizable.strings
-   (for example de.lproj) and translate the right-hand sides. */
+   (for example de.lproj) and translate the right-hand sides. Keep each
+   {placeholder} as it is; they may move within the sentence. */
 
 /* src/settings/mod.rs */
 "% (100 is lossless)" = "% (100 is lossless)";
+
+/* src/editor/window.rs */
+"1 annotation" = "1 annotation";
+
+/* src/history/window.rs */
+"1 capture" = "1 capture";
 
 /* src/settings/mod.rs */
 "A pipeline replaces copying, saving and the thumbnail above." = "A pipeline replaces copying, saving and the thumbnail above.";
@@ -33,6 +40,9 @@
 "Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
              Recording, then try again. macOS may ask you to reopen the app." = "Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
              Recording, then try again. macOS may ask you to reopen the app.";
+
+/* src/record/overlays.rs */
+"Allow camera access, then record again to include the camera" = "Allow camera access, then record again to include the camera";
 
 /* src/record/session.rs */
 "Allow microphone access, then record again to include it" = "Allow microphone access, then record again to include it";
@@ -78,6 +88,9 @@
 
 /* src/action.rs */
 "Camera" = "Camera";
+
+/* src/record/overlays.rs */
+"Camera access is off in System Settings > Privacy & Security" = "Camera access is off in System Settings > Privacy & Security";
 
 /* src/settings/mod.rs */
 "Camera shape:" = "Camera shape:";
@@ -160,6 +173,9 @@
 /* src/settings/mod.rs */
 "Command:" = "Command:";
 
+/* src/ocr/mod.rs */
+"Copied: {text}" = "Copied: {text}";
+
 /* src/settings/mod.rs */
 "Copy to the clipboard" = "Copy to the clipboard";
 
@@ -189,6 +205,9 @@
 
 /* src/settings/mod.rs */
 "Cursor highlight" = "Cursor highlight";
+
+/* src/editor/window.rs */
+"Delete “{name}”" = "Delete “{name}”";
 
 /* src/video_editor/crop.rs */
 "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop." = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
@@ -238,7 +257,7 @@
 /* src/settings/mod.rs */
 "From api.imgur.com/oauth2/addclient" = "From api.imgur.com/oauth2/addclient";
 
-/* src/settings/mod.rs */
+/* src/history/window.rs, src/settings/mod.rs */
 "GIF" = "GIF";
 
 /* src/settings/mod.rs */
@@ -246,6 +265,9 @@
 
 /* src/settings/mod.rs */
 "GIF width:" = "GIF width:";
+
+/* src/history/window.rs */
+"GIF, {length}" = "GIF, {length}";
 
 /* src/settings/mod.rs */
 "General" = "General";
@@ -277,6 +299,9 @@
 /* src/settings/mod.rs */
 "History" = "History";
 
+/* src/editor/window.rs */
+"Image, {width} by {height} points, {annotations}. Tool: {tool}" = "Image, {width} by {height} points, {annotations}. Tool: {tool}";
+
 /* src/settings/mod.rs */
 "Imgur" = "Imgur";
 
@@ -291,6 +316,9 @@
 
 /* src/settings/mod.rs */
 "Instead, run:" = "Instead, run:";
+
+/* src/settings/recorder.rs */
+"Invalid: {shortcut}" = "Invalid: {shortcut}";
 
 /* src/settings/mod.rs */
 "JPEG" = "JPEG";
@@ -361,6 +389,9 @@
 /* src/capture/overlay.rs */
 "Move the pointer over a window and click to capture it. Escape cancels." = "Move the pointer over a window and click to capture it. Escape cancels.";
 
+/* src/editor/window.rs */
+"No sensitive info found" = "No sensitive info found";
+
 /* src/ocr/mod.rs */
 "No text found" = "No text found";
 
@@ -421,6 +452,9 @@
 /* src/editor/window.rs */
 "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions." = "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions.";
 
+/* src/pin.rs */
+"Pinned screenshot, {width} by {height} points" = "Pinned screenshot, {width} by {height} points";
+
 /* src/capture/output.rs */
 "Pipeline not run: see the settings" = "Pipeline not run: see the settings";
 
@@ -463,20 +497,35 @@
 /* src/action.rs */
 "Record Screen" = "Record Screen";
 
-/* src/settings/mod.rs */
+/* src/settings/recorder.rs */
+"Record Shortcut" = "Record Shortcut";
+
+/* src/history/window.rs, src/settings/mod.rs */
 "Recording" = "Recording";
 
 /* src/record/session.rs */
 "Recording saved" = "Recording saved";
 
+/* src/history/window.rs, src/quick_access.rs */
+"Recording, {length}" = "Recording, {length}";
+
 /* src/editor/tools.rs */
 "Rectangle" = "Rectangle";
+
+/* src/editor/window.rs */
+"Redacted 1 item" = "Redacted 1 item";
+
+/* src/editor/window.rs */
+"Redacted {n} items" = "Redacted {n} items";
 
 /* src/settings/mod.rs */
 "Region:" = "Region:";
 
 /* src/action.rs */
 "Reload Settings" = "Reload Settings";
+
+/* src/settings/mod.rs */
+"Removed it from {action}." = "Removed it from {action}.";
 
 /* src/action.rs */
 "Restore Recently Closed" = "Restore Recently Closed";
@@ -508,11 +557,23 @@
 /* src/app/mod.rs */
 "Screen Recording permission is needed" = "Screen Recording permission is needed";
 
+/* src/history/window.rs, src/quick_access.rs */
+"Screenshot, {width} by {height} pixels" = "Screenshot, {width} by {height} pixels";
+
 /* src/settings/mod.rs */
 "Screenshots" = "Screenshots";
 
 /* src/settings/mod.rs */
 "Script" = "Script";
+
+/* src/scroll/session.rs */
+"Scroll down or sideways slowly, then click Done" = "Scroll down or sideways slowly, then click Done";
+
+/* src/scroll/session.rs */
+"Scrolled too fast · scroll back a little" = "Scrolled too fast · scroll back a little";
+
+/* src/scroll/session.rs */
+"Scrolled too fast · scroll back up a little" = "Scrolled too fast · scroll back up a little";
 
 /* src/action.rs */
 "Scrolling Capture" = "Scrolling Capture";
@@ -525,6 +586,9 @@
 
 /* src/editor/tools.rs */
 "Select" = "Select";
+
+/* src/scroll/session.rs */
+"Select the area that scrolls · Esc to cancel" = "Select the area that scrolls · Esc to cancel";
 
 /* src/action.rs */
 "Self-Timer" = "Self-Timer";
@@ -564,6 +628,9 @@
 
 /* src/settings/mod.rs */
 "Show:" = "Show:";
+
+/* src/scroll/session.rs */
+"Size limit reached · click Done" = "Size limit reached · click Done";
 
 /* src/app/mod.rs */
 "Some shortcuts could not be registered" = "Some shortcuts could not be registered";
@@ -652,6 +719,9 @@
 /* src/settings/mod.rs */
 "https://example.com/upload" = "https://example.com/upload";
 
+/* src/editor/window.rs */
+"no annotations" = "no annotations";
+
 /* src/settings/mod.rs */
 "pixels at most" = "pixels at most";
 
@@ -664,8 +734,47 @@
 /* src/settings/mod.rs */
 "text (the response), json:path.to.link, or header:Location." = "text (the response), json:path.to.link, or header:Location.";
 
+/* src/video_editor/window.rs */
+"up to {size}" = "up to {size}";
+
 /* src/settings/mod.rs */
 "{date} and {time} are replaced with the capture's date and time." = "{date} and {time} are replaced with the capture's date and time.";
+
+/* src/app/mod.rs */
+"{errors}\n\nChoose other shortcuts in Settings > Shortcuts." = "{errors}\n\nChoose other shortcuts in Settings > Shortcuts.";
+
+/* src/app/mod.rs */
+"{error}\n\nThe previous settings are still in use." = "{error}\n\nThe previous settings are still in use.";
+
+/* src/editor/mod.rs */
+"{file} is not an image CleanShotZ can open." = "{file} is not an image CleanShotZ can open.";
+
+/* src/quick_access.rs */
+"{label} in Quick Access" = "{label} in Quick Access";
+
+/* src/scroll/session.rs */
+"{length} px tall · keep scrolling, then click Done" = "{length} px tall · keep scrolling, then click Done";
+
+/* src/scroll/session.rs */
+"{length} px wide · keep scrolling sideways, then click Done" = "{length} px wide · keep scrolling sideways, then click Done";
+
+/* src/editor/window.rs */
+"{n} annotations" = "{n} annotations";
+
+/* src/history/window.rs */
+"{n} captures" = "{n} captures";
+
+/* src/video_editor/window.rs */
+"{speed}× Speed" = "{speed}× Speed";
+
+/* src/history/window.rs */
+"{what}, {when}" = "{what}, {when}";
+
+/* src/history/window.rs */
+"{what}, {when}, file missing" = "{what}, {when}, file missing";
+
+/* src/history/window.rs */
+"{when} · file missing" = "{when} · file missing";
 
 /* src/settings/mod.rs */
 "~/bin/upload.sh" = "~/bin/upload.sh";

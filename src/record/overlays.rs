@@ -108,10 +108,14 @@ impl Camera {
             Status::Granted => {}
             Status::NotDetermined => {
                 Permission::Camera.request();
-                return Err("Allow camera access, then record again to include the camera".into());
+                return Err(t!(
+                    "Allow camera access, then record again to include the camera"
+                ));
             }
             Status::Denied => {
-                return Err("Camera access is off in System Settings > Privacy & Security".into());
+                return Err(t!(
+                    "Camera access is off in System Settings > Privacy & Security"
+                ));
             }
         }
         // SAFETY: reading AVFoundation constants and creating capture objects.

@@ -554,13 +554,16 @@ CleanShotZ looks up the text it shows by its English wording in
 `cargo xtask strings` writes the current English text to
 `resources/en.lproj/Localizable.strings`. To add a language, copy that file
 to, for example, `resources/de.lproj/Localizable.strings` and translate the
-right-hand side of each line (keep placeholders such as `{date}`). Bundles
+right-hand side of each line. Keep placeholders such as `{n}` or `{file}`
+as they are; a translation may move them within the sentence. Bundles
 include every `.lproj` folder; macOS picks the language from System
 Settings > General > Language & Region (or per app, under Applications).
 
-Menus, alerts, notifications, the Settings window, tool names and VoiceOver
-descriptions are covered. Text assembled at runtime (such as file names in
-messages) is still English.
+Menus, alerts, notifications, the Settings window, tool names, status text
+and VoiceOver descriptions are covered, and dates and file sizes follow the
+system's format for the language. Error details from the command line, the
+URL scheme, pipelines and uploads stay in English. Plurals have one form for
+2 and more (`{n} captures`), which fits most but not all languages.
 
 ## License
 

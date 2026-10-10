@@ -314,16 +314,20 @@ fn show(mtm: MainThreadMarker, item: Rc<Item>) {
     });
     layout();
     panel.orderFrontRegardless();
-    access::announce(mtm, &format!("{label} in Quick Access"));
+    access::announce(mtm, &t!("{label} in Quick Access", label));
 }
 
 /// What VoiceOver says for a card.
 fn card_label(item: &Item) -> String {
     match item.video.get() {
-        Some(duration) => format!("Recording, {}", format_duration(duration)),
+        Some(duration) => t!("Recording, {length}", length = format_duration(duration)),
         None => {
             let (w, h) = image::pixel_size(&item.image.borrow());
-            format!("Screenshot, {w} by {h} pixels")
+            t!(
+                "Screenshot, {width} by {height} pixels",
+                width = w,
+                height = h
+            )
         }
     }
 }

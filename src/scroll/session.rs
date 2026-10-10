@@ -121,7 +121,7 @@ pub fn start(
         freeze: false,
         windows: Vec::new(),
         click_selects_display: false,
-        hint: Some("Select the area that scrolls · Esc to cancel".into()),
+        hint: Some(t!("Select the area that scrolls · Esc to cancel")),
     };
     STATE.with(|s| *s.borrow_mut() = State::Selecting);
     overlay::begin(mtm, displays, options, move |selection| match selection {
@@ -271,19 +271,19 @@ fn on_report(report: Report, settings: &CaptureSettings) {
                 }
                 active.axis = axis;
                 let message = match (push, axis) {
-                    (Push::Full, _) => "Size limit reached · click Done".to_string(),
+                    (Push::Full, _) => t!("Size limit reached · click Done"),
                     (Push::NoMatch, Some(Axis::Horizontal)) => {
-                        "Scrolled too fast · scroll back a little".to_string()
+                        t!("Scrolled too fast · scroll back a little")
                     }
-                    (Push::NoMatch, _) => "Scrolled too fast · scroll back up a little".to_string(),
-                    (_, Some(axis)) => {
-                        let (dimension, direction) = match axis {
-                            Axis::Vertical => ("tall", "scrolling"),
-                            Axis::Horizontal => ("wide", "scrolling sideways"),
-                        };
-                        format!("{length} px {dimension} · keep {direction}, then click Done")
+                    (Push::NoMatch, _) => t!("Scrolled too fast · scroll back up a little"),
+                    (_, Some(Axis::Vertical)) => {
+                        t!("{length} px tall · keep scrolling, then click Done", length)
                     }
-                    (_, None) => "Scroll down or sideways slowly, then click Done".to_string(),
+                    (_, Some(Axis::Horizontal)) => t!(
+                        "{length} px wide · keep scrolling sideways, then click Done",
+                        length
+                    ),
+                    (_, None) => t!("Scroll down or sideways slowly, then click Done"),
                 };
                 if matches!(push, Push::Added(_) | Push::First) {
                     active.last_added = Instant::now();

@@ -51,7 +51,7 @@ pub fn copy_text(image: CFRetained<CGImage>, line_breaks: Option<bool>) {
                 Ok(text) => {
                     copy_string(&text);
                     tracing::info!(characters = text.chars().count(), "text copied");
-                    crate::ui::toast::show(mtm, &format!("Copied: {}", preview(&text)));
+                    crate::ui::toast::show(mtm, &t!("Copied: {text}", text = preview(&text)));
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "text recognition failed");

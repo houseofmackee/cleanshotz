@@ -396,7 +396,7 @@ impl VideoEditor {
         row(&mute, 190.0, 64.0, top);
         let speeds: Vec<String> = plan::SPEEDS
             .iter()
-            .map(|s| format!("{}× Speed", format_speed(*s)))
+            .map(|s| t!("{speed}× Speed", speed = format_speed(*s)))
             .collect();
         let speed_titles: Vec<&str> = speeds.iter().map(String::as_str).collect();
         let speed = popup(&speed_titles, sel!(speedChanged:));
@@ -508,9 +508,9 @@ impl VideoEditor {
             // Encoders stay under the target bitrate, often far under on
             // simple content such as a mostly still screen.
             Format::Mp4 if plan.needs_reencode(ivars.size) => {
-                format!("up to {}", format_bytes(bytes))
+                t!("up to {size}", size = crate::i18n::bytes(bytes))
             }
-            Format::Mp4 => format!("≈ {}", format_bytes(bytes)),
+            Format::Mp4 => format!("≈ {}", crate::i18n::bytes(bytes)),
             Format::Gif => String::new(),
         };
         if let Some(label) = ivars.estimate.get() {
@@ -677,18 +677,6 @@ fn format_speed(speed: f64) -> String {
     text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-/// `840 KB`, `12.4 MB`, `1.2 GB`
-fn format_bytes(bytes: u64) -> String {
-    let b = bytes as f64;
-    if b < 1e6 {
-        format!("{:.0} KB", (b / 1e3).max(1.0))
-    } else if b < 1e9 {
-        format!("{:.1} MB", b / 1e6)
-    } else {
-        format!("{:.2} GB", b / 1e9)
-    }
-}
-
 /// `m:ss.s`
 fn format_length(seconds: f64) -> String {
     let tenths = (seconds.max(0.0) * 10.0).round() as u64;
@@ -700,13 +688,10 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formats_speeds_and_sizes() {
+    fn formats_speeds() {
         assert_eq!(format_speed(0.5), "0.5");
         assert_eq!(format_speed(1.0), "1");
         assert_eq!(format_speed(1.25), "1.25");
-        assert_eq!(format_bytes(840_000), "840 KB");
-        assert_eq!(format_bytes(12_400_000), "12.4 MB");
-        assert_eq!(format_bytes(1_234_000_000), "1.23 GB");
     }
 
     #[test]

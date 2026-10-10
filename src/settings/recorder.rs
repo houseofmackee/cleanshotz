@@ -208,8 +208,8 @@ impl ShortcutRecorder {
         let shortcut = self.ivars().shortcut.borrow().clone();
         let title = match Shortcut::parse(&shortcut) {
             Ok(s) => s.to_string(),
-            Err(_) if shortcut.trim().is_empty() => "Record Shortcut".to_string(),
-            Err(_) => format!("Invalid: {shortcut}"),
+            Err(_) if shortcut.trim().is_empty() => t!("Record Shortcut"),
+            Err(_) => t!("Invalid: {shortcut}", shortcut),
         };
         self.set_title(&title);
     }

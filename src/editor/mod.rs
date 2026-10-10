@@ -147,7 +147,12 @@ pub fn open_file(mtm: MainThreadMarker, path: &Path) {
                     },
                 )
             })
-            .ok_or_else(|| format!("{} is not an image CleanShotZ can open.", path.display()))
+            .ok_or_else(|| {
+                t!(
+                    "{file} is not an image CleanShotZ can open.",
+                    file = path.display()
+                )
+            })
     };
     match result {
         Ok((base, doc, source)) => open(mtm, base, doc, source, &title_for(path)),
