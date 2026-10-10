@@ -413,7 +413,7 @@ impl EditorController {
             let i = i as isize;
             let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
                 &NSString::from_str(tool.symbol()),
-                Some(&NSString::from_str(tool.title())),
+                Some(&NSString::from_str(&crate::i18n::tr(tool.title()))),
             );
             match image {
                 Some(image) => tools.setImage_forSegment(Some(&image), i),
@@ -423,7 +423,7 @@ impl EditorController {
             tools.setToolTip_forSegment(
                 Some(&NSString::from_str(&format!(
                     "{} ({})",
-                    tool.title(),
+                    crate::i18n::tr(tool.title()),
                     tool.shortcut().to_ascii_uppercase()
                 ))),
                 i,
@@ -1014,7 +1014,9 @@ impl EditorController {
                 base.height.round(),
                 session.tool.title()
             ),
-            Some("Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions."),
+            Some(&t!(
+                "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions."
+            )),
         );
     }
 

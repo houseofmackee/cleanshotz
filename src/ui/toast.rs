@@ -21,6 +21,7 @@ thread_local! {
 
 /// Shows `message` for about two seconds, replacing any toast on screen.
 pub fn show(mtm: MainThreadMarker, message: &str) {
+    let message = &crate::i18n::tr(message);
     // VoiceOver users cannot see the toast.
     super::access::announce(mtm, message);
     CURRENT.with(|c| {

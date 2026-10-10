@@ -180,14 +180,11 @@ pub fn begin(
         surface.window.makeFirstResponder(Some(&surface.view));
     }
     NSCursor::crosshairCursor().set();
-    let instructions = session.hint.clone().unwrap_or_else(|| {
-        match session.mode {
-            Mode::Window => {
-                "Move the pointer over a window and click to capture it. Escape cancels."
-            }
-            _ => "Drag to select an area. Space picks a window instead. Escape cancels.",
+    let instructions = session.hint.clone().unwrap_or_else(|| match session.mode {
+        Mode::Window => {
+            t!("Move the pointer over a window and click to capture it. Escape cancels.")
         }
-        .to_string()
+        _ => t!("Drag to select an area. Space picks a window instead. Escape cancels."),
     });
     for surface in &session.surfaces {
         crate::ui::access::describe(

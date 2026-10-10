@@ -336,7 +336,9 @@ fn describe_card(view: &CardView, id: u64, item: &Item) {
         // SAFETY: reading an AppKit constant.
         unsafe { NSAccessibilityImageRole },
         &card_label(item),
-        Some("Quick Access thumbnail. Drag it into an app, or use the actions."),
+        Some(&t!(
+            "Quick Access thumbnail. Drag it into an app, or use the actions."
+        )),
     );
     let video = item.is_video();
     let mut list: Vec<(&str, Button)> = vec![

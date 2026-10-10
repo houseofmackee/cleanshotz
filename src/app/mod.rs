@@ -827,7 +827,7 @@ fn titled_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {
     unsafe {
         NSMenuItem::initWithTitle_action_keyEquivalent(
             NSMenuItem::alloc(mtm),
-            &NSString::from_str(title),
+            &NSString::from_str(&crate::i18n::tr(title)),
             None,
             ns_string!(""),
         )

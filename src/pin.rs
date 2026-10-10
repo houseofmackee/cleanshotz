@@ -144,7 +144,9 @@ fn describe_pin(view: &PinView, id: u64, size: NSSize) {
             size.width.round(),
             size.height.round()
         ),
-        Some("Floats above other windows. Drag to move; use the actions to copy, zoom or close."),
+        Some(&t!(
+            "Floats above other windows. Drag to move; use the actions to copy, zoom or close."
+        )),
     );
     let action =
         |name: &'static str, f: fn(MainThreadMarker, &Pin)| -> (&'static str, Box<dyn Fn()>) {

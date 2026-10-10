@@ -1,3 +1,7 @@
+// First, so its `t!` macro is visible in every module below.
+#[macro_use]
+mod i18n;
+
 mod action;
 mod app;
 mod capture;

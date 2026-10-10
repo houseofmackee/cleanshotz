@@ -531,6 +531,21 @@ Script with the command line.
 Building the actions needs Xcode (for `appintentsmetadataprocessor`); with
 only the Command Line Tools the app builds without them.
 
+## Translating
+
+CleanShotZ looks up the text it shows by its English wording in
+`resources/<language>.lproj/Localizable.strings`, falling back to English.
+`cargo xtask strings` writes the current English text to
+`resources/en.lproj/Localizable.strings`. To add a language, copy that file
+to, for example, `resources/de.lproj/Localizable.strings` and translate the
+right-hand side of each line (keep placeholders such as `{date}`). Bundles
+include every `.lproj` folder; macOS picks the language from System
+Settings > General > Language & Region (or per app, under Applications).
+
+Menus, alerts, notifications, the Settings window, tool names and VoiceOver
+descriptions are covered. Text assembled at runtime (such as file names in
+messages) is still English.
+
 ## License
 
 Licensed under either of

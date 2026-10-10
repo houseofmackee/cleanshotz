@@ -1,0 +1,671 @@
+/* The English text CleanShotZ shows, collected by `cargo xtask strings`.
+   To translate: copy this file to resources/<language>.lproj/Localizable.strings
+   (for example de.lproj) and translate the right-hand sides. */
+
+/* src/settings/mod.rs */
+"% (100 is lossless)" = "% (100 is lossless)";
+
+/* src/settings/mod.rs */
+"A pipeline replaces copying, saving and the thumbnail above." = "A pipeline replaces copying, saving and the thumbnail above.";
+
+/* src/settings/mod.rs */
+"ACL:" = "ACL:";
+
+/* src/action.rs */
+"About CleanShotZ" = "About CleanShotZ";
+
+/* src/settings/mod.rs */
+"Access key ID:" = "Access key ID:";
+
+/* src/action.rs */
+"Accessibility" = "Accessibility";
+
+/* src/settings/mod.rs */
+"After capture:" = "After capture:";
+
+/* src/settings/mod.rs */
+"All keys" = "All keys";
+
+/* src/scroll/session.rs */
+"Allow Accessibility for CleanShotZ to use Auto-scroll" = "Allow Accessibility for CleanShotZ to use Auto-scroll";
+
+/* src/app/mod.rs */
+"Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
+             Recording, then try again. macOS may ask you to reopen the app." = "Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
+             Recording, then try again. macOS may ask you to reopen the app.";
+
+/* src/record/session.rs */
+"Allow microphone access, then record again to include it" = "Allow microphone access, then record again to include it";
+
+/* src/settings/mod.rs */
+"Amazon S3" = "Amazon S3";
+
+/* src/app/mod.rs */
+"An editor window has changes that were not saved or copied." = "An editor window has changes that were not saved or copied.";
+
+/* src/action.rs */
+"Annotate Clipboard Image" = "Annotate Clipboard Image";
+
+/* src/action.rs */
+"Arrange Pinned Screenshots" = "Arrange Pinned Screenshots";
+
+/* src/editor/tools.rs */
+"Arrow" = "Arrow";
+
+/* src/settings/mod.rs */
+"Audio:" = "Audio:";
+
+/* src/settings/mod.rs */
+"Authorization:" = "Authorization:";
+
+/* src/settings/mod.rs */
+"Automatic" = "Automatic";
+
+/* src/editor/tools.rs */
+"Background" = "Background";
+
+/* src/editor/tools.rs */
+"Blur" = "Blur";
+
+/* src/settings/mod.rs */
+"Bottom left" = "Bottom left";
+
+/* src/settings/mod.rs */
+"Bottom right" = "Bottom right";
+
+/* src/settings/mod.rs */
+"Bucket:" = "Bucket:";
+
+/* src/action.rs */
+"Camera" = "Camera";
+
+/* src/settings/mod.rs */
+"Camera shape:" = "Camera shape:";
+
+/* src/settings/mod.rs */
+"Camera size:" = "Camera size:";
+
+/* src/settings/mod.rs */
+"Camera:" = "Camera:";
+
+/* src/app/mod.rs */
+"Cancel" = "Cancel";
+
+/* src/action.rs */
+"Capture Area" = "Capture Area";
+
+/* src/action.rs */
+"Capture Fullscreen" = "Capture Fullscreen";
+
+/* src/action.rs */
+"Capture History…" = "Capture History…";
+
+/* src/action.rs */
+"Capture Previous Area" = "Capture Previous Area";
+
+/* src/action.rs */
+"Capture Text" = "Capture Text";
+
+/* src/action.rs */
+"Capture Window" = "Capture Window";
+
+/* src/app/mod.rs */
+"Capture failed" = "Capture failed";
+
+/* src/settings/mod.rs */
+"Capture:" = "Capture:";
+
+/* src/settings/mod.rs */
+"Choose…" = "Choose…";
+
+/* src/settings/mod.rs */
+"Circle" = "Circle";
+
+/* src/app/mod.rs */
+"CleanShotZ could not run the URL" = "CleanShotZ could not run the URL";
+
+/* src/app/mod.rs */
+"CleanShotZ needs Screen Recording permission to capture your screen.\n\n\
+                 After granting it in System Settings, macOS may ask you to quit and reopen the app.\n\n\
+                 Other permissions (Accessibility, Microphone, Camera) are only needed for some \
+                 features and can be granted later from the Permissions menu." = "CleanShotZ needs Screen Recording permission to capture your screen.\n\n\
+                 After granting it in System Settings, macOS may ask you to quit and reopen the app.\n\n\
+                 Other permissions (Accessibility, Microphone, Camera) are only needed for some \
+                 features and can be granted later from the Permissions menu.";
+
+/* src/settings/mod.rs */
+"CleanShotZ {date} at {time}" = "CleanShotZ {date} at {time}";
+
+/* src/settings/mod.rs */
+"Click a shortcut, then press the new keys. Escape cancels; Delete removes it." = "Click a shortcut, then press the new keys. Escape cancels; Delete removes it.";
+
+/* src/settings/mod.rs */
+"Clicks" = "Clicks";
+
+/* src/settings/mod.rs */
+"Client ID:" = "Client ID:";
+
+/* src/action.rs */
+"Close All Pinned Screenshots" = "Close All Pinned Screenshots";
+
+/* src/settings/mod.rs */
+"Close after dragging into an app" = "Close after dragging into an app";
+
+/* src/settings/mod.rs */
+"Close after:" = "Close after:";
+
+/* src/settings/mod.rs */
+"Codes such as en-US, de-DE, ja-JP, in order of preference." = "Codes such as en-US, de-DE, ja-JP, in order of preference.";
+
+/* src/settings/mod.rs */
+"Command:" = "Command:";
+
+/* src/settings/mod.rs */
+"Copy to the clipboard" = "Copy to the clipboard";
+
+/* src/settings/mod.rs */
+"Correct words with a dictionary" = "Correct words with a dictionary";
+
+/* src/app/mod.rs, src/settings/mod.rs */
+"Could not change Launch at Login" = "Could not change Launch at Login";
+
+/* src/record/session.rs */
+"Could not create the GIF" = "Could not create the GIF";
+
+/* src/settings/mod.rs */
+"Could not save to the Keychain" = "Could not save to the Keychain";
+
+/* src/record/session.rs */
+"Could not start recording" = "Could not start recording";
+
+/* src/settings/mod.rs */
+"Countdown:" = "Countdown:";
+
+/* src/editor/tools.rs */
+"Counter" = "Counter";
+
+/* src/editor/tools.rs */
+"Crop" = "Crop";
+
+/* src/settings/mod.rs */
+"Cursor highlight" = "Cursor highlight";
+
+/* src/video_editor/crop.rs */
+"Drag over the video to choose the area to keep. Return when done, Escape to remove the crop." = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
+
+/* src/capture/overlay.rs */
+"Drag to select an area. Space picks a window instead. Escape cancels." = "Drag to select an area. Space picks a window instead. Escape cancels.";
+
+/* src/editor/tools.rs */
+"Ellipse" = "Ellipse";
+
+/* src/settings/mod.rs */
+"Endpoint:" = "Endpoint:";
+
+/* src/settings/mod.rs */
+"Every setting is also in this file. After editing it, choose Reload Settings in the menu." = "Every setting is also in this file. After editing it, choose Reload Settings in the menu.";
+
+/* src/video_editor/window.rs */
+"Exporting…" = "Exporting…";
+
+/* src/settings/mod.rs */
+"File field:" = "File field:";
+
+/* src/settings/mod.rs */
+"File name:" = "File name:";
+
+/* src/record/session.rs */
+"Finishing recording…" = "Finishing recording…";
+
+/* src/pin.rs */
+"Floats above other windows. Drag to move; use the actions to copy, zoom or close." = "Floats above other windows. Drag to move; use the actions to copy, zoom or close.";
+
+/* src/settings/mod.rs */
+"Folder:" = "Folder:";
+
+/* src/settings/mod.rs */
+"For R2, MinIO and others, for example https://<account>.r2.cloudflarestorage.com." = "For R2, MinIO and others, for example https://<account>.r2.cloudflarestorage.com.";
+
+/* src/settings/mod.rs */
+"Format:" = "Format:";
+
+/* src/settings/mod.rs */
+"Frame rate:" = "Frame rate:";
+
+/* src/settings/mod.rs */
+"Freeze the screen while selecting" = "Freeze the screen while selecting";
+
+/* src/settings/mod.rs */
+"From api.imgur.com/oauth2/addclient" = "From api.imgur.com/oauth2/addclient";
+
+/* src/settings/mod.rs */
+"GIF" = "GIF";
+
+/* src/settings/mod.rs */
+"GIF frame rate:" = "GIF frame rate:";
+
+/* src/settings/mod.rs */
+"GIF width:" = "GIF width:";
+
+/* src/settings/mod.rs */
+"General" = "General";
+
+/* src/app/mod.rs */
+"Grant Access" = "Grant Access";
+
+/* src/settings/mod.rs */
+"H.264" = "H.264";
+
+/* src/settings/mod.rs */
+"HEVC" = "HEVC";
+
+/* src/settings/mod.rs */
+"HTTP endpoint" = "HTTP endpoint";
+
+/* src/settings/mod.rs */
+"Hide desktop icons and widgets" = "Hide desktop icons and widgets";
+
+/* src/settings/mod.rs */
+"Hide notification banners in recordings" = "Hide notification banners in recordings";
+
+/* src/settings/mod.rs */
+"High" = "High";
+
+/* src/editor/tools.rs */
+"Highlighter" = "Highlighter";
+
+/* src/settings/mod.rs */
+"History" = "History";
+
+/* src/settings/mod.rs */
+"Imgur" = "Imgur";
+
+/* src/settings/mod.rs */
+"Imgur asks every app for its own client ID. Register one (choose \"anonymous usage without user authorization\"; no callback URL needed) and paste it here. Uploads are anonymous and public to anyone with the link." = "Imgur asks every app for its own client ID. Register one (choose \"anonymous usage without user authorization\"; no callback URL needed) and paste it here. Uploads are anonymous and public to anyone with the link.";
+
+/* src/settings/mod.rs */
+"Include window shadows" = "Include window shadows";
+
+/* src/action.rs */
+"Input Monitoring" = "Input Monitoring";
+
+/* src/settings/mod.rs */
+"Instead, run:" = "Instead, run:";
+
+/* src/settings/mod.rs */
+"JPEG" = "JPEG";
+
+/* src/settings/mod.rs */
+"JPEG quality:" = "JPEG quality:";
+
+/* src/settings/mod.rs */
+"Keep a history of captures" = "Keep a history of captures";
+
+/* src/settings/mod.rs */
+"Keep for:" = "Keep for:";
+
+/* src/settings/mod.rs */
+"Keep line breaks" = "Keep line breaks";
+
+/* src/settings/mod.rs */
+"Keep them on separate tracks" = "Keep them on separate tracks";
+
+/* src/settings/mod.rs */
+"Keystrokes:" = "Keystrokes:";
+
+/* src/settings/mod.rs */
+"Languages:" = "Languages:";
+
+/* src/app/mod.rs */
+"Later" = "Later";
+
+/* src/settings/mod.rs */
+"Launch CleanShotZ at login" = "Launch CleanShotZ at login";
+
+/* src/action.rs */
+"Launch at Login" = "Launch at Login";
+
+/* src/editor/tools.rs */
+"Line" = "Line";
+
+/* src/history/window.rs */
+"Link copied" = "Link copied";
+
+/* src/settings/mod.rs */
+"Link:" = "Link:";
+
+/* src/editor/window.rs */
+"Looking for sensitive info…" = "Looking for sensitive info…";
+
+/* src/settings/mod.rs */
+"Low" = "Low";
+
+/* src/settings/mod.rs */
+"MP4" = "MP4";
+
+/* src/settings/mod.rs */
+"Medium" = "Medium";
+
+/* src/settings/mod.rs */
+"Method:" = "Method:";
+
+/* src/action.rs, src/settings/mod.rs */
+"Microphone" = "Microphone";
+
+/* src/record/session.rs */
+"Microphone access is off in System Settings" = "Microphone access is off in System Settings";
+
+/* src/settings/mod.rs */
+"Mouse pointer" = "Mouse pointer";
+
+/* src/capture/overlay.rs */
+"Move the pointer over a window and click to capture it. Escape cancels." = "Move the pointer over a window and click to capture it. Escape cancels.";
+
+/* src/ocr/mod.rs */
+"No text found" = "No text found";
+
+/* src/settings/mod.rs */
+"None" = "None";
+
+/* src/scroll/session.rs */
+"Nothing was captured" = "Nothing was captured";
+
+/* src/settings/mod.rs */
+"Notifications:" = "Notifications:";
+
+/* src/settings/mod.rs */
+"Nowhere (off)" = "Nowhere (off)";
+
+/* src/app/mod.rs, src/pipeline.rs, src/record/session.rs, src/settings/mod.rs, src/upload/mod.rs */
+"OK" = "OK";
+
+/* src/settings/mod.rs */
+"Off" = "Off";
+
+/* src/settings/mod.rs */
+"Open History…" = "Open History…";
+
+/* src/action.rs */
+"Open Settings File…" = "Open Settings File…";
+
+/* src/app/mod.rs */
+"Open System Settings" = "Open System Settings";
+
+/* src/action.rs */
+"Open in Editor…" = "Open in Editor…";
+
+/* src/settings/mod.rs */
+"Open in Text Editor" = "Open in Text Editor";
+
+/* src/settings/mod.rs */
+"Or run a pipeline of steps instead: add one to [pipelines] in the settings file." = "Or run a pipeline of steps instead: add one to [pipelines] in the settings file.";
+
+/* src/settings/mod.rs */
+"Otherwise they are mixed into one track, which every player plays." = "Otherwise they are mixed into one track, which every player plays.";
+
+/* src/settings/mod.rs */
+"PNG" = "PNG";
+
+/* src/settings/mod.rs */
+"POST (form upload)" = "POST (form upload)";
+
+/* src/settings/mod.rs */
+"PUT (file as body)" = "PUT (file as body)";
+
+/* src/editor/tools.rs */
+"Pen" = "Pen";
+
+/* src/app/mod.rs */
+"Permissions" = "Permissions";
+
+/* src/editor/window.rs */
+"Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions." = "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions.";
+
+/* src/capture/output.rs */
+"Pipeline not run: see the settings" = "Pipeline not run: see the settings";
+
+/* src/editor/tools.rs */
+"Pixelate" = "Pixelate";
+
+/* src/settings/mod.rs */
+"Play a sound" = "Play a sound";
+
+/* src/settings/mod.rs */
+"Position:" = "Position:";
+
+/* src/settings/mod.rs */
+"Public URL:" = "Public URL:";
+
+/* src/settings/mod.rs */
+"Quality:" = "Quality:";
+
+/* src/settings/mod.rs */
+"Quick Access" = "Quick Access";
+
+/* src/quick_access.rs */
+"Quick Access thumbnail. Drag it into an app, or use the actions." = "Quick Access thumbnail. Drag it into an app, or use the actions.";
+
+/* src/app/mod.rs */
+"Quit" = "Quit";
+
+/* src/action.rs */
+"Quit CleanShotZ" = "Quit CleanShotZ";
+
+/* src/app/mod.rs */
+"Quit and discard annotations?" = "Quit and discard annotations?";
+
+/* src/settings/mod.rs */
+"Recognize text so it can be searched" = "Recognize text so it can be searched";
+
+/* src/settings/mod.rs */
+"Record Retina screens at 1x" = "Record Retina screens at 1x";
+
+/* src/action.rs */
+"Record Screen" = "Record Screen";
+
+/* src/settings/mod.rs */
+"Recording" = "Recording";
+
+/* src/record/session.rs */
+"Recording saved" = "Recording saved";
+
+/* src/editor/tools.rs */
+"Rectangle" = "Rectangle";
+
+/* src/settings/mod.rs */
+"Region:" = "Region:";
+
+/* src/action.rs */
+"Reload Settings" = "Reload Settings";
+
+/* src/action.rs */
+"Restore Recently Closed" = "Restore Recently Closed";
+
+/* src/settings/mod.rs */
+"Rounded rectangle" = "Rounded rectangle";
+
+/* src/settings/mod.rs */
+"Runs with the file's path as its argument. The first line it prints is the link." = "Runs with the file's path as its argument. The first line it prints is the link.";
+
+/* src/settings/mod.rs */
+"S3-compatible storage" = "S3-compatible storage";
+
+/* src/settings/mod.rs */
+"Save Retina screenshots at 1x" = "Save Retina screenshots at 1x";
+
+/* src/settings/mod.rs */
+"Save to a file" = "Save to a file";
+
+/* src/settings/mod.rs */
+"Save to:" = "Save to:";
+
+/* src/video_editor/window.rs */
+"Saved" = "Saved";
+
+/* src/action.rs */
+"Screen Recording" = "Screen Recording";
+
+/* src/app/mod.rs */
+"Screen Recording permission is needed" = "Screen Recording permission is needed";
+
+/* src/settings/mod.rs */
+"Screenshots" = "Screenshots";
+
+/* src/settings/mod.rs */
+"Script" = "Script";
+
+/* src/action.rs */
+"Scrolling Capture" = "Scrolling Capture";
+
+/* src/scroll/session.rs */
+"Scrolling capture failed" = "Scrolling capture failed";
+
+/* src/settings/mod.rs */
+"Secret access key:" = "Secret access key:";
+
+/* src/editor/tools.rs */
+"Select" = "Select";
+
+/* src/action.rs */
+"Self-Timer" = "Self-Timer";
+
+/* src/settings/mod.rs */
+"Self-timer:" = "Self-timer:";
+
+/* src/upload/mod.rs */
+"Set an upload destination in the settings file first" = "Set an upload destination in the settings file first";
+
+/* src/settings/mod.rs */
+"Settings file:" = "Settings file:";
+
+/* src/app/mod.rs */
+"Settings were not reloaded" = "Settings were not reloaded";
+
+/* src/action.rs */
+"Settings…" = "Settings…";
+
+/* src/settings/mod.rs */
+"Shortcuts" = "Shortcuts";
+
+/* src/settings/mod.rs */
+"Shortcuts only" = "Shortcuts only";
+
+/* src/settings/mod.rs */
+"Show a thumbnail after each capture" = "Show a thumbnail after each capture";
+
+/* src/settings/mod.rs */
+"Show the camera" = "Show the camera";
+
+/* src/settings/mod.rs */
+"Show the magnifier" = "Show the magnifier";
+
+/* src/settings/mod.rs */
+"Show the mouse pointer" = "Show the mouse pointer";
+
+/* src/settings/mod.rs */
+"Show:" = "Show:";
+
+/* src/app/mod.rs */
+"Some shortcuts could not be registered" = "Some shortcuts could not be registered";
+
+/* src/editor/tools.rs */
+"Spotlight" = "Spotlight";
+
+/* src/settings/mod.rs */
+"Startup:" = "Startup:";
+
+/* src/settings/mod.rs */
+"System audio" = "System audio";
+
+/* src/settings/mod.rs */
+"System languages" = "System languages";
+
+/* src/editor/tools.rs */
+"Text" = "Text";
+
+/* src/ocr/mod.rs */
+"Text recognition failed" = "Text recognition failed";
+
+/* src/settings/mod.rs */
+"Text recognition:" = "Text recognition:";
+
+/* src/settings/mod.rs */
+"The bucket's URL" = "The bucket's URL";
+
+/* src/record/session.rs */
+"The camera, keystrokes and cursor highlight are not shown in window recordings" = "The camera, keystrokes and cursor highlight are not shown in window recordings";
+
+/* src/history/window.rs */
+"The file is no longer there" = "The file is no longer there";
+
+/* src/pipeline.rs */
+"The pipeline stopped" = "The pipeline stopped";
+
+/* src/record/session.rs */
+"The recording could not be saved" = "The recording could not be saved";
+
+/* src/settings/mod.rs */
+"The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file." = "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file.";
+
+/* src/settings/mod.rs */
+"URL:" = "URL:";
+
+/* src/action.rs */
+"Unlock Pinned Screenshots" = "Unlock Pinned Screenshots";
+
+/* src/settings/mod.rs */
+"Upload every capture automatically" = "Upload every capture automatically";
+
+/* src/upload/mod.rs */
+"Upload failed" = "Upload failed";
+
+/* src/settings/mod.rs */
+"Upload to:" = "Upload to:";
+
+/* src/settings/mod.rs */
+"Uploaded captures get a link that is copied to the clipboard." = "Uploaded captures get a link that is copied to the clipboard.";
+
+/* src/upload/mod.rs */
+"Uploaded · link copied" = "Uploaded · link copied";
+
+/* src/upload/mod.rs */
+"Uploading…" = "Uploading…";
+
+/* src/settings/mod.rs */
+"Uploads" = "Uploads";
+
+/* src/settings/mod.rs */
+"Video codec:" = "Video codec:";
+
+/* src/settings/mod.rs */
+"WebP" = "WebP";
+
+/* src/settings/mod.rs */
+"WebP quality:" = "WebP quality:";
+
+/* src/app/mod.rs */
+"Welcome to CleanShotZ" = "Welcome to CleanShotZ";
+
+/* src/settings/mod.rs */
+"days (0 keeps them)" = "days (0 keeps them)";
+
+/* src/settings/mod.rs */
+"https://example.com/upload" = "https://example.com/upload";
+
+/* src/settings/mod.rs */
+"pixels at most" = "pixels at most";
+
+/* src/settings/mod.rs */
+"screenshots/" = "screenshots/";
+
+/* src/settings/mod.rs */
+"seconds (0 keeps them)" = "seconds (0 keeps them)";
+
+/* src/settings/mod.rs */
+"text (the response), json:path.to.link, or header:Location." = "text (the response), json:path.to.link, or header:Location.";
+
+/* src/settings/mod.rs */
+"{date} and {time} are replaced with the capture's date and time." = "{date} and {time} are replaced with the capture's date and time.";
+
+/* src/settings/mod.rs */
+"~/bin/upload.sh" = "~/bin/upload.sh";

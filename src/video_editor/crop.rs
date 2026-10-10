@@ -129,7 +129,9 @@ impl CropView {
         // player underneath.
         self.setAccessibilityElement(editing);
         if editing {
-            let text = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
+            let text = &t!(
+                "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop."
+            );
             crate::ui::access::describe(
                 self,
                 // SAFETY: reading an AppKit constant.

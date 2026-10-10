@@ -293,8 +293,21 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - WebP output (lossless by default, or lossy with a quality) through
   libwebp, since ImageIO cannot write WebP.
 
-### M10: Polish
+### M10: Polish (done)
 - Accessibility (VoiceOver labels), localization scaffolding, performance pass.
+- Accessibility: custom-drawn views (Quick Access cards, pins, the editor
+  canvas, the History grid, capture and crop overlays) are labeled with
+  roles, help and actions; toasts and new captures are announced; checked
+  through the accessibility API.
+- Localization: `i18n::tr` looks text up by its English wording; alerts,
+  toasts, menus, Settings and tool names translate where they are shown,
+  and `t!` marks the rest. `cargo xtask strings` extracts the template.
+  Runtime-assembled messages are not translated yet.
+- Performance (release build, measured): idle 0% CPU with no idle
+  wakeups; ready about 0.15 s after launch; a full-resolution fullscreen
+  capture is saved in about 0.28 s (mostly PNG encoding); memory stays
+  level over repeated captures (about 56 MB footprint). No changes were
+  needed.
 
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo

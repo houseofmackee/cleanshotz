@@ -11,6 +11,8 @@
 //!   identity in the login keychain
 //! - `create-release-cert`: create the self-signed "CleanShotZ Release"
 //!   identity, and export it for the release workflow's secrets
+//! - `strings`: collect the user-facing English text into
+//!   `resources/en.lproj/Localizable.strings`, the translators' template
 //!
 //! Signing identity, in order: `CLEANSHOTZ_SIGN_IDENTITY` (a name or SHA-1
 //! from `security find-identity -p codesigning`), then for release builds
@@ -49,8 +51,9 @@ fn main() -> Result<()> {
         Some("dist") => dist()?,
         Some("create-dev-cert") => create_dev_cert()?,
         Some("create-release-cert") => create_release_cert()?,
+        Some("strings") => strings()?,
         _ => bail!(
-            "usage: cargo xtask <bundle|run> [--release] [--test] | dist | create-dev-cert | create-release-cert"
+            "usage: cargo xtask <bundle|run> [--release] [--test] | dist | strings | create-dev-cert | create-release-cert"
         ),
     }
     Ok(())
@@ -111,6 +114,22 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
         contents.join("Resources/AppIcon.icns"),
     )
     .context("copying the app icon")?;
+    // Translations: resources/<language>.lproj.
+    for entry in fs::read_dir(root.join("resources"))? {
+        let path = entry?.path();
+        if path.extension().is_some_and(|e| e == "lproj") {
+            let target = contents
+                .join("Resources")
+                .join(path.file_name().unwrap_or_default());
+            fs::create_dir_all(&target)?;
+            for file in fs::read_dir(&path)? {
+                let file = file?.path();
+                if file.is_file() {
+                    fs::copy(&file, target.join(file.file_name().unwrap_or_default()))?;
+                }
+            }
+        }
+    }
     // The AppleScript dictionary.
     fs::copy(
         root.join("resources/CleanShotZ.sdef"),
@@ -438,6 +457,194 @@ fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
     }
 }
 
+/// Calls whose string literal arguments are shown to the user, and
+/// translated where they are shown (see src/i18n.rs).
+const STRING_SINKS: &[&str] = &[
+    "t!(",
+    "toast::show(",
+    "alert::show(",
+    "titled_item(",
+    "push_button(",
+    "checkbox(",
+    "text_field_with(",
+];
+/// Settings form methods (`f.check(...)` and so on) translate their texts.
+const FORM_METHODS: &[&str] = &[
+    "check",
+    "login_item",
+    "choice",
+    "choice_with",
+    "text",
+    "number",
+    "secret",
+    "folder",
+    "button",
+    "note",
+    "row",
+];
+/// Files whose `fn title` lists names shown in menus, toolbars and tabs.
+const TITLE_FILES: &[&str] = &[
+    "src/action.rs",
+    "src/editor/tools.rs",
+    "src/settings/mod.rs",
+];
+
+/// Writes `resources/en.lproj/Localizable.strings` from the source.
+fn strings() -> Result<()> {
+    let root = workspace_root();
+    let mut found: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
+        Default::default();
+    let mut files = Vec::new();
+    collect_rust_files(&root.join("src"), &mut files)?;
+    files.sort();
+    for file in &files {
+        let source = fs::read_to_string(file)?;
+        let name = file
+            .strip_prefix(&root)
+            .unwrap_or(file)
+            .to_string_lossy()
+            .into_owned();
+        let titles = TITLE_FILES.contains(&name.as_str());
+        for text in extract_strings(&source, titles) {
+            found.entry(text).or_default().insert(name.clone());
+        }
+    }
+    let mut out = String::from(
+        "/* The English text CleanShotZ shows, collected by `cargo xtask strings`.\n   \
+         To translate: copy this file to resources/<language>.lproj/Localizable.strings\n   \
+         (for example de.lproj) and translate the right-hand sides. */\n",
+    );
+    for (text, sources) in &found {
+        let sources: Vec<&str> = sources.iter().map(String::as_str).collect();
+        out.push_str(&format!(
+            "\n/* {} */\n\"{text}\" = \"{text}\";\n",
+            sources.join(", ")
+        ));
+    }
+    let dir = root.join("resources/en.lproj");
+    fs::create_dir_all(&dir)?;
+    fs::write(dir.join("Localizable.strings"), out)?;
+    println!(
+        "{} strings written to resources/en.lproj/Localizable.strings",
+        found.len()
+    );
+    Ok(())
+}
+
+fn collect_rust_files(dir: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+    for entry in fs::read_dir(dir)? {
+        let path = entry?.path();
+        if path.is_dir() {
+            collect_rust_files(&path, out)?;
+        } else if path.extension().is_some_and(|e| e == "rs") {
+            out.push(path);
+        }
+    }
+    Ok(())
+}
+
+/// The user-facing literals in `source`: the arguments of [`STRING_SINKS`]
+/// and settings form calls, and with `titles`, the strings a `fn title`
+/// returns. Test code is skipped. Literals stay escaped as in Rust, which
+/// matches the .strings format for the escapes used (`\"`, `\\`, `\n`).
+fn extract_strings(source: &str, titles: bool) -> Vec<String> {
+    let source = source.split("#[cfg(test)]").next().unwrap_or(source);
+    let mut out = Vec::new();
+    // Whole names only: `t!(` must not match the end of `format!(`.
+    let calls = |pattern: &str| -> Vec<usize> {
+        source
+            .match_indices(pattern)
+            .filter(|(i, _)| {
+                !source[..*i]
+                    .chars()
+                    .next_back()
+                    .is_some_and(|c| c.is_alphanumeric() || c == '_')
+            })
+            .map(|(i, s)| i + s.len())
+            .collect()
+    };
+    let mut starts: Vec<usize> = Vec::new();
+    for sink in STRING_SINKS {
+        starts.extend(calls(sink));
+    }
+    for method in FORM_METHODS {
+        starts.extend(calls(&format!("f.{method}(")));
+    }
+    for start in starts {
+        out.extend(call_literals(&source[start..]));
+    }
+    if titles {
+        for (i, _) in source.match_indices("fn title(") {
+            let body = &source[i..];
+            let end = body.find("\n    }\n").unwrap_or(body.len());
+            for arm in body[..end].split("=> ").skip(1) {
+                if let Some(text) = arm
+                    .strip_prefix('"')
+                    .and_then(|a| literal_end(a).map(|e| &a[..e]))
+                {
+                    out.push(text.to_string());
+                }
+            }
+        }
+    }
+    out.retain(|s| s.chars().any(|c| c.is_alphabetic()) && !is_identifier_like(s));
+    out
+}
+
+/// String literals among a call's arguments (directly, or in an array
+/// such as alert buttons), up to its closing parenthesis. Literals inside
+/// nested calls (`format!` templates) and closures (`|c| ...`, which hold
+/// settings values) are left out.
+fn call_literals(args: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    // Open brackets after the call's own parenthesis.
+    let mut open: Vec<u8> = Vec::new();
+    let mut i = 0usize;
+    let bytes = args.as_bytes();
+    while i < bytes.len() {
+        match bytes[i] {
+            b'(' | b'[' => open.push(bytes[i]),
+            b')' | b']' => {
+                if open.pop().is_none() {
+                    break;
+                }
+            }
+            b'|' if open.is_empty() => break,
+            b'"' => {
+                let rest = &args[i + 1..];
+                let Some(end) = literal_end(rest) else { break };
+                if !open.contains(&b'(') {
+                    out.push(rest[..end].to_string());
+                }
+                i += end + 1;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+/// The length of a string literal's contents (before its closing quote).
+fn literal_end(s: &str) -> Option<usize> {
+    let mut escaped = false;
+    for (i, c) in s.char_indices() {
+        match c {
+            '\\' if !escaped => escaped = true,
+            '"' if !escaped => return Some(i),
+            _ => escaped = false,
+        }
+    }
+    None
+}
+
+/// Lowercase words such as tab ids and setting values, which are not
+/// shown as text.
+fn is_identifier_like(s: &str) -> bool {
+    s.chars()
+        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '-' || c == '_' || c == '.')
+}
+
 fn run(command: &mut Command) -> Result<()> {
     let status = command
         .status()
@@ -446,4 +653,51 @@ fn run(command: &mut Command) -> Result<()> {
         bail!("{command:?} failed with {status}");
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extracts_user_facing_literals() {
+        let source = r#"
+            toast::show(mtm, "Copied");
+            alert::show(mtm, "Title", "Some \"quoted\" text", &["OK", "Cancel"]);
+            let x = t!("Marked");
+            let y = format!("not {} text", x);
+            alert::show(mtm, "Shown", &format!("{e} nested"), &["OK"]);
+            f.check("Label:", "Do it", |c| c.flag, |c, v| c.mode = "internal".into());
+            f.choice("Format:", &["PNG", "JPEG"], |c| 0, |c, i| ());
+            ignored("Not a sink");
+            fn title(self) -> &'static str {
+                match self {
+                    A => "First",
+                    B => "Second",
+                }
+            }
+            #[cfg(test)]
+            mod tests { toast::show(mtm, "Test only"); }
+        "#;
+        let mut found = extract_strings(source, true);
+        found.sort();
+        found.dedup();
+        let expected = [
+            "Cancel",
+            "Copied",
+            "Do it",
+            "First",
+            "Format:",
+            "JPEG",
+            "Label:",
+            "Marked",
+            "OK",
+            "PNG",
+            "Second",
+            "Shown",
+            r#"Some \"quoted\" text"#,
+            "Title",
+        ];
+        assert_eq!(found, expected);
+    }
 }

@@ -24,6 +24,7 @@ use crate::config::{
     CameraShape, Codec, Config, Destination, Hotkeys, ImageFormat, KeystrokeMode, Quality, Side,
     VideoFormat,
 };
+use crate::i18n::tr;
 use crate::platform::login_item;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -329,11 +330,11 @@ impl SettingsWindow {
         let tab = Tab::from_id(&identifier.to_string())?;
         let item =
             NSToolbarItem::initWithItemIdentifier(NSToolbarItem::alloc(self.mtm()), identifier);
-        item.setLabel(&NSString::from_str(tab.title()));
+        item.setLabel(&NSString::from_str(&tr(tab.title())));
         item.setImage(
             NSImage::imageWithSystemSymbolName_accessibilityDescription(
                 &NSString::from_str(tab.symbol()),
-                Some(&NSString::from_str(tab.title())),
+                Some(&NSString::from_str(&tr(tab.title()))),
             )
             .as_deref(),
         );
@@ -389,7 +390,7 @@ impl SettingsWindow {
         // Finish any edit while its binding still exists: a field that
         // loses focus later would report to the next tab's bindings.
         window.makeFirstResponder(None);
-        window.setTitle(&NSString::from_str(tab.title()));
+        window.setTitle(&NSString::from_str(&tr(tab.title())));
         self.ivars().tab.set(tab);
         self.ivars().bound.borrow_mut().clear();
         *self.ivars().status.borrow_mut() = None;
@@ -680,7 +681,7 @@ impl<'a> Form<'a> {
             NSGridCell::emptyContentView(self.mtm)
         } else {
             into_view(NSTextField::labelWithString(
-                &NSString::from_str(label),
+                &NSString::from_str(&tr(label)),
                 self.mtm,
             ))
         };
@@ -731,7 +732,7 @@ impl<'a> Form<'a> {
     ) {
         let popup = NSPopUpButton::new(self.mtm);
         for option in options {
-            popup.addItemWithTitle(&NSString::from_str(option));
+            popup.addItemWithTitle(&NSString::from_str(&tr(option)));
         }
         self.bind(&popup, Bind::Choice { get, set, rebuild });
         self.row(label, into_view(popup));
@@ -747,7 +748,7 @@ impl<'a> Form<'a> {
         let field = text_field_with(self.mtm, "", 64.0);
         field.setAlignment(objc2_app_kit::NSTextAlignment::Right);
         self.bind(&field, Bind::Number(get, set));
-        let unit = NSTextField::labelWithString(&NSString::from_str(unit), self.mtm);
+        let unit = NSTextField::labelWithString(&NSString::from_str(&tr(unit)), self.mtm);
         let row = hstack(&[into_view(field), into_view(unit)]);
         self.row(label, row);
     }
@@ -811,7 +812,7 @@ impl<'a> Form<'a> {
         );
         clear.setToolTip(Some(ns_string!("Remove shortcut")));
         self.bind(&clear, Bind::ClearShortcut(action));
-        let label = format!("{}:", action.title().trim_end_matches('…'));
+        let label = format!("{}:", tr(action.title()).trim_end_matches('…'));
         self.row(
             &label,
             hstack(&[into_view(Retained::into_super(recorder)), into_view(clear)]),
@@ -830,7 +831,7 @@ impl<'a> Form<'a> {
 
     /// Small grey text under the previous control.
     fn note(&mut self, text: &str) {
-        let note = NSTextField::wrappingLabelWithString(&NSString::from_str(text), self.mtm);
+        let note = NSTextField::wrappingLabelWithString(&NSString::from_str(&tr(text)), self.mtm);
         note.setFont(Some(&NSFont::systemFontOfSize(
             NSFont::smallSystemFontSize(),
         )));
@@ -882,18 +883,20 @@ fn into_view<T: AsRef<NSView>>(view: Retained<T>) -> Retained<NSView> {
 fn checkbox(mtm: MainThreadMarker, title: &str) -> Retained<NSButton> {
     // SAFETY: target and action are set when the checkbox is bound.
     unsafe {
-        NSButton::checkboxWithTitle_target_action(&NSString::from_str(title), None, None, mtm)
+        NSButton::checkboxWithTitle_target_action(&NSString::from_str(&tr(title)), None, None, mtm)
     }
 }
 
 fn push_button(mtm: MainThreadMarker, title: &str) -> Retained<NSButton> {
     // SAFETY: target and action are set by the caller.
-    unsafe { NSButton::buttonWithTitle_target_action(&NSString::from_str(title), None, None, mtm) }
+    unsafe {
+        NSButton::buttonWithTitle_target_action(&NSString::from_str(&tr(title)), None, None, mtm)
+    }
 }
 
 fn text_field_with(mtm: MainThreadMarker, placeholder: &str, width: f64) -> Retained<NSTextField> {
     let field = NSTextField::new(mtm);
-    field.setPlaceholderString(Some(&NSString::from_str(placeholder)));
+    field.setPlaceholderString(Some(&NSString::from_str(&tr(placeholder))));
     field
         .widthAnchor()
         .constraintEqualToConstant(width)
