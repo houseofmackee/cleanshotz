@@ -12,6 +12,8 @@ name = "cleanshotz"
 version = "0.1.0"
 edition = "2024"
 description = "A native macOS screenshot, screen recording and annotation tool"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/houseofmackee/cleanshotz"
 publish = false
 
 [lints]

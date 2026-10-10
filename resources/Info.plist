@@ -9,7 +9,7 @@
 	<key>CFBundleExecutable</key>
 	<string>cleanshotz</string>
 	<key>CFBundleIdentifier</key>
-	<string>com.cleanshotz.app</string>
+	<string>io.github.houseofmackee.cleanshotz</string>
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
@@ -24,7 +24,7 @@
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.cleanshotz.app</string>
+			<string>io.github.houseofmackee.cleanshotz</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
 				<string>cleanshotz</string>
@@ -42,7 +42,7 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>CleanShotZ</string>
+	<string>Copyright © 2026 MacKenzie Glanzer. Free software under MIT OR Apache-2.0. Not affiliated with CleanShot X or MakeTheWeb.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>CleanShotZ records your microphone together with screen recordings.</string>
 	<key>NSScreenCaptureUsageDescription</key>

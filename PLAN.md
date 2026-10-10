@@ -4,6 +4,10 @@ A native macOS menu bar app, written in Rust, that covers the feature set of
 [CleanShot X](https://cleanshot.com) (reference: v4.8.10, installed locally) and
 adds improvements where CleanShot X is closed, cloud-bound or not scriptable.
 
+CleanShotZ is free and open source (MIT OR Apache-2.0), developed at
+<https://github.com/houseofmackee/cleanshotz> and distributed as direct
+downloads from GitHub Releases.
+
 ## 1. Reference feature inventory (CleanShot X)
 
 Collected from cleanshot.com and the installed bundle (`URL scheme cleanshot://`,
@@ -44,6 +48,10 @@ preference keys).
 8. **Post-capture actions pipeline:** user-defined chains (for example
    "resize to 50%, add background preset, upload, copy link, open in Slack").
 9. **Lower footprint:** no Electron/web views, minimal idle CPU and memory.
+10. **Free, open source and private:** no account, no license key, no telemetry
+    or crash reporting that phones home (CleanShot ships Sentry and analytics).
+    Network access happens only for uploads the user configures and for the
+    update check, which can be turned off.
 
 ## 3. Technical architecture
 
@@ -64,8 +72,14 @@ preference keys).
   need direct AppKit access anyway.
 - **Global hotkeys:** Carbon `RegisterEventHotKey` (no Accessibility permission
   needed). `CGEventTap` only for keystroke/click visualization during recording.
-- **Encoding:** `AVAssetWriter` (H.264/HEVC) for video; `gifski` crate for
-  high-quality GIF; `image` + `webp` crates for stills.
+- **Encoding:** `AVAssetWriter` (H.264/HEVC) for video; ImageIO
+  (`CGImageDestination`) for PNG/JPEG/GIF, with GIF palettes from a
+  permissively licensed quantizer (`quantette` or `color_quant`); `webp` crate
+  (libwebp, BSD) for WebP. `gifski` and `libimagequant` are deliberately not
+  used: they are AGPL/GPL and would change the license of the shipped binary.
+- **Dependency licenses:** `cargo deny` in CI allows only permissive licenses
+  (MIT, Apache-2.0, BSD, ISC, Zlib, Unicode) plus MPL-2.0, so a copyleft crate
+  cannot slip in.
 - **Storage:** `rusqlite` (bundled, FTS5) for history; `serde` + `toml` for config.
 - **IPC:** Unix domain socket in the app support dir for the CLI; URL scheme via
   `NSAppleEventManager` `kAEGetURL` handler.
@@ -157,7 +171,7 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - System audio + mic via ScreenCaptureKit (`captureMicrophone` on macOS 15, AVCaptureSession fallback on 14).
 - Webcam overlay (draggable bubble), click visualization, keystroke HUD,
   cursor highlight, countdown, pause/resume, DND toggle.
-- GIF output via gifski.
+- GIF output via ImageIO with a permissive quantizer (see Encoding above).
 
 ### M7: Video editor
 - Trim with filmstrip, mute, resolution/quality export, convert to GIF.
@@ -175,9 +189,41 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Socket server + `cleanshotz` CLI; App Intents / AppleScript dictionary.
 - Post-capture action pipeline (improvement #8).
 
-### M10: Release
-- Code signing, notarization, DMG, auto update (Sparkle via framework embedding).
+### M10: Polish
 - Accessibility (VoiceOver labels), localization scaffolding, performance pass.
+
+### Distribution (before the first public release, targeted after M3)
+- **Release workflow** (GitHub Actions on tag `v*`): build `aarch64` and
+  `x86_64`, merge with `lipo` into a universal binary, bundle, sign, package as
+  `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
+  SHA-256 checksums and generated release notes.
+- **Signing without a Developer ID:** releases are signed with a dedicated
+  self-signed "CleanShotZ Release" certificate whose `.p12` and password live
+  in GitHub Actions secrets, imported into a temporary keychain in CI. The
+  same certificate must sign every release: the signature's designated
+  requirement pins it, which is what keeps users' Screen Recording permission
+  across updates. Back up the `.p12` outside GitHub; losing it resets every
+  user's permissions once.
+- **First-launch experience:** the app is not notarized, so Gatekeeper blocks
+  the first open. The README and release notes explain: open it once, then
+  System Settings > Privacy & Security > Open Anyway (on macOS 15 and later the
+  Control-click > Open shortcut no longer works). Alternative for technical
+  users: `xattr -dr com.apple.quarantine /Applications/CleanShotZ.app`.
+- **Updates:** Sparkle 2 (embedded framework, driven via objc2) with an
+  EdDSA-signed `appcast.xml` published to GitHub Pages by the release
+  workflow. Sparkle verifies the EdDSA signature and that the update is signed
+  by the same certificate; updates it installs do not hit Gatekeeper again.
+  The private EdDSA key is a CI secret. Automatic checks are opt-in on first
+  launch.
+- **Homebrew:** not possible until releases are notarized, since Homebrew no
+  longer accepts casks that fail Gatekeeper.
+- **Later, with a Developer ID:** sign with Developer ID Application, enable
+  `--timestamp`, notarize with `notarytool` and staple. Switching certificates
+  changes the designated requirement, so users re-grant Screen Recording
+  once; announce it in that release's notes.
+- **Repository hygiene:** README with install instructions and screenshots,
+  CONTRIBUTING.md, issue and PR templates, CHANGELOG.md, Dependabot for Cargo
+  and Actions.
 
 ## 5. Risks and open questions
 
@@ -192,10 +238,21 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   the wallpaper) to avoid restarting Finder.
 - **Scrolling stitch quality** on animated or sticky content needs tuning and a
   test corpus of fixture images.
-- **Naming/trademark:** "CleanShotZ" is close to "CleanShot"; fine for personal
-  use, rename before any public distribution.
+- **Naming/trademark (accepted risk):** "CleanShot" is a trademark of
+  MakeTheWeb, and "CleanShotZ" is similar enough that a takedown or
+  cease-and-desist is possible. Decision: keep the name for now. Mitigations:
+  a clear "not affiliated with CleanShot X or MakeTheWeb" notice in the README
+  and About panel; no use of CleanShot's logo, icons, sounds or other bundled
+  assets; mention CleanShot X only to describe compatibility, not in
+  marketing. Keep naming centralized (bundle name, display strings) so a
+  rename stays cheap. The bundle ID `io.github.houseofmackee.cleanshotz` and
+  the `~/Library` paths would need a settings migration on rename.
+- **Unnotarized distribution friction:** the Gatekeeper step will lose some
+  users and draws "is this malware?" questions. Mitigations: reproducible CI
+  builds from tagged source, published checksums, clear instructions.
 
 ## 6. Immediate next steps
 
-1. Implement fullscreen capture to clipboard as the first end-to-end slice (M2).
-2. Area selection overlay and window capture (M2).
+1. Add `cargo deny` license checks to CI (done alongside this plan update).
+2. Implement fullscreen capture to clipboard as the first end-to-end slice (M2).
+3. Area selection overlay and window capture (M2).

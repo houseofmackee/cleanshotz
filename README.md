@@ -1,12 +1,36 @@
 # CleanShotZ
 
-A native macOS menu bar app for screenshots, screen recordings and
-annotations, written in Rust. See [PLAN.md](PLAN.md) for the feature plan and
-milestones.
+A free and open source macOS menu bar app for screenshots, screen recordings
+and annotations, written in Rust. See [PLAN.md](PLAN.md) for the feature plan
+and milestones.
 
-Requires macOS 14 or later and a Rust toolchain.
+> CleanShotZ is an independent project. It is not affiliated with, endorsed
+> by or connected to CleanShot X or MakeTheWeb. "CleanShot" is a trademark of
+> its respective owner.
+
+CleanShotZ is in early development and has no release yet.
+
+## Install
+
+Requires macOS 14 or later. Once releases exist, download the latest
+`CleanShotZ-<version>.zip` from
+[GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), unzip
+it and move `CleanShotZ.app` to `/Applications`.
+
+The app is signed but not notarized by Apple, so macOS blocks the first open.
+To allow it: open the app once, dismiss the warning, then go to
+System Settings > Privacy & Security and click Open Anyway. You only need to
+do this once; updates install without the warning.
+
+## Privacy
+
+No account, no telemetry, no crash reporting. CleanShotZ only uses the
+network for uploads you configure and for update checks, which you can turn
+off.
 
 ## Development
+
+Requires a Rust toolchain (stable).
 
 ```sh
 cargo xtask run          # build, bundle into target/debug/CleanShotZ.app, launch
@@ -64,3 +88,17 @@ a shortcut.
 | Scrolling Capture | `alt+shift+s` |
 | Capture Text | `alt+shift+o` |
 | Record Screen | `alt+shift+5` |
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSE-MIT](LICENSE-MIT))
+
+at your option.
+
+Unless you explicitly state otherwise, any contribution intentionally
+submitted for inclusion in the work by you, as defined in the Apache-2.0
+license, shall be dual licensed as above, without any additional terms or
+conditions.
