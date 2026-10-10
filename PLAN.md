@@ -226,10 +226,17 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   card; GIF saves next to it; Save As goes anywhere. Not done yet:
   cropping the video, speed changes and a separate quality slider.
 
-### M8: Scrolling capture
+### M8: Scrolling capture (done)
 - Capture frames while the user (or synthesized events) scrolls; stitch by
   finding vertical/horizontal overlap (row-hash matching with a fallback to
   normalized cross-correlation); live preview; handle sticky headers.
+- Notes: vertical scrolling only, by hand or with Auto-scroll (which
+  needs Accessibility and stops at the end of the content). Row hashes
+  match exactly on screen content, so the cross-correlation fallback was
+  not needed. Sticky headers and footers are kept once; overlay scroll
+  bars are removed from the result. A status line replaces the live
+  preview image. Images are capped at 30,000 px. Not done yet: horizontal
+  scrolling and a live preview thumbnail.
 
 ### M9: History, uploads, automation
 - History window with thumbnails, search, re-open, re-copy, delete.

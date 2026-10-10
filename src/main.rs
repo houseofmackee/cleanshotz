@@ -9,6 +9,7 @@ mod pin;
 mod platform;
 mod quick_access;
 mod record;
+mod scroll;
 mod shortcut;
 mod state;
 mod ui;

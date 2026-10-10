@@ -201,3 +201,49 @@ pub fn scale_for_path(path: &std::path::Path) -> f64 {
         .is_some_and(|s| s.ends_with("@2x"));
     if retina { 2.0 } else { 1.0 }
 }
+
+/// The image's pixels as 32-bit BGRA values (premultiplied), row by row,
+/// top row first. Returns width, height and pixels.
+pub fn to_pixels(image: &CGImage) -> Option<(usize, usize, Vec<u32>)> {
+    let (width, height) = pixel_size(image);
+    let context = draw_into_bitmap(image, width, height)?;
+    let data = CGBitmapContextGetData(Some(&context)) as *const u8;
+    let stride = CGBitmapContextGetBytesPerRow(Some(&context));
+    if data.is_null() {
+        return None;
+    }
+    let mut pixels = Vec::with_capacity(width * height);
+    for y in 0..height {
+        // SAFETY: each row has at least `width * 4` bytes, alive as long
+        // as `context`; reads are unaligned-safe.
+        let row = unsafe { std::slice::from_raw_parts(data.add(y * stride), width * 4) };
+        pixels.extend(
+            row.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|p| u32::from_ne_bytes([p[0], p[1], p[2], p[3]])),
+        );
+    }
+    Some((width, height, pixels))
+}
+
+/// An image from pixels in the layout [`to_pixels`] produces.
+pub fn from_pixels(width: usize, height: usize, pixels: &[u32]) -> Option<CFRetained<CGImage>> {
+    if width == 0 || height == 0 || pixels.len() != width * height {
+        return None;
+    }
+    let context = bitmap_context(width, height, None)?;
+    let data = CGBitmapContextGetData(Some(&context)) as *mut u8;
+    let stride = CGBitmapContextGetBytesPerRow(Some(&context));
+    if data.is_null() {
+        return None;
+    }
+    for (y, row) in pixels.chunks_exact(width).enumerate() {
+        // SAFETY: each destination row has room for `width * 4` bytes.
+        let dest = unsafe { std::slice::from_raw_parts_mut(data.add(y * stride), width * 4) };
+        for (d, p) in dest.as_chunks_mut::<4>().0.iter_mut().zip(row) {
+            d.copy_from_slice(&p.to_ne_bytes());
+        }
+    }
+    CGBitmapContextCreateImage(Some(&context))
+}

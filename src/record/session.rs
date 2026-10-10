@@ -11,9 +11,8 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSBackingStoreType, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSFontWeightMedium, NSImage,
-    NSPanel, NSScreen, NSStatusWindowLevel, NSTextField, NSTitlePosition,
-    NSWindowCollectionBehavior, NSWindowStyleMask,
+    NSBox, NSBoxType, NSButton, NSColor, NSFont, NSFontWeightMedium, NSImage, NSPanel, NSScreen,
+    NSTextField, NSTitlePosition,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
@@ -27,7 +26,7 @@ use crate::capture::sck::{self, CaptureError, Content};
 use crate::capture::{countdown, naming, output};
 use crate::config::{CaptureSettings, KeystrokeMode, RecordingSettings, VideoFormat};
 use crate::platform::permissions::{Permission, Status};
-use crate::ui::toast;
+use crate::ui::{panels, toast};
 
 /// What to record.
 #[derive(Clone, Copy, Debug)]
@@ -342,7 +341,7 @@ fn begin_recording(
 
     let full_screen = matches!(target, Target::Area { display_id, rect }
         if screen_for(mtm, display_id).is_some_and(|s| s.frame().size.width <= rect.width));
-    let border = (!full_screen).then(|| border_panel(mtm, cocoa_rect));
+    let border = (!full_screen).then(|| panels::border_panel(mtm, cocoa_rect));
     let (controls, time_label, pause_button) = control_panel(mtm, cocoa_rect);
     let timer = tick_timer();
     STATE.with(|s| {
@@ -571,79 +570,10 @@ fn symbol_image(name: &str) -> Option<Retained<NSImage>> {
     NSImage::imageWithSystemSymbolName_accessibilityDescription(&NSString::from_str(name), None)
 }
 
-fn floating_panel(mtm: MainThreadMarker, frame: NSRect) -> Retained<NSPanel> {
-    let panel = NSPanel::initWithContentRect_styleMask_backing_defer(
-        NSPanel::alloc(mtm),
-        frame,
-        NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel,
-        NSBackingStoreType::Buffered,
-        false,
-    );
-    // SAFETY: the recording state keeps a strong reference.
-    unsafe { panel.setReleasedWhenClosed(false) };
-    // At status level: recordings leave our UI at this level out.
-    panel.setLevel(NSStatusWindowLevel);
-    panel.setOpaque(false);
-    panel.setBackgroundColor(Some(&NSColor::clearColor()));
-    panel.setHidesOnDeactivate(false);
-    panel.setCollectionBehavior(
-        NSWindowCollectionBehavior::CanJoinAllSpaces
-            | NSWindowCollectionBehavior::FullScreenAuxiliary
-            | NSWindowCollectionBehavior::Stationary,
-    );
-    panel
-}
-
-/// A red outline just outside the recorded area.
-fn border_panel(mtm: MainThreadMarker, area: NSRect) -> Retained<NSPanel> {
-    let inset = 4.0;
-    let frame = NSRect::new(
-        NSPoint::new(area.origin.x - inset, area.origin.y - inset),
-        NSSize::new(
-            area.size.width + 2.0 * inset,
-            area.size.height + 2.0 * inset,
-        ),
-    );
-    let panel = floating_panel(mtm, frame);
-    panel.setIgnoresMouseEvents(true);
-    panel.setHasShadow(false);
-    let outline = NSBox::new(mtm);
-    outline.setBoxType(NSBoxType::Custom);
-    outline.setTitlePosition(NSTitlePosition::NoTitle);
-    outline.setBorderWidth(2.0);
-    outline.setBorderColor(&NSColor::colorWithSRGBRed_green_blue_alpha(
-        1.0, 0.25, 0.2, 0.9,
-    ));
-    outline.setFillColor(&NSColor::clearColor());
-    outline.setCornerRadius(4.0);
-    panel.setContentView(Some(&outline));
-    panel.orderFrontRegardless();
-    panel
-}
-
 const BAR: NSSize = NSSize {
     width: 220.0,
     height: 44.0,
 };
-
-/// Where the control bar goes: below the area, else above, else inside.
-fn control_origin(area: NSRect, visible: NSRect) -> NSPoint {
-    let gap = 12.0;
-    let x = (area.origin.x + (area.size.width - BAR.width) / 2.0).clamp(
-        visible.origin.x + 8.0,
-        visible.origin.x + visible.size.width - BAR.width - 8.0,
-    );
-    let below = area.origin.y - gap - BAR.height;
-    let above = area.origin.y + area.size.height + gap;
-    let y = if below >= visible.origin.y + 8.0 {
-        below
-    } else if above + BAR.height <= visible.origin.y + visible.size.height - 8.0 {
-        above
-    } else {
-        area.origin.y.max(visible.origin.y) + 20.0
-    };
-    NSPoint::new(x.round(), y.round())
-}
 
 fn control_panel(
     mtm: MainThreadMarker,
@@ -661,7 +591,10 @@ fn control_panel(
         })
         .or_else(|| NSScreen::mainScreen(mtm))
         .map_or(area, |s| s.visibleFrame());
-    let panel = floating_panel(mtm, NSRect::new(control_origin(area, visible), BAR));
+    let panel = panels::floating_panel(
+        mtm,
+        NSRect::new(panels::control_origin(area, visible, BAR), BAR),
+    );
     panel.setHasShadow(true);
 
     let background = NSBox::new(mtm);
@@ -767,19 +700,5 @@ mod tests {
         assert_eq!(even(1601.0), 1602);
         assert_eq!(even(1599.4), 1600);
         assert_eq!(even(0.2), 2);
-    }
-
-    #[test]
-    fn control_bar_goes_below_then_above_then_inside() {
-        let visible = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1000.0, 800.0));
-        let mid = NSRect::new(NSPoint::new(100.0, 300.0), NSSize::new(400.0, 200.0));
-        assert_eq!(control_origin(mid, visible).y, 300.0 - 12.0 - 44.0);
-        let low = NSRect::new(NSPoint::new(100.0, 10.0), NSSize::new(400.0, 200.0));
-        assert_eq!(control_origin(low, visible).y, 222.0);
-        let full = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(1000.0, 800.0));
-        assert_eq!(control_origin(full, visible).y, 20.0);
-        // Clamped horizontally.
-        let left = NSRect::new(NSPoint::new(-50.0, 300.0), NSSize::new(60.0, 60.0));
-        assert_eq!(control_origin(left, visible).x, 8.0);
     }
 }

@@ -301,6 +301,7 @@ impl AppDelegate {
             | Action::CaptureFullscreen
             | Action::CaptureWindow
             | Action::CaptureText
+            | Action::CaptureScrolling
             | Action::RecordScreen
             | Action::SelfTimer => self.capture(action),
             Action::OpenSettingsFile => {
@@ -396,6 +397,7 @@ impl AppDelegate {
                 state_path,
                 show_capture_error,
             ),
+            Action::CaptureScrolling => crate::scroll::start(mtm, settings),
             Action::RecordScreen => {
                 let recording = self.ivars().config.borrow().recording.clone();
                 crate::record::toggle(mtm, settings, recording)
