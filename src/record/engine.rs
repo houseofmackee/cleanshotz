@@ -210,10 +210,60 @@ define_class!(
             buffer: &CMSampleBuffer,
             _connection: &AVCaptureConnection,
         ) {
+            boost(buffer);
             self.ivars().handle(buffer, SCStreamOutputType::Microphone);
         }
     }
 );
+
+/// Gain for the macOS 14 microphone path. ScreenCaptureKit's microphone
+/// (macOS 15) applies automatic gain: in tests its level varied by about
+/// 12 dB between recordings and peaked up to 17 dB above the raw input.
+/// 6x (about 15.6 dB) puts the raw input's peaks at the louder end of
+/// that range; `soft_limit` catches anything louder.
+const MICROPHONE_GAIN: f32 = 6.0;
+/// Above this level, `soft_limit` bends peaks instead of clipping them.
+const LIMIT_KNEE: f32 = 0.8;
+
+/// Applies `MICROPHONE_GAIN` to a buffer of 32-bit float samples (the
+/// format the capture output is set to), in place.
+fn boost(buffer: &CMSampleBuffer) {
+    // SAFETY: the capture output delivers float PCM it does not reuse
+    // until the delegate returns; the pointer covers `length` bytes when
+    // the data is contiguous, which is checked first.
+    unsafe {
+        let Some(block) = buffer.data_buffer() else {
+            return;
+        };
+        let length = block.data_length();
+        if length == 0 || !block.is_range_contiguous(0, length) {
+            return;
+        }
+        let mut data: *mut std::ffi::c_char = ptr::null_mut();
+        if block.data_pointer(0, ptr::null_mut(), ptr::null_mut(), &mut data) != 0
+            || data.is_null()
+            || !(data as usize).is_multiple_of(std::mem::align_of::<f32>())
+        {
+            return;
+        }
+        let samples = std::slice::from_raw_parts_mut(data.cast::<f32>(), length / 4);
+        for s in samples {
+            *s = soft_limit(*s * MICROPHONE_GAIN);
+        }
+    }
+}
+
+/// Leaves samples up to the knee alone and eases louder ones toward full
+/// scale, so boosted speech does not clip harshly.
+fn soft_limit(x: f32) -> f32 {
+    let magnitude = x.abs();
+    if magnitude <= LIMIT_KNEE {
+        return x;
+    }
+    let room = 1.0 - LIMIT_KNEE;
+    let bent = LIMIT_KNEE + room * ((magnitude - LIMIT_KNEE) / room).tanh();
+    bent.copysign(x)
+}
 
 /// Microphone capture where ScreenCaptureKit cannot record it (before
 /// macOS 15): a capture session delivering to the recording queue, so its
@@ -719,4 +769,22 @@ pub fn macos_at_least(major: isize) -> bool {
     }
     let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
     version.majorVersion >= major
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn soft_limit_keeps_quiet_samples_and_never_clips() {
+        assert_eq!(soft_limit(0.5), 0.5);
+        assert_eq!(soft_limit(-0.8), -0.8);
+        for x in [0.9f32, 1.5, 6.0, 100.0] {
+            let y = soft_limit(x);
+            assert!(y > LIMIT_KNEE && y <= 1.0, "{x} -> {y}");
+            assert_eq!(soft_limit(-x), -y);
+        }
+        // Louder stays louder.
+        assert!(soft_limit(1.0) < soft_limit(2.0));
+    }
 }

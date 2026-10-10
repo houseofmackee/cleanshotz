@@ -218,7 +218,8 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   hiding notification banners from recordings (instead of toggling Do Not
   Disturb, which has no public API), mixing system audio and the
   microphone into one track after recording, and an AVFoundation
-  microphone fallback for macOS 14: done. The macOS 14 paths can be
+  microphone fallback for macOS 14 (boosted 6x with a soft limiter, since
+  ScreenCaptureKit's microphone applies automatic gain): done. The macOS 14 paths can be
   exercised on newer systems with `CLEANSHOTZ_PRETEND_MACOS=14` in debug
   builds.
 - Platform limits: ScreenCaptureKit records audio from applications only,
