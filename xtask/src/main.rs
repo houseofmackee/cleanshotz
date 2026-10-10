@@ -107,6 +107,7 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
         contents.join("MacOS").join(BINARY),
     )
     .context("copying the app binary")?;
+    app_intents_metadata(&profile_dir, &contents.join("Resources"));
 
     sign(
         &app,
@@ -237,6 +238,70 @@ fn workspace_root() -> PathBuf {
         .parent()
         .expect("xtask lives inside the workspace")
         .to_path_buf()
+}
+
+/// Generates `Metadata.appintents` (how macOS finds the App Intents)
+/// from what `build.rs` left in `<profile>/intents`. Needs Xcode's
+/// `appintentsmetadataprocessor`; without it the app works, minus its
+/// Shortcuts actions.
+fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
+    let intents = profile_dir.join("intents");
+    let (sources, const_values) = (intents.join("sources.txt"), intents.join("constvalues.txt"));
+    if !sources.exists() || !const_values.exists() {
+        eprintln!("note: no App Intents were compiled; skipping their metadata");
+        return;
+    }
+    let tool = |args: &[&str]| -> Option<String> {
+        let out = Command::new(args[0]).args(&args[1..]).output().ok()?;
+        out.status
+            .success()
+            .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+    };
+    let (Some(_), Some(sdk), Some(swiftc), Some(version)) = (
+        tool(&["xcrun", "--find", "appintentsmetadataprocessor"]),
+        tool(&["xcrun", "--show-sdk-path", "--sdk", "macosx"]),
+        tool(&["xcrun", "--find", "swiftc"]),
+        tool(&["xcodebuild", "-version"]),
+    ) else {
+        eprintln!(
+            "note: Xcode's appintentsmetadataprocessor is not available; the app will have no Shortcuts actions"
+        );
+        return;
+    };
+    let toolchain = Path::new(&swiftc)
+        .ancestors()
+        .nth(3)
+        .unwrap_or(Path::new("/"));
+    let build_version = version
+        .lines()
+        .find_map(|l| l.strip_prefix("Build version "))
+        .unwrap_or("0");
+    let status = Command::new("xcrun")
+        .arg("appintentsmetadataprocessor")
+        .arg("--output")
+        .arg(resources)
+        .arg("--toolchain-dir")
+        .arg(toolchain)
+        .args(["--module-name", "CleanShotZIntents"])
+        .args(["--sdk-root", &sdk])
+        .args(["--xcode-version", build_version])
+        .args(["--platform-family", "macOS"])
+        .args(["--deployment-target", "14.0"])
+        .args(["--target-triple", "arm64-apple-macos14.0"])
+        .arg("--source-file-list")
+        .arg(&sources)
+        .arg("--swift-const-vals-list")
+        .arg(&const_values)
+        .arg("--quiet-warnings")
+        .output();
+    match status {
+        Ok(out) if out.status.success() && resources.join("Metadata.appintents").exists() => {}
+        Ok(out) => eprintln!(
+            "warning: App Intents metadata was not generated:\n{}",
+            String::from_utf8_lossy(&out.stderr).trim()
+        ),
+        Err(e) => eprintln!("warning: could not run appintentsmetadataprocessor: {e}"),
+    }
 }
 
 fn run(command: &mut Command) -> Result<()> {

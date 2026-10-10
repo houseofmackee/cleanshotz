@@ -489,8 +489,20 @@ tell application "CleanShotZ"
 end tell
 ```
 
-The Shortcuts app can run these with its Run AppleScript action. The first
-time a script controls CleanShotZ, macOS asks you to allow it.
+The first time a script controls CleanShotZ, macOS asks you to allow it.
+
+### Shortcuts
+
+CleanShotZ also offers actions to the Shortcuts app (and Spotlight): Capture
+Area, Capture Fullscreen, Capture Window, Capture Previous Area (each with an
+optional "Then" action), Capture Text, Scrolling Capture, Record Screen, Open
+Capture History, Hide Desktop Icons and Run Pipeline. Search for CleanShotZ
+in the Shortcuts app's action list. Every command is also available through
+the Open URLs action (`cleanshotz://...`), Run AppleScript, or Run Shell
+Script with the command line.
+
+Building the actions needs Xcode (for `appintentsmetadataprocessor`); with
+only the Command Line Tools the app builds without them.
 
 ## License
 

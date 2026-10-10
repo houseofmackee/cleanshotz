@@ -2,6 +2,7 @@
 //! global hotkeys and first-launch onboarding.
 
 pub(crate) mod alert;
+mod intents;
 mod scripting;
 pub mod server;
 

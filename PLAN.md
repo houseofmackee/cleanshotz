@@ -280,7 +280,10 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   Unix socket, reports errors and starts the app when needed. An
   AppleScript dictionary offers the same commands and parameters (one
   command class turns them into the same requests). Imgur is a named
-  upload destination. Not done yet: App Intents.
+  upload destination. App Intents (swift/Intents.swift, compiled by
+  build.rs into a static library and force-loaded; their metadata made
+  by xtask with Xcode's appintentsmetadataprocessor) call one Rust
+  function that runs the same request as a URL.
 - Post-capture action pipeline (improvement #8).
   Done: named pipelines in `[pipelines]` with resize, background, redact,
   format, save, copy, upload, copy-link, open, run, annotate, pin and
