@@ -328,6 +328,7 @@ impl AppDelegate {
             Action::PermissionAccessibility => Permission::Accessibility.request(),
             Action::PermissionMicrophone => Permission::Microphone.request(),
             Action::PermissionCamera => Permission::Camera.request(),
+            Action::PermissionInputMonitoring => Permission::InputMonitoring.request(),
             Action::About => {
                 let app = NSApplication::sharedApplication(mtm);
                 app.activate();
@@ -451,6 +452,10 @@ impl AppDelegate {
             (Action::PermissionAccessibility, Permission::Accessibility),
             (Action::PermissionMicrophone, Permission::Microphone),
             (Action::PermissionCamera, Permission::Camera),
+            (
+                Action::PermissionInputMonitoring,
+                Permission::InputMonitoring,
+            ),
         ] {
             let item = self.menu_item(action);
             let granted = permission.status() == Status::Granted;

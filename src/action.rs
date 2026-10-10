@@ -24,12 +24,13 @@ pub enum Action {
     PermissionAccessibility,
     PermissionMicrophone,
     PermissionCamera,
+    PermissionInputMonitoring,
     About,
     Quit,
 }
 
 impl Action {
-    pub const ALL: [Action; 23] = [
+    pub const ALL: [Action; 24] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -51,6 +52,7 @@ impl Action {
         Action::PermissionAccessibility,
         Action::PermissionMicrophone,
         Action::PermissionCamera,
+        Action::PermissionInputMonitoring,
         Action::About,
         Action::Quit,
     ];
@@ -90,6 +92,7 @@ impl Action {
             Action::PermissionAccessibility => "Accessibility",
             Action::PermissionMicrophone => "Microphone",
             Action::PermissionCamera => "Camera",
+            Action::PermissionInputMonitoring => "Input Monitoring",
             Action::About => "About CleanShotZ",
             Action::Quit => "Quit CleanShotZ",
         }

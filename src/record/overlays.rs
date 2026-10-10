@@ -26,7 +26,7 @@ use objc2_core_foundation::{
 };
 use objc2_core_graphics::{
     CGEvent, CGEventField, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
-    CGEventTapProxy, CGEventType, CGPreflightListenEventAccess, CGRequestListenEventAccess,
+    CGEventTapProxy, CGEventType, CGPreflightListenEventAccess,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
@@ -244,7 +244,7 @@ impl KeyDisplay {
             None
         } else {
             if !CGPreflightListenEventAccess() {
-                CGRequestListenEventAccess();
+                Permission::InputMonitoring.request();
                 return Err(
                     "Allow Input Monitoring for CleanShotZ, then record again to show keystrokes"
                         .into(),

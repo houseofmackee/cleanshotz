@@ -7,7 +7,11 @@ use objc2_av_foundation::{
     AVAuthorizationStatus, AVCaptureDevice, AVMediaType, AVMediaTypeAudio, AVMediaTypeVideo,
 };
 use objc2_core_foundation::{CFBoolean, CFDictionary, CFString};
-use objc2_core_graphics::{CGPreflightScreenCaptureAccess, CGRequestScreenCaptureAccess};
+use objc2_core_graphics::{
+    CGEvent, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
+    CGPreflightListenEventAccess, CGPreflightScreenCaptureAccess, CGRequestListenEventAccess,
+    CGRequestScreenCaptureAccess,
+};
 use objc2_foundation::{NSString, NSURL};
 
 #[link(name = "ApplicationServices", kind = "framework")]
@@ -23,6 +27,8 @@ pub enum Permission {
     Accessibility,
     Microphone,
     Camera,
+    /// Listening to key presses (the keystroke display in recordings).
+    InputMonitoring,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -37,6 +43,7 @@ impl Permission {
     pub fn status(self) -> Status {
         match self {
             Permission::ScreenRecording => granted_or_denied(CGPreflightScreenCaptureAccess()),
+            Permission::InputMonitoring => granted_or_denied(CGPreflightListenEventAccess()),
             // SAFETY: no preconditions.
             Permission::Accessibility => granted_or_denied(unsafe { AXIsProcessTrusted() }),
             Permission::Microphone | Permission::Camera => {
@@ -66,6 +73,26 @@ impl Permission {
             (_, Status::Granted) => {}
             (Permission::ScreenRecording, _) => {
                 if !CGRequestScreenCaptureAccess() {
+                    self.open_settings();
+                }
+            }
+            (Permission::InputMonitoring, _) => {
+                CGRequestListenEventAccess();
+                // On recent macOS only an actual attempt to listen adds the
+                // app to the Input Monitoring list; the request call above
+                // just checks. The tap is dropped right away.
+                // SAFETY: a listen-only tap with a no-op callback.
+                let _ = unsafe {
+                    CGEvent::tap_create(
+                        CGEventTapLocation::SessionEventTap,
+                        CGEventTapPlacement::TailAppendEventTap,
+                        CGEventTapOptions::ListenOnly,
+                        1u64 << CGEventType::KeyDown.0,
+                        Some(pass_through),
+                        std::ptr::null_mut(),
+                    )
+                };
+                if !CGPreflightListenEventAccess() {
                     self.open_settings();
                 }
             }
@@ -104,6 +131,7 @@ impl Permission {
             Permission::Accessibility => "Privacy_Accessibility",
             Permission::Microphone => "Privacy_Microphone",
             Permission::Camera => "Privacy_Camera",
+            Permission::InputMonitoring => "Privacy_ListenEvent",
         };
         let url = format!("x-apple.systempreferences:com.apple.preference.security?{anchor}");
         if let Some(url) = NSURL::URLWithString(&NSString::from_str(&url)) {
@@ -121,6 +149,15 @@ impl Permission {
             }
         }
     }
+}
+
+unsafe extern "C-unwind" fn pass_through(
+    _proxy: objc2_core_graphics::CGEventTapProxy,
+    _kind: CGEventType,
+    event: std::ptr::NonNull<CGEvent>,
+    _user: *mut std::ffi::c_void,
+) -> *mut CGEvent {
+    event.as_ptr()
 }
 
 fn granted_or_denied(granted: bool) -> Status {
