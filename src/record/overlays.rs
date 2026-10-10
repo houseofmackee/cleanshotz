@@ -26,7 +26,7 @@ use objc2_core_foundation::{
 };
 use objc2_core_graphics::{
     CGEvent, CGEventField, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
-    CGEventTapProxy, CGEventType, CGPreflightListenEventAccess,
+    CGEventTapProxy, CGEventType,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
@@ -243,7 +243,7 @@ impl KeyDisplay {
         let tap = if fake {
             None
         } else {
-            if !CGPreflightListenEventAccess() {
+            if Permission::InputMonitoring.status() != Status::Granted {
                 Permission::InputMonitoring.request();
                 return Err(
                     "Allow Input Monitoring for CleanShotZ, then record again to show keystrokes"

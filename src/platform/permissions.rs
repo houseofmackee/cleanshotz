@@ -7,12 +7,21 @@ use objc2_av_foundation::{
     AVAuthorizationStatus, AVCaptureDevice, AVMediaType, AVMediaTypeAudio, AVMediaTypeVideo,
 };
 use objc2_core_foundation::{CFBoolean, CFDictionary, CFString};
-use objc2_core_graphics::{
-    CGEvent, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement, CGEventType,
-    CGPreflightListenEventAccess, CGPreflightScreenCaptureAccess, CGRequestListenEventAccess,
-    CGRequestScreenCaptureAccess,
-};
+use objc2_core_graphics::{CGPreflightScreenCaptureAccess, CGRequestScreenCaptureAccess};
 use objc2_foundation::{NSString, NSURL};
+
+// Input Monitoring. CoreGraphics' CGRequestListenEventAccess only checks
+// access on current macOS (through the window server) and never adds the
+// app to the list; IOKit's request goes to the privacy service directly.
+#[link(name = "IOKit", kind = "framework")]
+unsafe extern "C" {
+    fn IOHIDCheckAccess(request_type: u32) -> u32;
+    fn IOHIDRequestAccess(request_type: u32) -> bool;
+}
+
+const K_IOHID_REQUEST_TYPE_LISTEN_EVENT: u32 = 1;
+const K_IOHID_ACCESS_TYPE_GRANTED: u32 = 0;
+const K_IOHID_ACCESS_TYPE_UNKNOWN: u32 = 2;
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
@@ -43,7 +52,14 @@ impl Permission {
     pub fn status(self) -> Status {
         match self {
             Permission::ScreenRecording => granted_or_denied(CGPreflightScreenCaptureAccess()),
-            Permission::InputMonitoring => granted_or_denied(CGPreflightListenEventAccess()),
+            // SAFETY: plain IOKit query.
+            Permission::InputMonitoring => {
+                match unsafe { IOHIDCheckAccess(K_IOHID_REQUEST_TYPE_LISTEN_EVENT) } {
+                    K_IOHID_ACCESS_TYPE_GRANTED => Status::Granted,
+                    K_IOHID_ACCESS_TYPE_UNKNOWN => Status::NotDetermined,
+                    _ => Status::Denied,
+                }
+            }
             // SAFETY: no preconditions.
             Permission::Accessibility => granted_or_denied(unsafe { AXIsProcessTrusted() }),
             Permission::Microphone | Permission::Camera => {
@@ -76,23 +92,12 @@ impl Permission {
                     self.open_settings();
                 }
             }
-            (Permission::InputMonitoring, _) => {
-                CGRequestListenEventAccess();
-                // On recent macOS only an actual attempt to listen adds the
-                // app to the Input Monitoring list; the request call above
-                // just checks. The tap is dropped right away.
-                // SAFETY: a listen-only tap with a no-op callback.
-                let _ = unsafe {
-                    CGEvent::tap_create(
-                        CGEventTapLocation::SessionEventTap,
-                        CGEventTapPlacement::TailAppendEventTap,
-                        CGEventTapOptions::ListenOnly,
-                        1u64 << CGEventType::KeyDown.0,
-                        Some(pass_through),
-                        std::ptr::null_mut(),
-                    )
-                };
-                if !CGPreflightListenEventAccess() {
+            (Permission::InputMonitoring, status) => {
+                // Prompts the first time and adds the app to the list.
+                // SAFETY: plain IOKit request.
+                let granted = unsafe { IOHIDRequestAccess(K_IOHID_REQUEST_TYPE_LISTEN_EVENT) };
+                // After the first answer macOS no longer prompts.
+                if !granted && status == Status::Denied {
                     self.open_settings();
                 }
             }
@@ -149,15 +154,6 @@ impl Permission {
             }
         }
     }
-}
-
-unsafe extern "C-unwind" fn pass_through(
-    _proxy: objc2_core_graphics::CGEventTapProxy,
-    _kind: CGEventType,
-    event: std::ptr::NonNull<CGEvent>,
-    _user: *mut std::ffi::c_void,
-) -> *mut CGEvent {
-    event.as_ptr()
 }
 
 fn granted_or_denied(granted: bool) -> Status {
