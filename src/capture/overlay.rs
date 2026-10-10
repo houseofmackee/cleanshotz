@@ -180,7 +180,26 @@ pub fn begin(
         surface.window.makeFirstResponder(Some(&surface.view));
     }
     NSCursor::crosshairCursor().set();
+    let instructions = session.hint.clone().unwrap_or_else(|| {
+        match session.mode {
+            Mode::Window => {
+                "Move the pointer over a window and click to capture it. Escape cancels."
+            }
+            _ => "Drag to select an area. Space picks a window instead. Escape cancels.",
+        }
+        .to_string()
+    });
+    for surface in &session.surfaces {
+        crate::ui::access::describe(
+            &surface.view,
+            // SAFETY: reading an AppKit constant.
+            unsafe { objc2_app_kit::NSAccessibilityGroupRole },
+            "Screen selection",
+            Some(&instructions),
+        );
+    }
     SESSION.with(|s| *s.borrow_mut() = Some(session));
+    crate::ui::access::announce(mtm, &instructions);
 }
 
 fn make_surface(

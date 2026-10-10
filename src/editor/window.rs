@@ -356,10 +356,32 @@ impl EditorController {
                 | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         content.addSubview(&canvas);
+        let id = self.ivars().id;
+        let editor_action =
+            |name: &'static str, f: fn(&EditorController)| -> (&'static str, Box<dyn Fn()>) {
+                (
+                    name,
+                    Box::new(move || {
+                        if let Some(editor) = registry::get(id) {
+                            f(&editor);
+                        }
+                    }),
+                )
+            };
+        crate::ui::access::actions(
+            &canvas,
+            vec![
+                editor_action("Undo", |e| e.undo()),
+                editor_action("Redo", |e| e.redo()),
+                editor_action("Copy Image", |e| e.copy_to_clipboard()),
+                editor_action("Save", |e| e.save()),
+            ],
+        );
 
         let ui = self.build_bars(mtm, &content, width, height);
         let _ = self.ivars().ui.set(ui);
         let _ = self.ivars().canvas.set(canvas.clone());
+        self.describe_canvas(&canvas);
         let _ = self.ivars().window.set(window.clone());
         self.sync_controls();
 
@@ -966,8 +988,34 @@ impl EditorController {
     pub fn refresh(&self) {
         if let Some(canvas) = self.ivars().canvas.get() {
             canvas.setNeedsDisplay(true);
+            self.describe_canvas(canvas);
         }
         self.sync_controls();
+    }
+
+    /// What VoiceOver says for the canvas: the image, how many annotations
+    /// it has and the current tool.
+    fn describe_canvas(&self, canvas: &CanvasView) {
+        let session = self.ivars().session.borrow();
+        let base = &self.ivars().base;
+        let count = session.doc.annotations.len();
+        let annotations = match count {
+            0 => "no annotations".to_string(),
+            1 => "1 annotation".to_string(),
+            n => format!("{n} annotations"),
+        };
+        crate::ui::access::describe(
+            canvas,
+            // SAFETY: reading an AppKit constant.
+            unsafe { objc2_app_kit::NSAccessibilityImageRole },
+            &format!(
+                "Image, {} by {} points, {annotations}. Tool: {}",
+                base.width.round(),
+                base.height.round(),
+                session.tool.title()
+            ),
+            Some("Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions."),
+        );
     }
 
     pub fn set_tool(&self, tool: Tool) {

@@ -63,6 +63,8 @@ pub struct Ivars {
     thumbnails: RefCell<HashMap<i64, Retained<NSImage>>>,
     selected: Cell<Option<usize>>,
     show: Cell<Show>,
+    /// One accessibility element per item, for VoiceOver.
+    elements: RefCell<Vec<Retained<objc2_app_kit::NSAccessibilityElement>>>,
 }
 
 thread_local! {
@@ -148,6 +150,7 @@ impl HistoryWindow {
             thumbnails: RefCell::new(HashMap::new()),
             selected: Cell::new(None),
             show: Cell::new(Show::All),
+            elements: RefCell::new(Vec::new()),
         });
         // SAFETY: NSObject's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -274,7 +277,88 @@ impl HistoryWindow {
         }
         *ivars.items.borrow_mut() = items;
         ivars.selected.set(None);
+        self.describe_items();
         self.relayout();
+    }
+
+    /// Builds the accessibility elements VoiceOver lists for the grid: one
+    /// per capture, labeled, with the context menu's commands as actions.
+    fn describe_items(&self) {
+        use objc2_app_kit::{NSAccessibility, NSAccessibilityCustomAction, NSAccessibilityElement};
+        let Some(grid) = self.ivars().grid.get() else {
+            return;
+        };
+        let items = self.ivars().items.borrow();
+        let elements: Vec<Retained<NSAccessibilityElement>> = items
+            .iter()
+            .enumerate()
+            .map(|(index, item)| {
+                let label = item_label(item);
+                // SAFETY: reading an AppKit constant; the grid is the parent
+                // and outlives its elements (they are replaced on reload).
+                let element = unsafe {
+                    NSAccessibilityElement::accessibilityElementWithRole_frame_label_parent(
+                        objc2_app_kit::NSAccessibilityImageRole,
+                        NSRect::ZERO,
+                        Some(&NSString::from_str(&label)),
+                        Some(grid.as_ref()),
+                    )
+                }
+                .downcast::<NSAccessibilityElement>()
+                .expect("an accessibility element");
+                let recording = item.entry.kind.is_recording();
+                let mut commands = vec![
+                    (if recording { "Play" } else { "Open" }, tag::OPEN),
+                    (if recording { "Edit Video" } else { "Annotate" }, tag::EDIT),
+                    ("Copy", tag::COPY),
+                    ("Show in Finder", tag::SHOW_IN_FINDER),
+                ];
+                if !recording {
+                    commands.push(("Pin to Screen", tag::PIN));
+                }
+                if crate::upload::enabled() {
+                    commands.push(("Upload", tag::UPLOAD));
+                }
+                if item.entry.link.is_some() {
+                    commands.push(("Copy Link", tag::COPY_LINK));
+                }
+                commands.push(("Delete", tag::DELETE));
+                let actions: Vec<Retained<NSAccessibilityCustomAction>> = commands
+                    .into_iter()
+                    .filter(|(_, t)| item.exists || matches!(*t, tag::DELETE | tag::COPY_LINK))
+                    .map(|(name, t)| {
+                        let block = block2::RcBlock::new(move || {
+                            if let Some(c) = controller() {
+                                c.perform(t, index);
+                            }
+                            objc2::runtime::Bool::YES
+                        });
+                        NSAccessibilityCustomAction::initWithName_handler(
+                            NSAccessibilityCustomAction::alloc(),
+                            &NSString::from_str(name),
+                            Some(&block),
+                        )
+                    })
+                    .collect();
+                element
+                    .setAccessibilityCustomActions(Some(&NSArray::from_retained_slice(&actions)));
+                element
+            })
+            .collect();
+        let children: Vec<Retained<AnyObject>> = elements
+            .iter()
+            .map(|e| Retained::into_super(Retained::into_super(e.clone())))
+            .collect();
+        crate::ui::access::describe(
+            grid,
+            // SAFETY: reading an AppKit constant.
+            unsafe { objc2_app_kit::NSAccessibilityListRole },
+            "Captures",
+            Some("Each capture has actions to open, copy, show in Finder and more."),
+        );
+        // SAFETY: an array of accessibility elements.
+        unsafe { grid.setAccessibilityChildren(Some(&NSArray::from_retained_slice(&children))) };
+        *self.ivars().elements.borrow_mut() = elements;
     }
 
     fn columns(&self) -> usize {
@@ -297,6 +381,14 @@ impl HistoryWindow {
         let height = (rows as f64 * CELL.height + 2.0 * PADDING).max(visible.height);
         grid.setFrameSize(NSSize::new(visible.width, height));
         grid.setNeedsDisplay(true);
+        // Columns may have changed: move the accessibility elements along.
+        for (index, element) in ivars.elements.borrow().iter().enumerate() {
+            let r = self.cell_rect(index);
+            element.setAccessibilityFrameInParentSpace(NSRect::new(
+                NSPoint::new(r.x, r.y),
+                NSSize::new(r.width, r.height),
+            ));
+        }
     }
 
     fn cell_rect(&self, index: usize) -> Rect {
@@ -577,6 +669,35 @@ impl HistoryWindow {
 }
 
 /// Copies an entry: screenshots as PNG data, recordings as files.
+/// What VoiceOver says for a history item: kind, size or length, date.
+fn item_label(item: &Item) -> String {
+    let e = &item.entry;
+    let when = chrono::DateTime::from_timestamp(e.created, 0)
+        .map(|t| {
+            t.with_timezone(&chrono::Local)
+                .format("%-d %B %Y at %H:%M")
+                .to_string()
+        })
+        .unwrap_or_default();
+    let what = match e.kind {
+        Kind::Image => format!("Screenshot, {} by {} pixels", e.width, e.height),
+        Kind::Video | Kind::Gif => {
+            let kind = if e.kind == Kind::Gif {
+                "GIF"
+            } else {
+                "Recording"
+            };
+            let length = e
+                .duration
+                .map(|d| format!(", {}", crate::quick_access::format_duration(d)))
+                .unwrap_or_default();
+            format!("{kind}{length}")
+        }
+    };
+    let missing = if item.exists { "" } else { ", file missing" };
+    format!("{what}, {when}{missing}")
+}
+
 fn copy(entry: &Entry) {
     if entry.kind.is_recording() {
         crate::quick_access::copy_file(&entry.path);

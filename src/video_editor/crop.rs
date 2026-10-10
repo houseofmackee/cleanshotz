@@ -6,7 +6,7 @@ use std::cell::Cell;
 
 use objc2::rc::Retained;
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send};
-use objc2_app_kit::{NSColor, NSEvent, NSView};
+use objc2_app_kit::{NSAccessibility, NSColor, NSEvent, NSView};
 use objc2_foundation::{NSPoint, NSRect};
 
 use super::registry;
@@ -124,6 +124,20 @@ impl CropView {
         self.ivars().editing.set(editing);
         if editing && let Some(window) = self.window() {
             window.makeFirstResponder(Some(self));
+        }
+        // Only an element while cropping; otherwise VoiceOver reaches the
+        // player underneath.
+        self.setAccessibilityElement(editing);
+        if editing {
+            let text = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
+            crate::ui::access::describe(
+                self,
+                // SAFETY: reading an AppKit constant.
+                unsafe { objc2_app_kit::NSAccessibilityGroupRole },
+                "Crop area",
+                Some(text),
+            );
+            crate::ui::access::announce(self.mtm(), text);
         }
         self.setNeedsDisplay(true);
     }

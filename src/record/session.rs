@@ -11,8 +11,8 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSBox, NSBoxType, NSButton, NSColor, NSFont, NSFontWeightMedium, NSImage, NSPanel, NSScreen,
-    NSTextField, NSTitlePosition,
+    NSAccessibility, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSFontWeightMedium, NSImage,
+    NSPanel, NSScreen, NSTextField, NSTitlePosition,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
@@ -563,10 +563,25 @@ pub fn toggle_pause() {
             }
         };
         active.recorder.set_paused(paused);
-        let symbol = if paused { "play.fill" } else { "pause.fill" };
+        let (symbol, label) = if paused {
+            ("play.fill", "Resume recording")
+        } else {
+            ("pause.fill", "Pause recording")
+        };
         active
             .pause_button
             .setImage(symbol_image(symbol).as_deref());
+        active
+            .pause_button
+            .setAccessibilityLabel(Some(&NSString::from_str(label)));
+        crate::ui::access::announce(
+            MainThreadMarker::new().expect("runs on the main thread"),
+            if paused {
+                "Recording paused"
+            } else {
+                "Recording resumed"
+            },
+        );
         update_time(active);
     });
 }
@@ -681,6 +696,7 @@ fn control_panel(
         b.setBordered(false);
         b.setContentTintColor(Some(&NSColor::whiteColor()));
         b.setToolTip(Some(&NSString::from_str(tip)));
+        b.setAccessibilityLabel(Some(&NSString::from_str(tip)));
         b.setFrame(NSRect::new(NSPoint::new(x, 8.0), NSSize::new(32.0, 28.0)));
         background.addSubview(&b);
         b

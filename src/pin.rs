@@ -31,7 +31,7 @@ use crate::capture::geometry::{Point, Rect};
 use crate::capture::{output, screen_under_mouse};
 use crate::config::ImageFormat;
 use crate::quick_access::Item;
-use crate::ui::draw;
+use crate::ui::{access, draw};
 
 const MIN_ZOOM: f64 = 0.1;
 const MAX_ZOOM: f64 = 8.0;
@@ -100,6 +100,7 @@ pub fn pin(mtm: MainThreadMarker, item: &Item) {
     );
 
     let view = PinView::new(mtm, id, NSRect::new(NSPoint::ZERO, frame.size));
+    describe_pin(&view, id, base);
     panel.setContentView(Some(&view));
     // SAFETY: the view owns the tracking area.
     let tracking = unsafe {
@@ -129,6 +130,48 @@ pub fn pin(mtm: MainThreadMarker, item: &Item) {
     });
     PINS.with(|p| p.borrow_mut().pins.push(pin));
     panel.makeKeyAndOrderFront(None);
+}
+
+/// The pin as one accessibility element whose actions match its context
+/// menu.
+fn describe_pin(view: &PinView, id: u64, size: NSSize) {
+    access::describe(
+        view,
+        // SAFETY: reading an AppKit constant.
+        unsafe { objc2_app_kit::NSAccessibilityImageRole },
+        &format!(
+            "Pinned screenshot, {} by {} points",
+            size.width.round(),
+            size.height.round()
+        ),
+        Some("Floats above other windows. Drag to move; use the actions to copy, zoom or close."),
+    );
+    let action =
+        |name: &'static str, f: fn(MainThreadMarker, &Pin)| -> (&'static str, Box<dyn Fn()>) {
+            (
+                name,
+                Box::new(move || {
+                    defer(move |mtm| {
+                        if let Some(pin) = find(id) {
+                            f(mtm, &pin);
+                        }
+                    })
+                }),
+            )
+        };
+    access::actions(
+        view,
+        vec![
+            action("Copy", |_, pin| copy(pin)),
+            action("Save As…", save_as),
+            action("Zoom In", |_, pin| set_zoom(pin, pin.zoom.get() * 1.25)),
+            action("Zoom Out", |_, pin| set_zoom(pin, pin.zoom.get() / 1.25)),
+            action("Actual Size", |_, pin| set_zoom(pin, 1.0)),
+            action("Arrange All Pins", |mtm, _| arrange(mtm)),
+            action("Lock (Click Through)", |_, pin| set_locked(pin, true)),
+            action("Close", |_, pin| close(pin.id)),
+        ],
+    );
 }
 
 pub fn count() -> usize {

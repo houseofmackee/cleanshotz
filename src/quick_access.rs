@@ -19,10 +19,10 @@ use objc2::{
     AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
 };
 use objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext, NSDraggingItem,
-    NSDraggingSession, NSDraggingSource, NSEvent, NSGraphicsContext, NSImage, NSImageInterpolation,
-    NSPanel, NSResponder, NSScreen, NSStatusWindowLevel, NSTrackingArea, NSTrackingAreaOptions,
-    NSView, NSWindowCollectionBehavior, NSWindowStyleMask, NSWorkspace,
+    NSAccessibilityImageRole, NSBackingStoreType, NSColor, NSDragOperation, NSDraggingContext,
+    NSDraggingItem, NSDraggingSession, NSDraggingSource, NSEvent, NSGraphicsContext, NSImage,
+    NSImageInterpolation, NSPanel, NSResponder, NSScreen, NSStatusWindowLevel, NSTrackingArea,
+    NSTrackingAreaOptions, NSView, NSWindowCollectionBehavior, NSWindowStyleMask, NSWorkspace,
 };
 use objc2_core_foundation::CFRetained;
 use objc2_core_graphics::CGImage;
@@ -35,6 +35,7 @@ use crate::capture::output::{self, Delivered};
 use crate::capture::{image, screen_under_mouse};
 use crate::config::{CaptureSettings, ImageFormat, QuickAccessSettings, Side};
 use crate::pin;
+use crate::ui::access;
 use crate::ui::draw::{self, Weight};
 
 const MARGIN: f64 = 16.0;
@@ -281,6 +282,8 @@ fn show(mtm: MainThreadMarker, item: Rc<Item>) {
             | NSWindowCollectionBehavior::IgnoresCycle,
     );
     let view = CardView::new(mtm, id, NSRect::new(NSPoint::ZERO, size));
+    describe_card(&view, id, &item);
+    let label = card_label(&item);
     panel.setContentView(Some(&view));
     // SAFETY: the view owns the tracking area.
     let tracking = unsafe {
@@ -311,6 +314,63 @@ fn show(mtm: MainThreadMarker, item: Rc<Item>) {
     });
     layout();
     panel.orderFrontRegardless();
+    access::announce(mtm, &format!("{label} in Quick Access"));
+}
+
+/// What VoiceOver says for a card.
+fn card_label(item: &Item) -> String {
+    match item.video.get() {
+        Some(duration) => format!("Recording, {}", format_duration(duration)),
+        None => {
+            let (w, h) = image::pixel_size(&item.image.borrow());
+            format!("Screenshot, {w} by {h} pixels")
+        }
+    }
+}
+
+/// The card as one accessibility element whose actions are the hover
+/// buttons.
+fn describe_card(view: &CardView, id: u64, item: &Item) {
+    access::describe(
+        view,
+        // SAFETY: reading an AppKit constant.
+        unsafe { NSAccessibilityImageRole },
+        &card_label(item),
+        Some("Quick Access thumbnail. Drag it into an app, or use the actions."),
+    );
+    let video = item.is_video();
+    let mut list: Vec<(&str, Button)> = vec![
+        ("Copy", Button::Copy),
+        (
+            if item.is_saved() {
+                "Show in Finder"
+            } else {
+                "Save"
+            },
+            Button::Save,
+        ),
+        (
+            if video { "Edit Video" } else { "Annotate" },
+            Button::Annotate,
+        ),
+    ];
+    if !video {
+        list.push(("Pin to Screen", Button::Pin));
+    }
+    if crate::upload::enabled() {
+        list.push(("Upload", Button::Upload));
+    }
+    list.push(("Close", Button::Close));
+    access::actions(
+        view,
+        list.into_iter()
+            .map(|(name, button)| {
+                let run: Box<dyn Fn()> =
+                    Box::new(move || defer(move |mtm| perform(mtm, id, button)));
+                (name, run)
+            })
+            .collect(),
+    );
 }
 
 fn auto_close_timer(id: u64) -> Option<Retained<NSTimer>> {

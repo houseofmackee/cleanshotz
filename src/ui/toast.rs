@@ -21,6 +21,8 @@ thread_local! {
 
 /// Shows `message` for about two seconds, replacing any toast on screen.
 pub fn show(mtm: MainThreadMarker, message: &str) {
+    // VoiceOver users cannot see the toast.
+    super::access::announce(mtm, message);
     CURRENT.with(|c| {
         if let Some(old) = c.borrow_mut().take() {
             old.orderOut(None);
