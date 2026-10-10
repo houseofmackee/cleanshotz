@@ -75,6 +75,13 @@ mod registry {
     }
 }
 
+/// Debug builds only: `CLEANSHOTZ_NO_CONFIRM=1` discards unsaved
+/// annotations without asking, so automated test runs never leave a
+/// confirmation dialog on screen.
+pub fn skip_confirmations() -> bool {
+    cfg!(debug_assertions) && std::env::var_os("CLEANSHOTZ_NO_CONFIRM").is_some()
+}
+
 /// Whether any open editor has changes that were not saved or copied.
 pub fn has_unsaved_changes() -> bool {
     registry::all().iter().any(|e| e.is_dirty())

@@ -68,7 +68,7 @@ define_class!(
 
         #[unsafe(method(applicationShouldTerminate:))]
         fn should_terminate(&self, _app: &NSApplication) -> objc2_app_kit::NSApplicationTerminateReply {
-            if !crate::editor::has_unsaved_changes() {
+            if crate::editor::skip_confirmations() || !crate::editor::has_unsaved_changes() {
                 return objc2_app_kit::NSApplicationTerminateReply::TerminateNow;
             }
             let choice = alert::show(

@@ -2,6 +2,9 @@
 //!
 //! - `bundle [--release]`: build and assemble a signed `CleanShotZ.app`
 //! - `run [--release]`: bundle, then launch the app
+//! - `bundle --test`: a separate "CleanShotZ Test" app for automated
+//!   testing, with its own bundle id and `cleanshotz-test://` URL scheme,
+//!   so tests never reach the user's running CleanShotZ
 //! - `create-dev-cert`: create the self-signed "CleanShotZ Dev" signing
 //!   identity in the login keychain
 //!
@@ -23,13 +26,14 @@ const DEV_IDENTITY: &str = "CleanShotZ Dev";
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let release = args.iter().any(|a| a == "--release");
+    let test = args.iter().any(|a| a == "--test");
     match args.first().map(String::as_str) {
         Some("bundle") => {
-            let app = bundle(release)?;
+            let app = bundle(release, test)?;
             println!("{}", app.display());
         }
         Some("run") => {
-            let app = bundle(release)?;
+            let app = bundle(release, false)?;
             // Quit a running copy first so the new build is the one launched.
             let _ = Command::new("/usr/bin/osascript")
                 .args(["-e", &format!("quit app \"{APP_NAME}\"")])
@@ -37,12 +41,12 @@ fn main() -> Result<()> {
             run(Command::new("/usr/bin/open").arg("-n").arg(&app))?;
         }
         Some("create-dev-cert") => create_dev_cert()?,
-        _ => bail!("usage: cargo xtask <bundle|run> [--release] | create-dev-cert"),
+        _ => bail!("usage: cargo xtask <bundle|run> [--release] [--test] | create-dev-cert"),
     }
     Ok(())
 }
 
-fn bundle(release: bool) -> Result<PathBuf> {
+fn bundle(release: bool, test: bool) -> Result<PathBuf> {
     let root = workspace_root();
     let mut build = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
     build
@@ -56,7 +60,12 @@ fn bundle(release: bool) -> Result<PathBuf> {
     let profile_dir = root
         .join("target")
         .join(if release { "release" } else { "debug" });
-    let app = profile_dir.join(format!("{APP_NAME}.app"));
+    let name = if test {
+        format!("{APP_NAME} Test")
+    } else {
+        APP_NAME.to_string()
+    };
+    let app = profile_dir.join(format!("{name}.app"));
     let contents = app.join("Contents");
     if app.exists() {
         fs::remove_dir_all(&app).with_context(|| format!("removing {}", app.display()))?;
@@ -65,8 +74,20 @@ fn bundle(release: bool) -> Result<PathBuf> {
     fs::create_dir_all(contents.join("Resources"))?;
 
     let version = package_version(&root.join("Cargo.toml"))?;
-    let plist =
+    let mut plist =
         fs::read_to_string(root.join("resources/Info.plist"))?.replace("{{VERSION}}", &version);
+    if test {
+        plist = plist
+            .replace(
+                "<string>io.github.houseofmackee.cleanshotz</string>",
+                "<string>io.github.houseofmackee.cleanshotz.test</string>",
+            )
+            .replace("<string>cleanshotz</string>\n\t\t\t</array>", "<string>cleanshotz-test</string>\n\t\t\t</array>")
+            .replace("<string>CleanShotZ</string>", &format!("<string>{name}</string>"));
+        if !plist.contains("cleanshotz-test") || !plist.contains(".cleanshotz.test") {
+            bail!("Info.plist changed shape; update the test variant replacements in xtask");
+        }
+    }
     fs::write(contents.join("Info.plist"), plist)?;
     fs::write(contents.join("PkgInfo"), "APPL????")?;
     fs::copy(

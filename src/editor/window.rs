@@ -333,6 +333,9 @@ impl EditorController {
     }
 
     fn confirm_discard(&self) -> bool {
+        if super::skip_confirmations() {
+            return true;
+        }
         let alert = NSAlert::new(self.mtm());
         alert.setMessageText(ns_string!("Discard your changes?"));
         alert.setInformativeText(ns_string!("The annotations have not been saved or copied."));

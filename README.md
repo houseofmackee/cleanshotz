@@ -40,6 +40,12 @@ cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
 ```
 
+`cargo xtask bundle --test` builds a separate "CleanShotZ Test" app with
+its own bundle id and `cleanshotz-test://` URL scheme, for automated
+testing next to a running CleanShotZ. Debug builds started with
+`CLEANSHOTZ_NO_CONFIRM=1` discard unsaved annotations without asking, so
+test runs never leave a dialog behind.
+
 The app must run from its `.app` bundle (not the bare binary) for macOS to
 attribute privacy permissions and the login item to it.
 
