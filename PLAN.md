@@ -181,8 +181,8 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   canvas; Add Image to the Right / Below), image backgrounds (Desktop
   Wallpaper, Choose Image) and saved background presets
   (`backgrounds.json`, also usable from pipelines) are done. Blur and
-  pixelate sample the original capture only, not image layers. Not done
-  yet: an app icon. Quitting asks before discarding unsaved annotations.
+  pixelate sample the original capture only, not image layers. Quitting
+  asks before discarding unsaved annotations.
 
 ### M5: OCR and redaction (done)
 - Capture Text: region OCR to clipboard, language selection, line break handling.
@@ -312,10 +312,10 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
   xtask dist` (zip, DMG, checksums), `cargo xtask create-release-cert`, the
-  app icon (`resources/icon/make-icon.swift`) and repository hygiene are
-  done. Not done: creating the release certificate and its secrets (the
-  maintainer's step), README screenshots, and automatic updates (deferred,
-  see Updates).
+  app icon (`resources/icon/make-icon.swift`), the release certificate and
+  its secrets, README screenshots and repository hygiene are done; v0.1.0
+  was published as a pre-release. Automatic updates are deferred (see
+  Updates).
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
