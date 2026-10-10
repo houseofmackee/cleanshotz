@@ -7,11 +7,14 @@ use objc2_av_foundation::{
     AVAuthorizationStatus, AVCaptureDevice, AVMediaType, AVMediaTypeAudio, AVMediaTypeVideo,
 };
 use objc2_core_graphics::{CGPreflightScreenCaptureAccess, CGRequestScreenCaptureAccess};
+use objc2_core_foundation::{CFBoolean, CFDictionary, CFString};
 use objc2_foundation::{NSString, NSURL};
 
 #[link(name = "ApplicationServices", kind = "framework")]
 unsafe extern "C" {
     fn AXIsProcessTrusted() -> bool;
+    fn AXIsProcessTrustedWithOptions(options: Option<&CFDictionary>) -> bool;
+    static kAXTrustedCheckOptionPrompt: &'static CFString;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -53,11 +56,31 @@ impl Permission {
     /// Shows the system prompt when the user has not been asked yet, and
     /// otherwise opens the matching System Settings pane, since macOS only
     /// prompts once.
+    ///
+    /// Screen Recording and Accessibility cannot tell "not asked yet" from
+    /// "denied", so for them the request call is always made: it is what
+    /// adds the app to the list in System Settings (and prompts the first
+    /// time). Without it the app never appears there.
     pub fn request(self) {
         match (self, self.status()) {
             (_, Status::Granted) => {}
-            (Permission::ScreenRecording, Status::NotDetermined) => {
-                CGRequestScreenCaptureAccess();
+            (Permission::ScreenRecording, _) => {
+                if !CGRequestScreenCaptureAccess() {
+                    self.open_settings();
+                }
+            }
+            (Permission::Accessibility, _) => {
+                // SAFETY: a dictionary with the documented prompt option.
+                let trusted = unsafe {
+                    let options = CFDictionary::from_slices(
+                        &[kAXTrustedCheckOptionPrompt],
+                        &[CFBoolean::new(true)],
+                    );
+                    AXIsProcessTrustedWithOptions(Some(options.as_opaque()))
+                };
+                if !trusted {
+                    self.open_settings();
+                }
             }
             (Permission::Microphone | Permission::Camera, Status::NotDetermined) => {
                 let Some(media_type) = self.media_type() else {
