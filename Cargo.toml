@@ -1,0 +1,15 @@
+[package]
+name = "cleanshotz"
+version = "0.1.0"
+edition = "2024"
+description = "A native macOS screenshot, screen recording and annotation tool"
+publish = false
+
+[dependencies]
+
+# macOS app bundle metadata (used by cargo-bundle, see PLAN.md milestone M0)
+[package.metadata.bundle]
+name = "CleanShotZ"
+identifier = "com.cleanshotz.app"
+category = "public.app-category.productivity"
+osx_minimum_system_version = "14.0"
