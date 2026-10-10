@@ -183,6 +183,16 @@ Escape, function keys), so typed text such as passwords never appears in a
 recording. Both are shown in area and full-screen recordings, not in window
 recordings.
 
+### Video editor
+
+Click the scissors on a recording's thumbnail (or open a video with Open in
+Editor…). Trim… shows QuickTime's trim bar: drag the yellow handles and
+click Trim. Mute removes the sound, the size menu scales down to 1080p, 720p
+or 540p (never up), and MP4 or GIF picks the format. Save replaces the
+recording (a GIF is saved next to it); Save As… saves a copy anywhere.
+When only trimming or muting, the video is copied without re-encoding, so
+it keeps its quality and saves quickly.
+
 ### Quick Access Overlay
 
 Each capture appears as a thumbnail in the bottom-left corner. Hover it to

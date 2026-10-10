@@ -53,7 +53,7 @@ pub struct Item {
     saved: Cell<bool>,
     png: RefCell<Option<Vec<u8>>>,
     /// For recordings: the duration in seconds. `image` is the thumbnail.
-    video: Option<f64>,
+    video: Cell<Option<f64>>,
 }
 
 impl Item {
@@ -71,12 +71,12 @@ impl Item {
             file: RefCell::new(file),
             saved: Cell::new(saved),
             png: RefCell::new(None),
-            video: None,
+            video: Cell::new(None),
         }
     }
 
     pub fn is_video(&self) -> bool {
-        self.video.is_some()
+        self.video.get().is_some()
     }
 
     pub fn image(&self) -> CFRetained<CGImage> {
@@ -166,7 +166,7 @@ pub fn add(mtm: MainThreadMarker, delivered: Delivered) {
         file: RefCell::new(delivered.file),
         saved: Cell::new(delivered.saved),
         png: RefCell::new(delivered.png),
-        video: None,
+        video: Cell::new(None),
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
@@ -190,12 +190,28 @@ pub fn add_video(
         file: RefCell::new(file),
         saved: Cell::new(saved),
         png: RefCell::new(None),
-        video: Some(duration),
+        video: Cell::new(Some(duration)),
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
     }
     show(mtm, item);
+}
+
+/// After a recording was edited and saved over: shows its new thumbnail
+/// and duration.
+pub fn refresh_video(file: &std::path::Path, thumbnail: CFRetained<CGImage>, duration: f64) {
+    SHELF.with(|s| {
+        let mut shelf = s.borrow_mut();
+        for card in shelf.cards.iter_mut().filter(|c| c.item.file() == file) {
+            *card.item.image.borrow_mut() = thumbnail.clone();
+            card.item.video.set(Some(duration));
+            card.thumbnail = card.item.ns_image();
+            card.size = card_size(card.item.point_size());
+            card.view.setNeedsDisplay(true);
+        }
+    });
+    layout();
 }
 
 /// Puts a file on the clipboard (pasting it in Finder, Mail or chat apps
@@ -447,6 +463,7 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
             pin::pin(mtm, &item);
             close(id, true);
         }
+        Button::Annotate if item.is_video() => crate::video_editor::open(mtm, &item.file()),
         Button::Annotate => crate::editor::open_capture(mtm, &item),
     }
 }
@@ -554,10 +571,14 @@ fn button_rects(bounds: Rect, saved: bool, video: bool) -> Vec<(Button, Rect, &'
             if saved { "Show in Finder" } else { "Save" },
         ),
     ];
-    // Recordings cannot be annotated or pinned.
+    // Recordings cannot be pinned, and "annotate" means trimming them.
     buttons
         .into_iter()
-        .filter(|(b, _, _)| !video || !matches!(b, Button::Annotate | Button::Pin))
+        .filter(|(b, _, _)| !video || *b != Button::Pin)
+        .map(|(b, r, label)| match b {
+            Button::Annotate if video => (b, r, "scissors"),
+            _ => (b, r, label),
+        })
         .collect()
 }
 
@@ -774,7 +795,7 @@ impl CardView {
             );
         }
 
-        if let Some(duration) = item.video {
+        if let Some(duration) = item.video.get() {
             let label = format!("▶ {}", format_duration(duration));
             let size = draw::text_size(&label, 11.0, Weight::Semibold);
             let badge = Rect::new(

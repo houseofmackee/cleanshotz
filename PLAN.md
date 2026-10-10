@@ -217,8 +217,14 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Platform limits: ScreenCaptureKit records audio from applications only,
   not command-line tools such as `afplay`.
 
-### M7: Video editor
+### M7: Video editor (done)
 - Trim with filmstrip, mute, resolution/quality export, convert to GIF.
+- Notes: trimming uses AVKit's player view (the QuickTime trim UI).
+  Exports build a composition of the trimmed range and use passthrough
+  (no re-encoding) unless a smaller resolution is chosen; sizes never
+  upscale. Save replaces the recording and refreshes its Quick Access
+  card; GIF saves next to it; Save As goes anywhere. Not done yet:
+  cropping the video, speed changes and a separate quality slider.
 
 ### M8: Scrolling capture
 - Capture frames while the user (or synthesized events) scrolls; stitch by

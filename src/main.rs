@@ -12,6 +12,7 @@ mod record;
 mod shortcut;
 mod state;
 mod ui;
+mod video_editor;
 
 use std::process::ExitCode;
 
@@ -60,6 +61,43 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        #[cfg(debug_assertions)]
+        Some("--dev-video-export") if args.len() == 8 => {
+            use video_editor::plan::*;
+            let source = std::path::Path::new(&args[1]);
+            let size = record::media::size(source);
+            let plan = Plan {
+                start: args[3].parse().unwrap_or(0.0),
+                end: args[4]
+                    .parse()
+                    .unwrap_or(f64::MAX)
+                    .min(record::media::duration(source)),
+                mute: args[5] == "mute",
+                resolution: match args[6].as_str() {
+                    "1080" => Resolution::P1080,
+                    "720" => Resolution::P720,
+                    "540" => Resolution::P540,
+                    _ => Resolution::Original,
+                },
+                format: if args[7] == "gif" {
+                    Format::Gif
+                } else {
+                    Format::Mp4
+                },
+            };
+            let preset = preset(plan.resolution, size);
+            let gif = (15, gif_width(plan.resolution, size, 1280));
+            match video_editor::export::export(source, &plan, preset, gif, args[2].as_ref()) {
+                Ok(()) => {
+                    println!("exported with {preset:?}");
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         #[cfg(debug_assertions)]
         Some("--dev-gif") if args.len() == 3 => {
             match record::media::to_gif(args[1].as_ref(), args[2].as_ref(), 15, 1280) {

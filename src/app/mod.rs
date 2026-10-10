@@ -343,6 +343,7 @@ impl AppDelegate {
         let config = self.ivars().config.borrow();
         crate::quick_access::configure(config.quick_access.clone(), config.capture.clone());
         crate::ocr::configure(config.text.clone());
+        crate::video_editor::configure(config.recording.clone());
     }
 
     fn capture(&self, action: Action) {

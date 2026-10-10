@@ -26,6 +26,22 @@ pub fn duration(path: &Path) -> f64 {
     unsafe { asset(path).duration().seconds() }
 }
 
+/// Pixel size of the first video track (0 x 0 if there is none).
+pub fn size(path: &Path) -> (f64, f64) {
+    // SAFETY: synchronous track query on a local file.
+    unsafe {
+        let Some(video) = objc2_av_foundation::AVMediaTypeVideo else {
+            return (0.0, 0.0);
+        };
+        #[allow(deprecated)]
+        let tracks = asset(path).tracksWithMediaType(video);
+        tracks.firstObject().map_or((0.0, 0.0), |t| {
+            let s = t.naturalSize();
+            (s.width, s.height)
+        })
+    }
+}
+
 /// Exact frames from a recording, scaled to fit `max_width` pixels.
 struct Frames {
     generator: Retained<AVAssetImageGenerator>,

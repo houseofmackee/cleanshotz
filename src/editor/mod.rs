@@ -112,8 +112,13 @@ pub fn open_capture(mtm: MainThreadMarker, item: &Item) {
     );
 }
 
-/// Opens an image file or a `.cszdoc` project.
+/// Opens an image file or a `.cszdoc` project (videos go to the video
+/// editor).
 pub fn open_file(mtm: MainThreadMarker, path: &Path) {
+    if crate::video_editor::is_video(path) {
+        crate::video_editor::open(mtm, path);
+        return;
+    }
     let is_project = path
         .extension()
         .is_some_and(|e| e.eq_ignore_ascii_case(project::EXTENSION));
