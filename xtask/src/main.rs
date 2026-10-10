@@ -5,13 +5,18 @@
 //! - `bundle --test`: a separate "CleanShotZ Test" app for automated
 //!   testing, with its own bundle id and `cleanshotz-test://` URL scheme,
 //!   so tests never reach the user's running CleanShotZ
+//! - `dist`: a signed release bundle packaged for GitHub Releases in
+//!   `target/dist`: a zip, a DMG and `SHA256SUMS.txt`
 //! - `create-dev-cert`: create the self-signed "CleanShotZ Dev" signing
 //!   identity in the login keychain
+//! - `create-release-cert`: create the self-signed "CleanShotZ Release"
+//!   identity, and export it for the release workflow's secrets
 //!
 //! Signing identity, in order: `CLEANSHOTZ_SIGN_IDENTITY` (a name or SHA-1
-//! from `security find-identity -p codesigning`), then "CleanShotZ Dev" if it
-//! is in the keychain, then ad-hoc. Ad-hoc works but makes macOS forget the
-//! Screen Recording permission after every rebuild. See README.md.
+//! from `security find-identity -p codesigning`), then for release builds
+//! "CleanShotZ Release" if it is in the keychain, then "CleanShotZ Dev",
+//! then ad-hoc. Ad-hoc works but makes macOS forget the Screen Recording
+//! permission after every rebuild. See README.md.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -22,6 +27,7 @@ use anyhow::{Context, Result, bail};
 const APP_NAME: &str = "CleanShotZ";
 const BINARY: &str = "cleanshotz";
 const DEV_IDENTITY: &str = "CleanShotZ Dev";
+const RELEASE_IDENTITY: &str = "CleanShotZ Release";
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -40,8 +46,12 @@ fn main() -> Result<()> {
                 .status();
             run(Command::new("/usr/bin/open").arg("-n").arg(&app))?;
         }
+        Some("dist") => dist()?,
         Some("create-dev-cert") => create_dev_cert()?,
-        _ => bail!("usage: cargo xtask <bundle|run> [--release] [--test] | create-dev-cert"),
+        Some("create-release-cert") => create_release_cert()?,
+        _ => bail!(
+            "usage: cargo xtask <bundle|run> [--release] [--test] | dist | create-dev-cert | create-release-cert"
+        ),
     }
     Ok(())
 }
@@ -129,6 +139,7 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
 fn sign(app: &Path, entitlements: &Path, release: bool) -> Result<()> {
     let identity = match std::env::var("CLEANSHOTZ_SIGN_IDENTITY") {
         Ok(identity) if !identity.is_empty() => identity,
+        _ if release && has_identity(RELEASE_IDENTITY)? => RELEASE_IDENTITY.to_string(),
         _ if has_identity(DEV_IDENTITY)? => DEV_IDENTITY.to_string(),
         _ => {
             eprintln!(
@@ -164,14 +175,57 @@ fn has_identity(name: &str) -> Result<bool> {
     Ok(String::from_utf8_lossy(&output.stdout).contains(&format!("\"{name}\"")))
 }
 
-/// Creates a self-signed code signing certificate and imports it, with its
-/// private key, into the login keychain. Codesign is pre-authorized to use
-/// the key. No trust settings are changed.
+/// Creates the self-signed "CleanShotZ Dev" identity for local builds.
 fn create_dev_cert() -> Result<()> {
     if has_identity(DEV_IDENTITY)? {
         println!("\"{DEV_IDENTITY}\" already exists in the keychain");
         return Ok(());
     }
+    create_cert(DEV_IDENTITY, 3650, None)?;
+    println!("created \"{DEV_IDENTITY}\"; `cargo xtask bundle` now signs with it");
+    Ok(())
+}
+
+/// Creates the self-signed "CleanShotZ Release" identity: imported into the
+/// login keychain (so local release builds match), and exported to
+/// `target/release-cert` for the release workflow's secrets.
+fn create_release_cert() -> Result<()> {
+    if has_identity(RELEASE_IDENTITY)? {
+        bail!(
+            "\"{RELEASE_IDENTITY}\" already exists in the keychain. A new one would change \
+             every release's signature (and reset users' Screen Recording permission); \
+             export the existing one from Keychain Access if you need its .p12 again"
+        );
+    }
+    let out = workspace_root().join("target/release-cert");
+    fs::create_dir_all(&out)?;
+    // Twenty years: every release must be signed by this same certificate.
+    create_cert(RELEASE_IDENTITY, 7300, Some(&out))?;
+    println!(
+        "created \"{RELEASE_IDENTITY}\" in the login keychain and exported it to {dir}:
+
+  CleanShotZ-Release.p12         the certificate and private key
+  CleanShotZ-Release.p12.base64  for the RELEASE_CERT_P12_BASE64 secret
+  password.txt                   for the RELEASE_CERT_PASSWORD secret
+
+1. Add both secrets to the GitHub repository (Settings > Secrets and
+   variables > Actions), or with the GitHub CLI:
+     gh secret set RELEASE_CERT_P12_BASE64 < {dir}/CleanShotZ-Release.p12.base64
+     gh secret set RELEASE_CERT_PASSWORD < {dir}/password.txt
+2. Back up CleanShotZ-Release.p12 and its password somewhere safe outside
+   GitHub (a password manager). Losing them means a new certificate, which
+   resets every user's Screen Recording permission once.
+3. Delete {dir} afterwards.",
+        dir = out.display()
+    );
+    Ok(())
+}
+
+/// Creates a self-signed code signing certificate valid for `days` and
+/// imports it, with its private key, into the login keychain. Codesign is
+/// pre-authorized to use the key. No trust settings are changed. With
+/// `export`, also writes the password-protected .p12 there.
+fn create_cert(name: &str, days: u32, export: Option<&Path>) -> Result<()> {
     let dir = std::env::temp_dir().join(format!("cleanshotz-cert-{}", std::process::id()));
     fs::create_dir_all(&dir)?;
     let result = (|| {
@@ -179,7 +233,7 @@ fn create_dev_cert() -> Result<()> {
             dir.join("cert.cnf"),
             format!(
                 "[req]\ndistinguished_name = dn\nx509_extensions = ext\nprompt = no\n\
-                 [dn]\nCN = {DEV_IDENTITY}\n\
+                 [dn]\nCN = {name}\n\
                  [ext]\nbasicConstraints = critical,CA:false\n\
                  keyUsage = critical,digitalSignature\n\
                  extendedKeyUsage = critical,codeSigning\n"
@@ -189,8 +243,19 @@ fn create_dev_cert() -> Result<()> {
         // (OpenSSL 3 defaults to algorithms it rejects).
         let openssl = "/usr/bin/openssl";
         run(Command::new(openssl).current_dir(&dir).args([
-            "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3650", "-config",
-            "cert.cnf", "-keyout", "key.pem", "-out", "cert.pem",
+            "req",
+            "-x509",
+            "-newkey",
+            "rsa:2048",
+            "-nodes",
+            "-days",
+            &days.to_string(),
+            "-config",
+            "cert.cnf",
+            "-keyout",
+            "key.pem",
+            "-out",
+            "cert.pem",
         ]))?;
         let output = Command::new(openssl)
             .args(["rand", "-hex", "16"])
@@ -199,17 +264,8 @@ fn create_dev_cert() -> Result<()> {
         run(Command::new(openssl)
             .current_dir(&dir)
             .args([
-                "pkcs12",
-                "-export",
-                "-inkey",
-                "key.pem",
-                "-in",
-                "cert.pem",
-                "-out",
-                "id.p12",
-                "-name",
-                DEV_IDENTITY,
-                "-passout",
+                "pkcs12", "-export", "-inkey", "key.pem", "-in", "cert.pem", "-out", "id.p12",
+                "-name", name, "-passout",
             ])
             .arg(format!("pass:{password}")))?;
         let keychain = std::env::var("HOME")? + "/Library/Keychains/login.keychain-db";
@@ -222,11 +278,80 @@ fn create_dev_cert() -> Result<()> {
             &password,
             "-T",
             "/usr/bin/codesign",
-        ]))
+        ]))?;
+        if let Some(out) = export {
+            fs::copy(dir.join("id.p12"), out.join("CleanShotZ-Release.p12"))?;
+            let base64 = Command::new("/usr/bin/base64")
+                .arg("-i")
+                .arg(dir.join("id.p12"))
+                .output()?;
+            fs::write(out.join("CleanShotZ-Release.p12.base64"), base64.stdout)?;
+            fs::write(out.join("password.txt"), &password)?;
+        }
+        Ok(())
     })();
     let _ = fs::remove_dir_all(&dir);
-    result?;
-    println!("created \"{DEV_IDENTITY}\"; `cargo xtask bundle` now signs with it");
+    result
+}
+
+/// Builds the signed release bundle and packages it in `target/dist`:
+/// `CleanShotZ-<version>.zip` (made with ditto, which keeps the
+/// signature intact), `CleanShotZ-<version>.dmg` (with an Applications
+/// link to drag onto) and `SHA256SUMS.txt`.
+fn dist() -> Result<()> {
+    let root = workspace_root();
+    let version = package_version(&root.join("Cargo.toml"))?;
+    let app = bundle(true, false)?;
+    run(Command::new("/usr/bin/codesign")
+        .args(["--verify", "--deep", "--strict"])
+        .arg(&app))
+    .context("the bundle's signature does not verify")?;
+
+    let dist = root.join("target/dist");
+    if dist.exists() {
+        fs::remove_dir_all(&dist)?;
+    }
+    fs::create_dir_all(&dist)?;
+    let zip = format!("{APP_NAME}-{version}.zip");
+    let dmg = format!("{APP_NAME}-{version}.dmg");
+    run(Command::new("/usr/bin/ditto")
+        .args(["-c", "-k", "--sequesterRsrc", "--keepParent"])
+        .arg(&app)
+        .arg(dist.join(&zip)))?;
+
+    let staging = dist.join("dmg");
+    fs::create_dir_all(&staging)?;
+    run(Command::new("/usr/bin/ditto")
+        .arg(&app)
+        .arg(staging.join(format!("{APP_NAME}.app"))))?;
+    std::os::unix::fs::symlink("/Applications", staging.join("Applications"))?;
+    run(Command::new("/usr/bin/hdiutil")
+        .args([
+            "create",
+            "-quiet",
+            "-volname",
+            APP_NAME,
+            "-fs",
+            "HFS+",
+            "-format",
+            "UDZO",
+            "-srcfolder",
+        ])
+        .arg(&staging)
+        .arg(dist.join(&dmg)))?;
+    fs::remove_dir_all(&staging)?;
+
+    let sums = Command::new("/usr/bin/shasum")
+        .current_dir(&dist)
+        .args(["-a", "256", &zip, &dmg])
+        .output()
+        .context("running shasum")?;
+    if !sums.status.success() {
+        bail!("shasum failed");
+    }
+    fs::write(dist.join("SHA256SUMS.txt"), &sums.stdout)?;
+    print!("{}", String::from_utf8_lossy(&sums.stdout));
+    println!("{}", dist.display());
     Ok(())
 }
 

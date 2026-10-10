@@ -196,7 +196,7 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   M9, where history is built. Captures now only exclude CleanShotZ's
   transient UI, so editor windows and pins can be captured.
 
-### M6: Screen recording
+### M6: Screen recording (done)
 - SCStream for area/window/display; AVAssetWriter H.264/HEVC; fps and quality presets.
 - System audio + mic via ScreenCaptureKit (`captureMicrophone` on macOS 15, AVCaptureSession fallback on 14).
 - Webcam overlay (draggable bubble), click visualization, keystroke HUD,
@@ -297,6 +297,12 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Accessibility (VoiceOver labels), localization scaffolding, performance pass.
 
 ### Distribution (before the first public release, targeted after M3)
+- Status: the release workflow (`.github/workflows/release.yml`), `cargo
+  xtask dist` (zip, DMG, checksums), `cargo xtask create-release-cert`, the
+  app icon (`resources/icon/make-icon.swift`) and repository hygiene are
+  done. Not done: creating the release certificate and its secrets (the
+  maintainer's step), README screenshots, and automatic updates (deferred,
+  see Updates).
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
@@ -313,7 +319,8 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   System Settings > Privacy & Security > Open Anyway (on macOS 15 and later the
   Control-click > Open shortcut no longer works). Alternative for technical
   users: `xattr -dr com.apple.quarantine /Applications/CleanShotZ.app`.
-- **Updates:** Sparkle 2 (embedded framework, driven via objc2) with an
+- **Updates (deferred for now; users download new releases by hand):**
+  Sparkle 2 (embedded framework, driven via objc2) with an
   EdDSA-signed `appcast.xml` published to GitHub Pages by the release
   workflow. Sparkle verifies the EdDSA signature and that the update is signed
   by the same certificate; updates it installs do not hit Gatekeeper again.
@@ -333,15 +340,14 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 
 - **objc2 coverage:** some APIs (App Intents, Swift-only frameworks) are not
   reachable from Rust. Mitigation: a tiny Swift shim target linked as a static
-  library, only where unavoidable.
+  library, only where unavoidable (done for App Intents in `swift/`).
 - **TCC permission resets:** unsigned or ad-hoc rebuilds lose Screen Recording
   permission. Mitigation: dev builds are signed with a self-signed
   "CleanShotZ Dev" certificate (`cargo xtask create-dev-cert`).
-- **Desktop icon hiding:** CleanShot covers icons with a wallpaper window.
-  CleanShotZ instead leaves Finder's desktop icon windows and Notification
-  Center's widget windows out of the ScreenCaptureKit filter, so nothing on
-  screen changes. Revisit for screen recording if users expect the icons to
-  disappear on screen too.
+- **Desktop icon hiding:** captures leave Finder's desktop icon windows and
+  Notification Center's widget windows out of the ScreenCaptureKit filter,
+  so nothing on screen changes. The `hide-desktop-icons` command instead
+  covers them on screen with the wallpaper, as CleanShot does.
 - **Scrolling stitch quality** on animated or sticky content needs tuning and a
   test corpus of fixture images.
 - **Naming/trademark (accepted risk):** "CleanShot" is a trademark of

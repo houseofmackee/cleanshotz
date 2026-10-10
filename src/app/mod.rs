@@ -102,12 +102,11 @@ define_class!(
         #[unsafe(method(application:openURLs:))]
         fn open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
             for url in urls.iter() {
-                let command = url.host().map(|h| h.to_string()).unwrap_or_default();
                 // Debug builds: cleanshotz://dev-show-key?code=8&flags=1048576
                 // shows a key in the keystroke display, for testing it
                 // without Input Monitoring permission.
                 #[cfg(debug_assertions)]
-                if command == "dev-show-key" {
+                if url.host().is_some_and(|h| h.to_string() == "dev-show-key") {
                     let code = query_value(&url, "code").and_then(|v| v.parse().ok()).unwrap_or(0);
                     let flags = query_value(&url, "flags").and_then(|v| v.parse().ok()).unwrap_or(0);
                     crate::record::overlays::simulate_key(code, flags);
@@ -768,6 +767,7 @@ fn add_to_quick_access(mtm: MainThreadMarker, file: PathBuf) -> Result<(), Strin
 }
 
 /// The value of query parameter `name` in `url`, percent-decoded.
+#[cfg(debug_assertions)]
 fn query_value(url: &NSURL, name: &str) -> Option<String> {
     let components =
         objc2_foundation::NSURLComponents::componentsWithURL_resolvingAgainstBaseURL(url, false)?;

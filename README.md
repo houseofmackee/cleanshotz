@@ -1,5 +1,7 @@
 # CleanShotZ
 
+<img src="resources/icon/AppIcon-1024.png" width="128" alt="CleanShotZ icon">
+
 A free and open source macOS menu bar app for screenshots, screen recordings
 and annotations, written in Rust. See [PLAN.md](PLAN.md) for the feature plan
 and milestones.
@@ -8,25 +10,29 @@ and milestones.
 > by or connected to CleanShot X or MakeTheWeb. "CleanShot" is a trademark of
 > its respective owner.
 
-CleanShotZ is in early development and has no release yet.
+CleanShotZ is in early development; see [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
-Requires macOS 14 or later on an Apple Silicon Mac. Once releases exist, download the latest
-`CleanShotZ-<version>.zip` from
-[GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), unzip
-it and move `CleanShotZ.app` to `/Applications`.
+Requires macOS 14 or later on an Apple Silicon Mac. Download
+`CleanShotZ-<version>.dmg` (or the zip) from
+[GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), open
+it and drag CleanShotZ into Applications. `SHA256SUMS.txt` has the checksums.
 
 The app is signed but not notarized by Apple, so macOS blocks the first open.
 To allow it: open the app once, dismiss the warning, then go to
-System Settings > Privacy & Security and click Open Anyway. You only need to
-do this once; updates install without the warning.
+System Settings > Privacy & Security and click Open Anyway. Or, in Terminal:
+`xattr -dr com.apple.quarantine /Applications/CleanShotZ.app`.
+
+To update, download the new release and replace the app (quit it first).
+Every release is signed with the same certificate, so macOS keeps the Screen
+Recording and other permissions you gave it; you may need to allow the first
+open again.
 
 ## Privacy
 
-No account, no telemetry, no crash reporting. CleanShotZ only uses the
-network for uploads you configure and for update checks, which you can turn
-off.
+No account, no telemetry, no crash reporting, no update checks. CleanShotZ
+only uses the network for uploads you configure.
 
 ## Development
 
@@ -68,8 +74,29 @@ cargo xtask create-dev-cert
 `cargo xtask bundle` and `run` then sign with "CleanShotZ Dev" automatically.
 To use a different identity, set `CLEANSHOTZ_SIGN_IDENTITY` to its name or
 SHA-1. Without any identity, builds fall back to ad-hoc signing. The
-certificate is not marked as trusted and does not need to be; it is only for
-local development, and release distribution needs a Developer ID (M10).
+certificate is not marked as trusted and does not need to be.
+
+### Releases
+
+Releases are signed with a separate self-signed "CleanShotZ Release"
+certificate, the same for every release (users' permissions depend on it).
+Create it once, add it to the repository's secrets as the command explains,
+and back it up outside GitHub:
+
+```sh
+cargo xtask create-release-cert
+```
+
+`cargo xtask dist` builds the signed release bundle and packages it in
+`target/dist` (zip, DMG, `SHA256SUMS.txt`). Pushing a version tag runs the
+same in the [release workflow](.github/workflows/release.yml) and publishes
+a GitHub release; the tag must match the version in `Cargo.toml`:
+
+```sh
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+A hyphenated tag (`v0.2.0-beta.1`) makes a pre-release.
 
 ### Files
 
