@@ -1,5 +1,8 @@
-//! What an export does, decided without AVFoundation: trim range, export
-//! preset and output size.
+//! What an export does, decided without AVFoundation: trim range, crop,
+//! speed, output size and bitrate, and whether the video can simply be
+//! copied.
+
+use crate::capture::geometry::Rect;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resolution {
@@ -53,6 +56,15 @@ pub enum Preset {
     P540,
 }
 
+/// Playback speeds offered, as factors.
+pub const SPEEDS: [f64; 7] = [0.5, 0.75, 1.0, 1.25, 1.5, 2.0, 4.0];
+
+/// Bits per pixel per frame at the lowest and highest quality.
+const BPP_RANGE: (f64, f64) = (0.03, 0.20);
+/// The quality used when re-encoding without one chosen: about the
+/// recording's own "high" quality.
+pub const DEFAULT_QUALITY: f64 = 0.55;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Plan {
     /// Seconds into the source.
@@ -61,21 +73,98 @@ pub struct Plan {
     pub mute: bool,
     pub resolution: Resolution,
     pub format: Format,
+    /// The part of the frame to keep, in source pixels (top-left origin).
+    pub crop: Option<Rect>,
+    /// Playback speed factor: 2.0 plays twice as fast.
+    pub speed: f64,
+    /// Quality from 0 to 1, when chosen; otherwise the video is copied
+    /// when nothing else needs re-encoding.
+    pub quality: Option<f64>,
 }
 
 impl Plan {
+    /// Length of the trimmed range in the source.
     pub fn duration(&self) -> f64 {
         (self.end - self.start).max(0.0)
+    }
+
+    /// Length of the result, after the speed change.
+    pub fn output_duration(&self) -> f64 {
+        self.duration() / self.speed.max(0.01)
+    }
+
+    /// Whether the frames must be decoded and encoded again; otherwise the
+    /// samples are copied, which is fast and lossless.
+    pub fn needs_reencode(&self, source_size: (f64, f64)) -> bool {
+        self.crop.is_some()
+            || (self.speed - 1.0).abs() > 1e-6
+            || self.quality.is_some()
+            || preset(self.resolution, source_size) != Preset::Passthrough
     }
 
     /// Whether saving would change the file at all.
     pub fn changes_anything(&self, source_duration: f64, source_size: (f64, f64)) -> bool {
         let trimmed = self.start > 0.01 || self.end < source_duration - 0.01;
-        trimmed
-            || self.mute
-            || self.format == Format::Gif
-            || preset(self.resolution, source_size) != Preset::Passthrough
+        trimmed || self.mute || self.format == Format::Gif || self.needs_reencode(source_size)
     }
+
+    /// Output size in pixels: the crop (or the whole frame), fitted into
+    /// the resolution, never upscaled, in even numbers.
+    pub fn output_size(&self, source_size: (f64, f64)) -> (usize, usize) {
+        let (w, h) = self.crop.map_or(source_size, |c| (c.width, c.height));
+        let factor = match self.resolution.bounds() {
+            Some((bw, bh)) => {
+                let (bw, bh) = if h > w { (bh, bw) } else { (bw, bh) };
+                (bw / w).min(bh / h).min(1.0)
+            }
+            None => 1.0,
+        };
+        let even = |v: f64| (((v * factor) / 2.0).round() as usize * 2).max(2);
+        (even(w), even(h))
+    }
+
+    /// Video bitrate for re-encoding at `fps`.
+    pub fn bitrate(&self, source_size: (f64, f64), fps: f64) -> u64 {
+        let (w, h) = self.output_size(source_size);
+        let q = self.quality.unwrap_or(DEFAULT_QUALITY).clamp(0.0, 1.0);
+        let bpp = BPP_RANGE.0 + q * (BPP_RANGE.1 - BPP_RANGE.0);
+        let fps = if fps.is_finite() && fps > 0.0 {
+            fps.min(120.0)
+        } else {
+            30.0
+        };
+        ((w * h) as f64 * fps * bpp).clamp(250_000.0, 150_000_000.0) as u64
+    }
+
+    /// Estimated file size in bytes: from the target bitrate when
+    /// re-encoding (an upper bound; encoders often use less), otherwise
+    /// the source's share for the trimmed range.
+    pub fn estimated_size(
+        &self,
+        source_size: (f64, f64),
+        source_duration: f64,
+        source_bytes: u64,
+        fps: f64,
+    ) -> u64 {
+        let audio = if self.mute { 0.0 } else { 192_000.0 / 8.0 };
+        if self.needs_reencode(source_size) {
+            let video = self.bitrate(source_size, fps) as f64 / 8.0;
+            ((video + audio) * self.output_duration()) as u64
+        } else if source_duration > 0.0 {
+            (source_bytes as f64 * self.duration() / source_duration) as u64
+        } else {
+            source_bytes
+        }
+    }
+}
+
+/// `crop` (source pixels) limited to the frame, or `None` when it is
+/// too small to use or covers the whole frame.
+pub fn clamp_crop(crop: Rect, source_size: (f64, f64)) -> Option<Rect> {
+    let frame = Rect::new(0.0, 0.0, source_size.0, source_size.1);
+    let c = crop.intersection(&frame).rounded();
+    let whole = c.width >= frame.width - 1.0 && c.height >= frame.height - 1.0;
+    (c.width >= 16.0 && c.height >= 16.0 && !whole).then_some(c)
 }
 
 /// The trim range from the player's playback end times (each `None` when
@@ -178,6 +267,9 @@ mod tests {
             mute: false,
             resolution: Resolution::Original,
             format: Format::Mp4,
+            crop: None,
+            speed: 1.0,
+            quality: None,
         };
         assert!(!plan.changes_anything(10.0, (1600.0, 1000.0)));
         assert!(Plan { start: 1.0, ..plan }.changes_anything(10.0, (1600.0, 1000.0)));
@@ -196,5 +288,110 @@ mod tests {
             }
             .changes_anything(10.0, (1600.0, 1000.0))
         );
+    }
+
+    fn plan() -> Plan {
+        Plan {
+            start: 0.0,
+            end: 10.0,
+            mute: false,
+            resolution: Resolution::Original,
+            format: Format::Mp4,
+            crop: None,
+            speed: 1.0,
+            quality: None,
+        }
+    }
+
+    #[test]
+    fn crop_speed_and_quality_need_reencoding() {
+        let size = (1600.0, 1000.0);
+        assert!(!plan().needs_reencode(size));
+        assert!(
+            Plan {
+                speed: 2.0,
+                ..plan()
+            }
+            .needs_reencode(size)
+        );
+        assert!(
+            Plan {
+                quality: Some(0.3),
+                ..plan()
+            }
+            .needs_reencode(size)
+        );
+        let crop = Some(Rect::new(100.0, 50.0, 800.0, 600.0));
+        assert!(Plan { crop, ..plan() }.needs_reencode(size));
+        assert!(Plan { crop, ..plan() }.changes_anything(10.0, size));
+        assert_eq!(
+            Plan {
+                speed: 2.0,
+                ..plan()
+            }
+            .output_duration(),
+            5.0
+        );
+    }
+
+    #[test]
+    fn output_size_crops_then_fits_without_upscaling() {
+        let size = (3456.0, 2234.0);
+        assert_eq!(plan().output_size(size), (3456, 2234));
+        let crop = Some(Rect::new(10.0, 10.0, 1001.0, 501.0));
+        // Odd sizes become even.
+        assert_eq!(Plan { crop, ..plan() }.output_size(size), (1002, 502));
+        let p = Plan {
+            resolution: Resolution::P720,
+            ..plan()
+        };
+        assert_eq!(p.output_size(size), (1114, 720));
+        // A crop already smaller than 720p stays as it is.
+        assert_eq!(Plan { crop, ..p }.output_size(size), (1002, 502));
+    }
+
+    #[test]
+    fn quality_scales_the_bitrate() {
+        let size = (1920.0, 1080.0);
+        let low = Plan {
+            quality: Some(0.0),
+            ..plan()
+        }
+        .bitrate(size, 30.0);
+        let high = Plan {
+            quality: Some(1.0),
+            ..plan()
+        }
+        .bitrate(size, 30.0);
+        let default = plan().bitrate(size, 30.0);
+        assert!(low < default && default < high);
+        assert_eq!(high, (1920.0 * 1080.0 * 30.0 * 0.20) as u64);
+    }
+
+    #[test]
+    fn estimates_sizes() {
+        let size = (1920.0, 1080.0);
+        // Copied: the trimmed share of the source.
+        let half = Plan { end: 5.0, ..plan() };
+        assert_eq!(half.estimated_size(size, 10.0, 8_000_000, 30.0), 4_000_000);
+        // Re-encoded at double speed: half the duration.
+        let fast = Plan {
+            speed: 2.0,
+            mute: true,
+            ..plan()
+        };
+        let bytes = fast.estimated_size(size, 10.0, 8_000_000, 30.0);
+        assert_eq!(bytes, (fast.bitrate(size, 30.0) as f64 / 8.0 * 5.0) as u64);
+    }
+
+    #[test]
+    fn crops_are_clamped() {
+        let size = (1000.0, 800.0);
+        assert_eq!(
+            clamp_crop(Rect::new(-10.0, 100.0, 300.0, 300.0), size),
+            Some(Rect::new(0.0, 100.0, 290.0, 300.0))
+        );
+        assert_eq!(clamp_crop(Rect::new(0.0, 0.0, 1000.0, 800.0), size), None);
+        assert_eq!(clamp_crop(Rect::new(10.0, 10.0, 8.0, 300.0), size), None);
     }
 }

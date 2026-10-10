@@ -99,6 +99,17 @@ fn main() -> ExitCode {
                 } else {
                     Format::Mp4
                 },
+                crop: std::env::var("CSZ_CROP").ok().and_then(|c| {
+                    let v: Vec<f64> = c.split(',').filter_map(|n| n.parse().ok()).collect();
+                    (v.len() == 4).then(|| capture::geometry::Rect::new(v[0], v[1], v[2], v[3]))
+                }),
+                speed: std::env::var("CSZ_SPEED")
+                    .ok()
+                    .and_then(|s| s.parse().ok())
+                    .unwrap_or(1.0),
+                quality: std::env::var("CSZ_QUALITY")
+                    .ok()
+                    .and_then(|q| q.parse().ok()),
             };
             let preset = preset(plan.resolution, size);
             let gif = (15, gif_width(plan.resolution, size, 1280));

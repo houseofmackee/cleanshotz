@@ -231,8 +231,11 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   Exports build a composition of the trimmed range and use passthrough
   (no re-encoding) unless a smaller resolution is chosen; sizes never
   upscale. Save replaces the recording and refreshes its Quick Access
-  card; GIF saves next to it; Save As goes anywhere. Not done yet:
-  cropping the video, speed changes and a separate quality slider.
+  card; GIF saves next to it; Save As goes anywhere. Cropping (an
+  overlay over the player), speed changes (0.5x to 4x, pitch kept) and a
+  quality slider with a size estimate are done: they re-encode through an
+  asset reader and writer with a video composition, while trim and mute
+  alone still copy the samples.
 
 ### M8: Scrolling capture (done)
 - Capture frames while the user (or synthesized events) scrolls; stitch by

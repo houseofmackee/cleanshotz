@@ -251,13 +251,21 @@ cursor overlay, since ScreenCaptureKit can do neither there.
 
 ### Video editor
 
-Click the scissors on a recording's thumbnail (or open a video with Open in
-Editor…). Trim… shows QuickTime's trim bar: drag the yellow handles and
-click Trim. Mute removes the sound, the size menu scales down to 1080p, 720p
-or 540p (never up), and MP4 or GIF picks the format. Save replaces the
+Click the scissors on a recording's thumbnail, double-click it, or open a
+video with Open in Editor…. Trim… shows QuickTime's trim bar: drag the
+yellow handles and click Trim. Crop… lets you drag the area to keep over
+the video (drag inside it to move it, drag a corner to resize; Return
+finishes, Escape removes the crop). The speed menu plays the result from
+0.5× to 4× (the sound keeps its pitch; the player previews the speed).
+Mute removes the sound, the size menu scales down to 1080p, 720p or 540p
+(never up), and MP4 or GIF picks the format. The Quality slider sets the
+bitrate when the video is re-encoded; next to it are the expected file
+size, the result's length and its size in pixels. Save replaces the
 recording (a GIF is saved next to it); Save As… saves a copy anywhere.
+
 When only trimming or muting, the video is copied without re-encoding, so
-it keeps its quality and saves quickly.
+it keeps its quality and saves quickly. Cropping, a speed change, a
+smaller size or moving the Quality slider re-encode it.
 
 ### Capture history
 

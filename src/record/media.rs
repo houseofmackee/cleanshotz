@@ -42,6 +42,21 @@ pub fn size(path: &Path) -> (f64, f64) {
     }
 }
 
+/// Frame rate of the first video track (30 if unknown).
+pub fn fps(path: &Path) -> f64 {
+    // SAFETY: synchronous track query on a local file.
+    let rate = unsafe {
+        objc2_av_foundation::AVMediaTypeVideo.and_then(|video| {
+            #[allow(deprecated)]
+            asset(path)
+                .tracksWithMediaType(video)
+                .firstObject()
+                .map(|t| f64::from(t.nominalFrameRate()))
+        })
+    };
+    rate.filter(|r| r.is_finite() && *r > 0.0).unwrap_or(30.0)
+}
+
 /// Exact frames from a recording, scaled to fit `max_width` pixels.
 struct Frames {
     generator: Retained<AVAssetImageGenerator>,
@@ -146,9 +161,8 @@ pub fn to_gif(video: &Path, gif: &Path, fps: u32, max_width: u32) -> Result<(), 
 /// Does nothing for recordings with fewer than two audio tracks.
 pub fn mix_audio_tracks(path: &Path) -> Result<(), String> {
     use objc2_av_foundation::{
-        AVAssetReader, AVAssetReaderAudioMixOutput, AVAssetReaderStatus, AVAssetReaderTrackOutput,
-        AVAssetWriter, AVAssetWriterInput, AVAssetWriterStatus, AVFileTypeMPEG4, AVMediaTypeAudio,
-        AVMediaTypeVideo,
+        AVAssetReader, AVAssetReaderAudioMixOutput, AVAssetReaderTrackOutput, AVAssetWriter,
+        AVAssetWriterInput, AVFileTypeMPEG4, AVMediaTypeAudio, AVMediaTypeVideo,
     };
     use objc2_core_media::CMFormatDescription;
     use objc2_foundation::{NSDictionary, NSNumber};
@@ -243,15 +257,47 @@ pub fn mix_audio_tracks(path: &Path) -> Result<(), String> {
         }
         writer.startSessionAtSourceTime(CMTime::with_seconds(0.0, 600));
 
-        // Copy both streams, feeding whichever input is ready.
-        let mut done = [false, false];
         let pairs = [
             (
                 &*video_out as &objc2_av_foundation::AVAssetReaderOutput,
-                &video_in,
+                &*video_in,
             ),
-            (&*audio_out, &audio_in),
+            (&*audio_out, &*audio_in),
         ];
+        if let Err(e) = transfer(&reader, &writer, &pairs) {
+            let _ = std::fs::remove_file(&mixed);
+            return Err(e);
+        }
+    }
+    std::fs::rename(&mixed, path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+/// Copies every sample from each reader output to its writer input,
+/// feeding whichever input is ready, then finishes the file. The reader
+/// and writer must be started, with the writer's session begun.
+///
+/// # Safety
+///
+/// The objects must be set up for each other and used only on this
+/// thread while this runs.
+pub unsafe fn transfer(
+    reader: &objc2_av_foundation::AVAssetReader,
+    writer: &objc2_av_foundation::AVAssetWriter,
+    pairs: &[(
+        &objc2_av_foundation::AVAssetReaderOutput,
+        &objc2_av_foundation::AVAssetWriterInput,
+    )],
+) -> Result<(), String> {
+    use objc2_av_foundation::{AVAssetReaderStatus, AVAssetWriterStatus};
+    let failed = |writer: &objc2_av_foundation::AVAssetWriter, what: &str| {
+        // SAFETY: plain property read.
+        unsafe { writer.error() }
+            .map(|e| e.localizedDescription().to_string())
+            .unwrap_or_else(|| what.to_string())
+    };
+    // SAFETY: per the function's contract.
+    unsafe {
+        let mut done = vec![false; pairs.len()];
         while !done.iter().all(|d| *d) {
             let mut progressed = false;
             for (i, (out, input)) in pairs.iter().enumerate() {
@@ -264,11 +310,7 @@ pub fn mix_audio_tracks(path: &Path) -> Result<(), String> {
                         if !input.appendSampleBuffer(&sample) {
                             reader.cancelReading();
                             writer.cancelWriting();
-                            let _ = std::fs::remove_file(&mixed);
-                            return Err(writer
-                                .error()
-                                .map(|e| e.localizedDescription().to_string())
-                                .unwrap_or_else(|| "mixing the audio failed".into()));
+                            return Err(failed(writer, "writing the video failed"));
                         }
                     }
                     None => {
@@ -283,23 +325,22 @@ pub fn mix_audio_tracks(path: &Path) -> Result<(), String> {
         }
         if reader.status() == AVAssetReaderStatus::Failed {
             writer.cancelWriting();
-            let _ = std::fs::remove_file(&mixed);
-            return Err("could not read the recording to mix its audio".into());
+            return Err(reader
+                .error()
+                .map(|e| e.localizedDescription().to_string())
+                .unwrap_or_else(|| "reading the video failed".into()));
         }
         let (tx, rx) = std::sync::mpsc::channel();
         let block = block2::RcBlock::new(move || {
             let _ = tx.send(());
         });
         writer.finishWritingWithCompletionHandler(&block);
-        rx.recv_timeout(std::time::Duration::from_secs(120))
-            .map_err(|_| "mixing the audio timed out".to_string())?;
-        if writer.status() != AVAssetWriterStatus::Completed {
-            let _ = std::fs::remove_file(&mixed);
-            return Err(writer
-                .error()
-                .map(|e| e.localizedDescription().to_string())
-                .unwrap_or_else(|| "mixing the audio failed".into()));
+        rx.recv_timeout(std::time::Duration::from_secs(600))
+            .map_err(|_| "finishing the video timed out".to_string())?;
+        if writer.status() == AVAssetWriterStatus::Completed {
+            Ok(())
+        } else {
+            Err(failed(writer, "finishing the video failed"))
         }
     }
-    std::fs::rename(&mixed, path).map_err(|e| format!("{}: {e}", path.display()))
 }

@@ -1,5 +1,6 @@
 //! The video editor: trim, mute, resize and convert recordings.
 
+mod crop;
 pub mod export;
 pub mod plan;
 mod window;

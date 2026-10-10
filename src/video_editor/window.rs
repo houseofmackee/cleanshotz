@@ -1,5 +1,6 @@
-//! The video editor window: a player with QuickTime-style trimming and an
-//! options bar (mute, resolution, format, save).
+//! The video editor window: a player with QuickTime-style trimming, a crop
+//! overlay, and an options bar (crop, mute, speed, size, format, quality,
+//! save).
 
 use std::cell::{Cell, OnceCell};
 use std::path::{Path, PathBuf};
@@ -10,24 +11,28 @@ use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSAlert, NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSButton,
-    NSControlStateValueOn, NSModalResponseOK, NSPopUpButton, NSSavePanel, NSScreen, NSTextField,
-    NSWindow, NSWindowDelegate, NSWindowStyleMask,
+    NSControlStateValueOn, NSModalResponseOK, NSPopUpButton, NSSavePanel, NSScreen, NSSlider,
+    NSTextField, NSWindow, NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_av_foundation::{AVPlayer, AVPlayerItem};
 use objc2_av_kit::{AVPlayerView, AVPlayerViewControlsStyle, AVPlayerViewTrimResult};
 use objc2_core_media::{CMTime, CMTimeFlags};
 use objc2_foundation::{
-    NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL,
+    NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL, ns_string,
 };
 
+use super::crop::CropView;
 use super::plan::{self, Format, Plan, Resolution};
 use super::{export, registry};
+use crate::capture::geometry::Rect;
 use crate::record::media;
 use crate::ui::toast;
 
-const BAR_HEIGHT: f64 = 52.0;
-/// Narrowest window that fits the bottom bar: the controls on the left end
-/// at 554 points, Save As and Save take 194 on the right.
+/// Two rows of controls.
+const BAR_HEIGHT: f64 = 92.0;
+/// Narrowest window that fits the bottom bar: the top row ends at 592
+/// points; in the bottom row the labels end at 560, and Save As and Save
+/// take 194 on the right.
 const MIN_WIDTH: f64 = 760.0;
 
 pub struct Ivars {
@@ -37,12 +42,20 @@ pub struct Ivars {
     size: (f64, f64),
     gif_fps: u32,
     gif_max_width: u32,
+    fps: f64,
+    bytes: u64,
     window: OnceCell<Retained<NSWindow>>,
     player: OnceCell<Retained<AVPlayer>>,
     player_view: OnceCell<Retained<AVPlayerView>>,
     length: OnceCell<Retained<NSTextField>>,
+    estimate: OnceCell<Retained<NSTextField>>,
+    crop_view: OnceCell<Retained<CropView>>,
+    crop_button: OnceCell<Retained<NSButton>>,
     controls: OnceCell<Vec<Retained<AnyObject>>>,
     mute: Cell<bool>,
+    crop: Cell<Option<Rect>>,
+    speed: Cell<f64>,
+    quality: Cell<Option<f64>>,
     resolution: Cell<Resolution>,
     format: Cell<Format>,
     busy: Cell<bool>,
@@ -99,6 +112,7 @@ define_class!(
                 // SAFETY: plain player property.
                 unsafe { player.setMuted(mute) };
             }
+            self.update_length();
         }
 
         #[unsafe(method(resolutionChanged:))]
@@ -107,12 +121,60 @@ define_class!(
             self.ivars()
                 .resolution
                 .set(Resolution::ALL.get(index).copied().unwrap_or(Resolution::Original));
+            self.update_length();
         }
 
         #[unsafe(method(formatChanged:))]
         fn format_changed(&self, sender: &NSPopUpButton) {
             let format = if sender.indexOfSelectedItem() == 1 { Format::Gif } else { Format::Mp4 };
             self.ivars().format.set(format);
+            self.update_length();
+        }
+
+        #[unsafe(method(cropAction:))]
+        fn crop_action(&self, _sender: &AnyObject) {
+            let editing = self
+                .ivars()
+                .crop_button
+                .get()
+                .is_some_and(|b| b.title().to_string() == "Done");
+            if editing {
+                self.end_cropping();
+            } else {
+                if let Some(player) = self.ivars().player.get() {
+                    // SAFETY: plain player control.
+                    unsafe { player.pause() };
+                }
+                if let Some(button) = self.ivars().crop_button.get() {
+                    button.setTitle(ns_string!("Done"));
+                }
+                if let Some(view) = self.ivars().crop_view.get() {
+                    view.set_editing(true);
+                }
+            }
+        }
+
+        #[unsafe(method(speedChanged:))]
+        fn speed_changed(&self, sender: &NSPopUpButton) {
+            let index = sender.indexOfSelectedItem().max(0) as usize;
+            let speed = plan::SPEEDS.get(index).copied().unwrap_or(1.0);
+            self.ivars().speed.set(speed);
+            if let Some(player) = self.ivars().player.get() {
+                // SAFETY: plain player properties; previews the speed.
+                unsafe {
+                    player.setDefaultRate(speed as f32);
+                    if player.rate() != 0.0 {
+                        player.setRate(speed as f32);
+                    }
+                }
+            }
+            self.update_length();
+        }
+
+        #[unsafe(method(qualityChanged:))]
+        fn quality_changed(&self, sender: &NSSlider) {
+            self.ivars().quality.set(Some(sender.doubleValue()));
+            self.update_length();
         }
 
         #[unsafe(method(save:))]
@@ -158,12 +220,20 @@ impl VideoEditor {
             size: media::size(source),
             gif_fps,
             gif_max_width,
+            fps: media::fps(source),
+            bytes: std::fs::metadata(source).map_or(0, |m| m.len()),
             window: OnceCell::new(),
             player: OnceCell::new(),
             player_view: OnceCell::new(),
             length: OnceCell::new(),
+            estimate: OnceCell::new(),
+            crop_view: OnceCell::new(),
+            crop_button: OnceCell::new(),
             controls: OnceCell::new(),
             mute: Cell::new(false),
+            crop: Cell::new(None),
+            speed: Cell::new(1.0),
+            quality: Cell::new(None),
             resolution: Cell::new(Resolution::Original),
             format: Cell::new(Format::Mp4),
             busy: Cell::new(false),
@@ -240,6 +310,13 @@ impl VideoEditor {
                 | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         content.addSubview(&view);
+        let crop_view = CropView::new(mtm, self.ivars().id, view.frame());
+        crop_view.setAutoresizingMask(
+            NSAutoresizingMaskOptions::ViewWidthSizable
+                | NSAutoresizingMaskOptions::ViewHeightSizable,
+        );
+        content.addSubview(&crop_view);
+        let _ = self.ivars().crop_view.set(crop_view);
 
         let controls = self.build_bar(mtm, &content, width);
         let _ = self.ivars().controls.set(controls);
@@ -297,8 +374,16 @@ impl VideoEditor {
             p
         };
 
+        // Top row: what to change.
+        let top = 52.0;
+        let row = |view: &objc2_app_kit::NSView, x: f64, w: f64, y: f64| {
+            place(view, x, w, left);
+            view.setFrameOrigin(NSPoint::new(x, y));
+        };
         let trim = button("Trim…", sel!(trim:));
-        place(&trim, 12.0, 80.0, left);
+        row(&trim, 12.0, 80.0, top);
+        let crop = button("Crop…", sel!(cropAction:));
+        row(&crop, 98.0, 80.0, top);
         // SAFETY: the action exists on VideoEditor.
         let mute = unsafe {
             NSButton::checkboxWithTitle_target_action(
@@ -308,30 +393,62 @@ impl VideoEditor {
                 mtm,
             )
         };
-        place(&mute, 104.0, 70.0, left);
+        row(&mute, 190.0, 64.0, top);
+        let speeds: Vec<String> = plan::SPEEDS
+            .iter()
+            .map(|s| format!("{}× Speed", format_speed(*s)))
+            .collect();
+        let speed_titles: Vec<&str> = speeds.iter().map(String::as_str).collect();
+        let speed = popup(&speed_titles, sel!(speedChanged:));
+        speed.selectItemAtIndex(plan::SPEEDS.iter().position(|s| *s == 1.0).unwrap_or(0) as isize);
+        row(&speed, 258.0, 116.0, top);
         let titles: Vec<&str> = Resolution::ALL.iter().map(|r| r.title()).collect();
         let resolution = popup(&titles, sel!(resolutionChanged:));
-        place(&resolution, 178.0, 130.0, left);
+        row(&resolution, 380.0, 126.0, top);
         let format = popup(&["MP4", "GIF"], sel!(formatChanged:));
-        place(&format, 314.0, 80.0, left);
+        row(&format, 512.0, 80.0, top);
+
+        // Bottom row: quality, what comes out, saving.
+        let quality_label = NSTextField::labelWithString(ns_string!("Quality"), mtm);
+        row(&quality_label, 14.0, 52.0, y - 6.0);
+        // SAFETY: the action exists on VideoEditor.
+        let quality = unsafe {
+            NSSlider::sliderWithValue_minValue_maxValue_target_action(
+                plan::DEFAULT_QUALITY,
+                0.0,
+                1.0,
+                Some(target),
+                Some(sel!(qualityChanged:)),
+                mtm,
+            )
+        };
+        quality.setToolTip(Some(ns_string!(
+            "Moving this re-encodes the video at that quality; otherwise unchanged parts are copied"
+        )));
+        row(&quality, 68.0, 130.0, y + 2.0);
+        let estimate = NSTextField::labelWithString(&NSString::from_str(""), mtm);
+        estimate.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+        row(&estimate, 206.0, 104.0, y - 6.0);
         let length = NSTextField::labelWithString(&NSString::from_str(""), mtm);
         length.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
-        place(&length, 404.0, 150.0, left);
-        // Labels draw at the top of their frame; line the text up with
-        // the buttons' titles.
-        length.setFrameOrigin(NSPoint::new(404.0, y - 6.0));
+        row(&length, 312.0, 248.0, y - 6.0);
         let save = button("Save", sel!(save:));
         place(&save, width - 92.0, 80.0, right);
         let save_as = button("Save As…", sel!(saveAs:));
         place(&save_as, width - 194.0, 96.0, right);
         let _ = self.ivars().length.set(length);
+        let _ = self.ivars().estimate.set(estimate);
+        let _ = self.ivars().crop_button.set(crop.clone());
 
         let any = |v: &objc2_app_kit::NSView| -> Retained<AnyObject> { v.retain().into() };
         vec![
             any(&trim),
+            any(&crop),
             any(&mute),
+            any(&speed),
             any(&resolution),
             any(&format),
+            any(&quality),
             any(&save),
             any(&save_as),
         ]
@@ -360,12 +477,90 @@ impl VideoEditor {
         plan::trim_range(self.ivars().duration, start, end)
     }
 
-    fn update_length(&self) {
+    /// What saving now would do.
+    fn current_plan(&self) -> Plan {
+        let ivars = self.ivars();
         let (start, end) = self.trim_range();
-        let (w, h) = self.ivars().size;
-        let text = format!("{} · {}×{}", format_length(end - start), w as u32, h as u32);
-        if let Some(label) = self.ivars().length.get() {
+        Plan {
+            start,
+            end,
+            mute: ivars.mute.get(),
+            resolution: ivars.resolution.get(),
+            format: ivars.format.get(),
+            crop: ivars.crop.get(),
+            speed: ivars.speed.get(),
+            quality: ivars.quality.get(),
+        }
+    }
+
+    /// Shows the result's length and size, and an estimate of its file
+    /// size (MP4 only; GIF sizes depend too much on the content).
+    fn update_length(&self) {
+        let ivars = self.ivars();
+        let plan = self.current_plan();
+        let (w, h) = plan.output_size(ivars.size);
+        let text = format!("{} · {}×{}", format_length(plan.output_duration()), w, h);
+        if let Some(label) = ivars.length.get() {
             label.setStringValue(&NSString::from_str(&text));
+        }
+        let bytes = plan.estimated_size(ivars.size, ivars.duration, ivars.bytes, ivars.fps);
+        let estimate = match plan.format {
+            // Encoders stay under the target bitrate, often far under on
+            // simple content such as a mostly still screen.
+            Format::Mp4 if plan.needs_reencode(ivars.size) => {
+                format!("up to {}", format_bytes(bytes))
+            }
+            Format::Mp4 => format!("≈ {}", format_bytes(bytes)),
+            Format::Gif => String::new(),
+        };
+        if let Some(label) = ivars.estimate.get() {
+            label.setStringValue(&NSString::from_str(&estimate));
+        }
+    }
+
+    pub(super) fn crop(&self) -> Option<Rect> {
+        self.ivars().crop.get()
+    }
+
+    pub(super) fn set_crop(&self, crop: Option<Rect>) {
+        self.ivars().crop.set(crop);
+        if let Some(view) = self.ivars().crop_view.get() {
+            view.setNeedsDisplay(true);
+        }
+        self.update_length();
+    }
+
+    pub(super) fn source_size(&self) -> (f64, f64) {
+        self.ivars().size
+    }
+
+    /// Where the video is drawn, in the player's (and crop overlay's)
+    /// coordinates.
+    pub(super) fn video_rect(&self) -> NSRect {
+        let Some(view) = self.ivars().player_view.get() else {
+            return NSRect::ZERO;
+        };
+        // SAFETY: plain property read.
+        let bounds = unsafe { view.videoBounds() };
+        if bounds.size.width > 0.0 && bounds.size.height > 0.0 {
+            return bounds;
+        }
+        // Before the first frame: fit the video in the view.
+        let (w, h) = self.ivars().size;
+        let b = view.bounds();
+        let s = (b.size.width / w.max(1.0)).min(b.size.height / h.max(1.0));
+        NSRect::new(
+            NSPoint::new((b.size.width - w * s) / 2.0, (b.size.height - h * s) / 2.0),
+            NSSize::new(w * s, h * s),
+        )
+    }
+
+    pub(super) fn end_cropping(&self) {
+        if let Some(button) = self.ivars().crop_button.get() {
+            button.setTitle(ns_string!("Crop…"));
+        }
+        if let Some(view) = self.ivars().crop_view.get() {
+            view.set_editing(false);
         }
     }
 
@@ -384,15 +579,9 @@ impl VideoEditor {
         if self.ivars().busy.get() {
             return;
         }
+        self.end_cropping();
         let ivars = self.ivars();
-        let (start, end) = self.trim_range();
-        let plan = Plan {
-            start,
-            end,
-            mute: ivars.mute.get(),
-            resolution: ivars.resolution.get(),
-            format: ivars.format.get(),
-        };
+        let plan = self.current_plan();
         let source = ivars.source.clone();
         let save_as = target.is_some();
         if !save_as && !plan.changes_anything(ivars.duration, ivars.size) {
@@ -482,6 +671,24 @@ impl VideoEditor {
     }
 }
 
+/// `0.5`, `1`, `1.25`
+fn format_speed(speed: f64) -> String {
+    let text = format!("{speed:.2}");
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+/// `840 KB`, `12.4 MB`, `1.2 GB`
+fn format_bytes(bytes: u64) -> String {
+    let b = bytes as f64;
+    if b < 1e6 {
+        format!("{:.0} KB", (b / 1e3).max(1.0))
+    } else if b < 1e9 {
+        format!("{:.1} MB", b / 1e6)
+    } else {
+        format!("{:.2} GB", b / 1e9)
+    }
+}
+
 /// `m:ss.s`
 fn format_length(seconds: f64) -> String {
     let tenths = (seconds.max(0.0) * 10.0).round() as u64;
@@ -491,6 +698,16 @@ fn format_length(seconds: f64) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn formats_speeds_and_sizes() {
+        assert_eq!(format_speed(0.5), "0.5");
+        assert_eq!(format_speed(1.0), "1");
+        assert_eq!(format_speed(1.25), "1.25");
+        assert_eq!(format_bytes(840_000), "840 KB");
+        assert_eq!(format_bytes(12_400_000), "12.4 MB");
+        assert_eq!(format_bytes(1_234_000_000), "1.23 GB");
+    }
 
     #[test]
     fn formats_lengths_with_tenths() {
