@@ -6,6 +6,20 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-10
+
+### Changed
+
+- Messages that include values (counts, sizes, file names, VoiceOver
+  descriptions, scrolling capture status) can now be translated, and
+  translations may reorder their placeholders. Dates in History and file
+  sizes in the video editor follow the system's language and format.
+- Dependencies: `base64` 0.23, `toml` 1.1 and `actions/checkout` 7.
+- README screenshots of the editor, Quick Access, History, the video
+  editor, recording and Settings.
+
+## [0.1.0] - 2026-10-10
+
 The first release. CleanShotZ is a free, open source menu bar app for
 screenshots, screen recordings and annotations on macOS 14 and later
 (Apple silicon).
@@ -35,3 +49,7 @@ screenshots, screen recordings and annotations on macOS 14 and later
 - Automation: every command as a `cleanshotz://` URL, a command line,
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
+
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.1...HEAD
+[0.1.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.0...v0.1.1
+[0.1.0]: https://github.com/houseofmackee/cleanshotz/releases/tag/v0.1.0
