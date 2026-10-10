@@ -1299,12 +1299,14 @@ fn uploads(f: &mut Form, config: &Config) {
             "HTTP endpoint",
             "S3-compatible storage",
             "Script",
+            "Imgur",
         ],
         |c| match c.upload.destination {
             Destination::None => 0,
             Destination::Http => 1,
             Destination::S3 => 2,
             Destination::Script => 3,
+            Destination::Imgur => 4,
         },
         |c, i| {
             c.upload.destination = [
@@ -1312,7 +1314,8 @@ fn uploads(f: &mut Form, config: &Config) {
                 Destination::Http,
                 Destination::S3,
                 Destination::Script,
-            ][i.min(3)]
+                Destination::Imgur,
+            ][i.min(4)]
         },
         true,
     );
@@ -1328,6 +1331,17 @@ fn uploads(f: &mut Form, config: &Config) {
     );
     f.gap();
     match config.upload.destination {
+        Destination::Imgur => {
+            f.text(
+                "Client ID:",
+                "From api.imgur.com/oauth2/addclient",
+                |c| c.upload.imgur.client_id.clone(),
+                |c, v| c.upload.imgur.client_id = v,
+            );
+            f.note(
+                "Imgur asks every app for its own client ID. Register one (choose \"anonymous usage without user authorization\"; no callback URL needed) and paste it here. Uploads are anonymous and public to anyone with the link.",
+            );
+        }
         Destination::Http => {
             f.text(
                 "URL:",

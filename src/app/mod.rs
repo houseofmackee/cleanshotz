@@ -2,6 +2,7 @@
 //! global hotkeys and first-launch onboarding.
 
 pub(crate) mod alert;
+mod scripting;
 pub mod server;
 
 use std::cell::{OnceCell, RefCell};
@@ -60,6 +61,7 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
+            scripting::register();
             capture::output::clear_temp_dir();
             self.configure_quick_access();
             crate::history::prune();
@@ -373,6 +375,13 @@ impl AppDelegate {
 
     /// Runs a `cleanshotz://` URL from Launch Services or the command line.
     fn handle_url(&self, url: &str) -> Result<(), String> {
+        // Debug builds: cleanshotz://dev-applescript?source=... runs a
+        // script inside the app, to test the AppleScript dictionary
+        // without the Automation permission a separate process needs.
+        #[cfg(debug_assertions)]
+        if let Some(query) = url.split("://dev-applescript?source=").nth(1) {
+            return scripting::run_source(&crate::command::percent_decode(query));
+        }
         let request = crate::command::parse_url(url)?;
         tracing::info!(?request, "command");
         self.handle(request)

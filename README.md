@@ -299,7 +299,7 @@ the `[upload]` section of the settings file:
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
-| `destination` | `"none"` | `"http"`, `"s3"`, `"script"` or `"none"` |
+| `destination` | `"none"` | `"http"`, `"s3"`, `"imgur"`, `"script"` or `"none"` |
 | `auto_upload` | `false` | Upload every capture and recording right away |
 
 Any value can say `"keychain:NAME"` to read a secret from the Keychain
@@ -337,6 +337,11 @@ acl = ""                 # e.g. "public-read"
 
 **Script** (`[upload.script]`) runs `command` in a shell with the file path
 as its argument; the first line it prints is the link.
+
+**Imgur** (`[upload.imgur]`) uploads anonymously; anyone with the link can
+see the image. Imgur asks every app for its own `client_id`: register one
+at <https://api.imgur.com/oauth2/addclient> (anonymous usage, no callback
+URL) and paste it into Settings > Uploads.
 
 ### Quick Access Overlay
 
@@ -468,6 +473,24 @@ cleanshotz capture-area --x 0 --y 0 --width 800 --height 600 --action pin
 cleanshotz capture-text --filepath ~/Desktop/receipt.png --linebreaks false
 open "cleanshotz://record-screen?x=100&y=100&width=1280&height=720"
 ```
+
+### AppleScript
+
+Every command is also an AppleScript command, with the same parameters
+(open CleanShotZ in Script Editor's Library to see the dictionary):
+
+```applescript
+tell application "CleanShotZ"
+    capture area x 0 y 0 width 800 height 600 action "pin"
+    capture fullscreen pipeline "share"
+    capture text from file (POSIX file "/tmp/receipt.png") without line breaks
+    run pipeline named "share" from file "/tmp/shot.png"
+    open settings tab "shortcuts"
+end tell
+```
+
+The Shortcuts app can run these with its Run AppleScript action. The first
+time a script controls CleanShotZ, macOS asks you to allow it.
 
 ## License
 

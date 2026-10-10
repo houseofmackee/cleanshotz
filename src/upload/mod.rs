@@ -13,7 +13,7 @@ use std::sync::Mutex;
 use dispatch2::DispatchQueue;
 use objc2::MainThreadMarker;
 
-use crate::config::{Destination, HttpUpload, S3Upload, ScriptUpload, UploadSettings};
+use crate::config::{Destination, HttpUpload, ImgurUpload, S3Upload, ScriptUpload, UploadSettings};
 use crate::ui::toast;
 
 static SETTINGS: Mutex<Option<UploadSettings>> = Mutex::new(None);
@@ -56,6 +56,7 @@ pub fn upload_file(path: &Path) -> Result<String, String> {
         Destination::Http => http(&settings.http, path, &name),
         Destination::S3 => s3(&settings.s3, path, &name),
         Destination::Script => script(&settings.script, path),
+        Destination::Imgur => imgur(&settings.imgur, path, &name),
     }
 }
 
@@ -119,6 +120,42 @@ fn http(settings: &HttpUpload, path: &Path, name: &str) -> Result<String, String
     request::extract_link(&settings.link, &response.body, |h| {
         response.headers.get(&h.to_ascii_lowercase()).cloned()
     })
+}
+
+/// Imgur's API, as an HTTP upload: the file as `image` (or `video` for
+/// recordings), the link from `data.link`.
+fn imgur(settings: &ImgurUpload, path: &Path, name: &str) -> Result<String, String> {
+    if settings.client_id.trim().is_empty() {
+        return Err(
+            "set upload.imgur.client_id (register one at https://api.imgur.com/oauth2/addclient)"
+                .into(),
+        );
+    }
+    let client_id = keychain::resolve(settings.client_id.trim())?;
+    let video = crate::video_editor::is_video(path);
+    let url = imgur_url();
+    let upload = HttpUpload {
+        url,
+        method: "POST".into(),
+        field: if video { "video" } else { "image" }.into(),
+        form: [("type".to_string(), "file".to_string())].into(),
+        headers: [(
+            "Authorization".to_string(),
+            format!("Client-ID {client_id}"),
+        )]
+        .into(),
+        link: "json:data.link".into(),
+    };
+    http(&upload, path, name)
+}
+
+fn imgur_url() -> String {
+    // Debug builds: CLEANSHOTZ_IMGUR_URL points uploads at a test server.
+    #[cfg(debug_assertions)]
+    if let Ok(url) = std::env::var("CLEANSHOTZ_IMGUR_URL") {
+        return url;
+    }
+    "https://api.imgur.com/3/upload".into()
 }
 
 fn s3(settings: &S3Upload, path: &Path, name: &str) -> Result<String, String> {

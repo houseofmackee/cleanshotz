@@ -1,0 +1,249 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<!-- Generated from the command list in src/command.rs; every command
+     runs through the same code as cleanshotz:// URLs. -->
+<dictionary title="CleanShotZ Terminology">
+	<suite name="CleanShotZ Suite" code="CszZ" description="Screenshots, recordings and annotations.">
+		<command name="capture area" code="CszZCArA" description="Select an area and capture it, or capture the given area at once.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="x" code="XPos" optional="yes" description="Left edge of the area, in points from the left of the display.">
+				<type type="real"/>
+				<cocoa key="x"/>
+			</parameter>
+			<parameter name="y" code="YPos" optional="yes" description="Bottom edge of the area, in points from the bottom of the display.">
+				<type type="real"/>
+				<cocoa key="y"/>
+			</parameter>
+			<parameter name="width" code="Wdth" optional="yes" description="Width of the area in points.">
+				<type type="real"/>
+				<cocoa key="width"/>
+			</parameter>
+			<parameter name="height" code="Hght" optional="yes" description="Height of the area in points.">
+				<type type="real"/>
+				<cocoa key="height"/>
+			</parameter>
+			<parameter name="display" code="Disp" optional="yes" description="Display number: 1 is the main display. Default: the one under the pointer.">
+				<type type="integer"/>
+				<cocoa key="display"/>
+			</parameter>
+			<parameter name="action" code="Actn" optional="yes" description="What to do with the screenshot: copy, save, annotate, upload or pin.">
+				<type type="text"/>
+				<cocoa key="action"/>
+			</parameter>
+			<parameter name="pipeline" code="Pipe" optional="yes" description="Run this pipeline from the settings file instead.">
+				<type type="text"/>
+				<cocoa key="pipeline"/>
+			</parameter>
+		</command>
+		<command name="capture previous area" code="CszZCPrv" description="Capture the last selected area again.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="action" code="Actn" optional="yes" description="What to do with the screenshot: copy, save, annotate, upload or pin.">
+				<type type="text"/>
+				<cocoa key="action"/>
+			</parameter>
+			<parameter name="pipeline" code="Pipe" optional="yes" description="Run this pipeline from the settings file instead.">
+				<type type="text"/>
+				<cocoa key="pipeline"/>
+			</parameter>
+		</command>
+		<command name="capture fullscreen" code="CszZCFul" description="Capture the display under the pointer.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="action" code="Actn" optional="yes" description="What to do with the screenshot: copy, save, annotate, upload or pin.">
+				<type type="text"/>
+				<cocoa key="action"/>
+			</parameter>
+			<parameter name="pipeline" code="Pipe" optional="yes" description="Run this pipeline from the settings file instead.">
+				<type type="text"/>
+				<cocoa key="pipeline"/>
+			</parameter>
+		</command>
+		<command name="capture window" code="CszZCWin" description="Pick a window and capture it.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="action" code="Actn" optional="yes" description="What to do with the screenshot: copy, save, annotate, upload or pin.">
+				<type type="text"/>
+				<cocoa key="action"/>
+			</parameter>
+			<parameter name="pipeline" code="Pipe" optional="yes" description="Run this pipeline from the settings file instead.">
+				<type type="text"/>
+				<cocoa key="pipeline"/>
+			</parameter>
+		</command>
+		<command name="self timer" code="CszZCTmr" description="Select an area, then capture it after a countdown.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="action" code="Actn" optional="yes" description="What to do with the screenshot: copy, save, annotate, upload or pin.">
+				<type type="text"/>
+				<cocoa key="action"/>
+			</parameter>
+			<parameter name="pipeline" code="Pipe" optional="yes" description="Run this pipeline from the settings file instead.">
+				<type type="text"/>
+				<cocoa key="pipeline"/>
+			</parameter>
+		</command>
+		<command name="scrolling capture" code="CszZCScr" description="Capture content that scrolls, down or sideways.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="x" code="XPos" optional="yes" description="Left edge of the area, in points from the left of the display.">
+				<type type="real"/>
+				<cocoa key="x"/>
+			</parameter>
+			<parameter name="y" code="YPos" optional="yes" description="Bottom edge of the area, in points from the bottom of the display.">
+				<type type="real"/>
+				<cocoa key="y"/>
+			</parameter>
+			<parameter name="width" code="Wdth" optional="yes" description="Width of the area in points.">
+				<type type="real"/>
+				<cocoa key="width"/>
+			</parameter>
+			<parameter name="height" code="Hght" optional="yes" description="Height of the area in points.">
+				<type type="real"/>
+				<cocoa key="height"/>
+			</parameter>
+			<parameter name="display" code="Disp" optional="yes" description="Display number: 1 is the main display. Default: the one under the pointer.">
+				<type type="integer"/>
+				<cocoa key="display"/>
+			</parameter>
+			<parameter name="autoscroll" code="AScr" optional="yes" description="Scroll to the end automatically.">
+				<type type="boolean"/>
+				<cocoa key="autoscroll"/>
+			</parameter>
+		</command>
+		<command name="all in one" code="CszZCAll" description="Same as capture area.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="x" code="XPos" optional="yes" description="Left edge of the area, in points from the left of the display.">
+				<type type="real"/>
+				<cocoa key="x"/>
+			</parameter>
+			<parameter name="y" code="YPos" optional="yes" description="Bottom edge of the area, in points from the bottom of the display.">
+				<type type="real"/>
+				<cocoa key="y"/>
+			</parameter>
+			<parameter name="width" code="Wdth" optional="yes" description="Width of the area in points.">
+				<type type="real"/>
+				<cocoa key="width"/>
+			</parameter>
+			<parameter name="height" code="Hght" optional="yes" description="Height of the area in points.">
+				<type type="real"/>
+				<cocoa key="height"/>
+			</parameter>
+			<parameter name="display" code="Disp" optional="yes" description="Display number: 1 is the main display. Default: the one under the pointer.">
+				<type type="integer"/>
+				<cocoa key="display"/>
+			</parameter>
+		</command>
+		<command name="capture text" code="CszZCTxt" description="Recognize the text in an area or an image file and copy it.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="from file" code="FrFl" optional="yes" description="The image (or video) file.">
+				<type type="file"/>
+				<type type="text"/>
+				<cocoa key="filepath"/>
+			</parameter>
+			<parameter name="x" code="XPos" optional="yes" description="Left edge of the area, in points from the left of the display.">
+				<type type="real"/>
+				<cocoa key="x"/>
+			</parameter>
+			<parameter name="y" code="YPos" optional="yes" description="Bottom edge of the area, in points from the bottom of the display.">
+				<type type="real"/>
+				<cocoa key="y"/>
+			</parameter>
+			<parameter name="width" code="Wdth" optional="yes" description="Width of the area in points.">
+				<type type="real"/>
+				<cocoa key="width"/>
+			</parameter>
+			<parameter name="height" code="Hght" optional="yes" description="Height of the area in points.">
+				<type type="real"/>
+				<cocoa key="height"/>
+			</parameter>
+			<parameter name="display" code="Disp" optional="yes" description="Display number: 1 is the main display. Default: the one under the pointer.">
+				<type type="integer"/>
+				<cocoa key="display"/>
+			</parameter>
+			<parameter name="line breaks" code="LnBr" optional="yes" description="Keep line breaks in the recognized text.">
+				<type type="boolean"/>
+				<cocoa key="linebreaks"/>
+			</parameter>
+		</command>
+		<command name="record screen" code="CszZCRec" description="Start a screen recording, or stop the one in progress.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="x" code="XPos" optional="yes" description="Left edge of the area, in points from the left of the display.">
+				<type type="real"/>
+				<cocoa key="x"/>
+			</parameter>
+			<parameter name="y" code="YPos" optional="yes" description="Bottom edge of the area, in points from the bottom of the display.">
+				<type type="real"/>
+				<cocoa key="y"/>
+			</parameter>
+			<parameter name="width" code="Wdth" optional="yes" description="Width of the area in points.">
+				<type type="real"/>
+				<cocoa key="width"/>
+			</parameter>
+			<parameter name="height" code="Hght" optional="yes" description="Height of the area in points.">
+				<type type="real"/>
+				<cocoa key="height"/>
+			</parameter>
+			<parameter name="display" code="Disp" optional="yes" description="Display number: 1 is the main display. Default: the one under the pointer.">
+				<type type="integer"/>
+				<cocoa key="display"/>
+			</parameter>
+		</command>
+		<command name="pin" code="CszZPinn" description="Pin an image file to the screen (asks for one without a file).">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="from file" code="FrFl" optional="yes" description="The image (or video) file.">
+				<type type="file"/>
+				<type type="text"/>
+				<cocoa key="filepath"/>
+			</parameter>
+		</command>
+		<command name="open annotate" code="CszZOAnn" description="Open an image or project in the editor (asks for one without a file).">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="from file" code="FrFl" optional="yes" description="The image (or video) file.">
+				<type type="file"/>
+				<type type="text"/>
+				<cocoa key="filepath"/>
+			</parameter>
+		</command>
+		<command name="open from clipboard" code="CszZOClp" description="Open the image on the clipboard in the editor.">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
+		<command name="add quick access overlay" code="CszZAQAO" description="Show an image or video file in Quick Access.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="from file" code="FrFl" optional="yes" description="The image (or video) file.">
+				<type type="file"/>
+				<type type="text"/>
+				<cocoa key="filepath"/>
+			</parameter>
+		</command>
+		<command name="toggle desktop icons" code="CszZDTgl" description="Hide or show desktop icons and widgets.">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
+		<command name="hide desktop icons" code="CszZDHid" description="Cover desktop icons and widgets with the wallpaper.">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
+		<command name="show desktop icons" code="CszZDShw" description="Show desktop icons and widgets again.">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
+		<command name="open history" code="CszZOHis" description="Open the capture history.">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
+		<command name="restore recently closed" code="CszZRRec" description="Show the most recently closed Quick Access thumbnail again.">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
+		<command name="open settings" code="CszZOSet" description="Open the Settings window.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="tab" code="STab" optional="yes" description="general, screenshots, quickaccess, recording, history, uploads (cloud) or shortcuts.">
+				<type type="text"/>
+				<cocoa key="tab"/>
+			</parameter>
+		</command>
+		<command name="run pipeline" code="CszZRPip" description="Run a pipeline from the settings file on an image file.">
+			<cocoa class="CSZScriptCommand"/>
+			<parameter name="named" code="PNam" optional="yes" description="The pipeline’s name in the settings file.">
+				<type type="text"/>
+				<cocoa key="name"/>
+			</parameter>
+			<parameter name="from file" code="FrFl" optional="yes" description="The image (or video) file.">
+				<type type="file"/>
+				<type type="text"/>
+				<cocoa key="filepath"/>
+			</parameter>
+		</command>
+	</suite>
+</dictionary>

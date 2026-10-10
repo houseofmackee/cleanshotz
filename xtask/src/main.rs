@@ -96,6 +96,12 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
     }
     fs::write(contents.join("Info.plist"), plist)?;
     fs::write(contents.join("PkgInfo"), "APPL????")?;
+    // The AppleScript dictionary.
+    fs::copy(
+        root.join("resources/CleanShotZ.sdef"),
+        contents.join("Resources/CleanShotZ.sdef"),
+    )
+    .context("copying the scripting definition")?;
     fs::copy(
         profile_dir.join(BINARY),
         contents.join("MacOS").join(BINARY),

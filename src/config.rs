@@ -386,6 +386,7 @@ pub enum Destination {
     Http,
     S3,
     Script,
+    Imgur,
 }
 
 /// Uploading captures and copying a link to them.
@@ -401,6 +402,15 @@ pub struct UploadSettings {
     pub http: HttpUpload,
     pub s3: S3Upload,
     pub script: ScriptUpload,
+    pub imgur: ImgurUpload,
+}
+
+/// Anonymous Imgur uploads. Imgur asks every app for its own client ID:
+/// register one (no callback URL needed) at <https://api.imgur.com/oauth2/addclient>.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ImgurUpload {
+    pub client_id: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

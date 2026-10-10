@@ -277,8 +277,10 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   Done: every CleanShot command and parameter (areas, displays, `action`,
   `linebreaks`, `autoscroll`, desktop icons, Quick Access from a file),
   checked strictly so typos are errors. The CLI talks to the app over a
-  Unix socket, reports errors and starts the app when needed. Not done
-  yet: App Intents and an AppleScript dictionary.
+  Unix socket, reports errors and starts the app when needed. An
+  AppleScript dictionary offers the same commands and parameters (one
+  command class turns them into the same requests). Imgur is a named
+  upload destination. Not done yet: App Intents.
 - Post-capture action pipeline (improvement #8).
   Done: named pipelines in `[pipelines]` with resize, background, redact,
   format, save, copy, upload, copy-link, open, run, annotate, pin and

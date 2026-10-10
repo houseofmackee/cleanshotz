@@ -41,6 +41,10 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppleScriptEnabled</key>
+	<true/>
+	<key>OSAScriptingDefinition</key>
+	<string>CleanShotZ.sdef</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<!-- Allows uploads to plain-HTTP servers on the local network. -->

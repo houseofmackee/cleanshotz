@@ -61,6 +61,14 @@ pub fn start(_mtm: MainThreadMarker, handler: impl Fn(&str) -> Result<(), String
     });
 }
 
+/// Runs a `cleanshotz://` URL through the request handler (main thread).
+pub fn handle_url(url: &str) -> Result<(), String> {
+    HANDLER.with(|h| match h.get() {
+        Some(handler) => handler(url),
+        None => Err("CleanShotZ is not ready".into()),
+    })
+}
+
 /// Removes the socket when the app quits.
 pub fn stop() {
     let path = socket_path();
