@@ -60,6 +60,9 @@ preference keys).
 - **Minimum macOS 14 (Sonoma).** This unlocks `SCScreenshotManager` (single frame
   capture), ScreenCaptureKit audio capture (system audio without a virtual audio
   driver, which CleanShot needs) and modern Vision OCR.
+- **Apple Silicon only.** No Intel (`x86_64`) builds. This keeps CI and
+  releases to a single native target and lets us rely on Apple Silicon
+  performance (for example full-resolution live magnifier redraws).
 - **Language bindings:** the `objc2` family (`objc2`, `objc2-foundation`,
   `objc2-app-kit`, `objc2-screen-capture-kit`, `objc2-av-foundation`,
   `objc2-vision`, `objc2-core-graphics`, `objc2-core-image`, `block2`,
@@ -193,8 +196,8 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Accessibility (VoiceOver labels), localization scaffolding, performance pass.
 
 ### Distribution (before the first public release, targeted after M3)
-- **Release workflow** (GitHub Actions on tag `v*`): build `aarch64` and
-  `x86_64`, merge with `lipo` into a universal binary, bundle, sign, package as
+- **Release workflow** (GitHub Actions on tag `v*`): build for
+  `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
   SHA-256 checksums and generated release notes.
 - **Signing without a Developer ID:** releases are signed with a dedicated

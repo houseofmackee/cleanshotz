@@ -12,7 +12,7 @@ CleanShotZ is in early development and has no release yet.
 
 ## Install
 
-Requires macOS 14 or later. Once releases exist, download the latest
+Requires macOS 14 or later on an Apple Silicon Mac. Once releases exist, download the latest
 `CleanShotZ-<version>.zip` from
 [GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), unzip
 it and move `CleanShotZ.app` to `/Applications`.

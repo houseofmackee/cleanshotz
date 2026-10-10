@@ -2,7 +2,7 @@
 # Only permissive licenses, so the shipped app can stay MIT OR Apache-2.0.
 
 [graph]
-targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+targets = ["aarch64-apple-darwin"]
 
 [licenses]
 allow = [
