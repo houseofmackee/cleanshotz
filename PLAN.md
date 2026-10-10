@@ -240,6 +240,9 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 
 ### M9: History, uploads, automation
 - History window with thumbnails, search, re-open, re-copy, delete.
+  Done: SQLite store with FTS5 search over recognized text (improvement
+  #4), thumbnails, filters, retention, and unsaved captures kept in the
+  history folder instead of a temp folder.
 - Native Settings window, including a shortcut recorder.
 - `UploadBackend` trait and S3, HTTP, Imgur, script backends; credentials in Keychain.
 - URL scheme `cleanshotz://`: extend the capture commands from M2 to full

@@ -2,7 +2,6 @@
 
 pub mod sensitive;
 
-use std::cell::RefCell;
 use std::ops::Range;
 
 use dispatch2::DispatchQueue;
@@ -23,16 +22,17 @@ use objc2_vision::{
 
 use crate::capture::geometry::Rect;
 
-thread_local! {
-    static SETTINGS: RefCell<TextSettings> = RefCell::new(TextSettings::default());
-}
+// Process-wide: text is also recognized on background threads.
+static SETTINGS: std::sync::Mutex<TextSettings> = std::sync::Mutex::new(TextSettings::DEFAULT);
 
 pub fn configure(settings: TextSettings) {
-    SETTINGS.with(|s| *s.borrow_mut() = settings);
+    if let Ok(mut s) = SETTINGS.lock() {
+        *s = settings;
+    }
 }
 
 pub fn settings() -> TextSettings {
-    SETTINGS.with(|s| s.borrow().clone())
+    SETTINGS.lock().map(|s| s.clone()).unwrap_or_default()
 }
 
 /// Recognizes the text in `image` on a background thread, copies it to the

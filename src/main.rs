@@ -3,6 +3,7 @@ mod app;
 mod capture;
 mod config;
 mod editor;
+mod history;
 mod logging;
 mod ocr;
 mod pin;

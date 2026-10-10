@@ -306,7 +306,8 @@ fn begin_recording(
     let temp = output::temp_dir();
     let save_dir = naming::expand_home(&capture.save_directory);
     let saved = capture.save_to_file;
-    let final_dir = if saved { &save_dir } else { &temp };
+    let unsaved = output::unsaved_dir();
+    let final_dir = if saved { &save_dir } else { &unsaved };
     std::fs::create_dir_all(&temp).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(final_dir).map_err(|e| e.to_string())?;
     let (video, gif) = match settings.format {
@@ -473,6 +474,7 @@ fn deliver(finish: Finish) {
             match (file, thumbnail) {
                 (Ok(file), Some(thumbnail)) => {
                     tracing::info!(path = %file.display(), duration, "recording saved");
+                    crate::history::record_video(file.clone(), thumbnail.0.clone(), duration);
                     crate::quick_access::add_video(
                         mtm,
                         file,

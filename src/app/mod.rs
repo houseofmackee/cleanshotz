@@ -60,6 +60,7 @@ define_class!(
         fn did_finish_launching(&self, _notification: &NSNotification) {
             capture::output::clear_temp_dir();
             self.configure_quick_access();
+            crate::history::prune();
             self.install_status_item();
             self.install_hotkeys();
             self.run_onboarding_if_needed();
@@ -284,16 +285,6 @@ impl AppDelegate {
     }
 
     fn perform(&self, action: Action) {
-        if let Some(milestone) = action.pending_milestone() {
-            tracing::info!(?action, milestone, "action not implemented yet");
-            alert::show(
-                self.mtm(),
-                &format!("{} is not available yet", action.title()),
-                &format!("This feature is planned for milestone {milestone} (see PLAN.md)."),
-                &["OK"],
-            );
-            return;
-        }
         let mtm = self.mtm();
         match action {
             Action::CaptureArea
@@ -313,6 +304,7 @@ impl AppDelegate {
                 }
             }
             Action::ReloadSettings => self.reload_settings(),
+            Action::OpenHistory => crate::history::open_window(mtm),
             Action::OpenInEditor => crate::editor::open_with_panel(mtm),
             Action::AnnotateClipboard => crate::editor::open_clipboard(mtm),
             Action::RestoreRecentlyClosed => crate::quick_access::restore_recently_closed(mtm),
@@ -336,7 +328,6 @@ impl AppDelegate {
                 app.orderFrontStandardAboutPanel(None);
             }
             Action::Quit => NSApplication::sharedApplication(mtm).terminate(None),
-            _ => unreachable!("{action:?} has a pending milestone"),
         }
     }
 
@@ -345,6 +336,7 @@ impl AppDelegate {
         crate::quick_access::configure(config.quick_access.clone(), config.capture.clone());
         crate::ocr::configure(config.text.clone());
         crate::video_editor::configure(config.recording.clone());
+        crate::history::configure(config.history);
     }
 
     fn capture(&self, action: Action) {

@@ -432,9 +432,19 @@ impl VideoEditor {
                         let thumbnail = thumbnail.map(super::AssertSend::into_inner);
                         if output == source {
                             if let Some(thumbnail) = thumbnail {
+                                crate::history::refresh(
+                                    output.clone(),
+                                    thumbnail.clone(),
+                                    Some(duration),
+                                );
                                 crate::quick_access::refresh_video(&output, thumbnail, duration);
                             }
                         } else if let Some(thumbnail) = thumbnail {
+                            crate::history::record_video(
+                                output.clone(),
+                                thumbnail.clone(),
+                                duration,
+                            );
                             crate::quick_access::add_video(
                                 mtm,
                                 output.clone(),

@@ -198,6 +198,26 @@ recording (a GIF is saved next to it); Save As… saves a copy anywhere.
 When only trimming or muting, the video is copied without re-encoding, so
 it keeps its quality and saves quickly.
 
+### Capture history
+
+Capture History… in the menu shows every screenshot and recording, newest
+first. Search finds captures by the text in them (recognized on your Mac in
+the background) or by file name, and the filter switches between all,
+screenshots and recordings. Double-click to open; right-click to Annotate or
+Edit, Copy, Show in Finder, Pin or Delete. Delete and Cmd+C work from the
+keyboard too.
+
+Captures you don't save are kept in `~/Library/Application Support/CleanShotZ/History`
+for as long as history keeps them. Deleting such an entry deletes its file;
+deleting an entry for a saved file leaves the file alone. Options live in
+the `[history]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Keep a history of captures |
+| `retention_days` | `30` | Remove entries older than this; `0` keeps them |
+| `recognize_text` | `true` | Recognize text in screenshots for search |
+
 ### Quick Access Overlay
 
 Each capture appears as a thumbnail in the bottom-left corner. Hover it to

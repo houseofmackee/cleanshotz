@@ -15,6 +15,7 @@ pub struct Config {
     pub quick_access: QuickAccessSettings,
     pub text: TextSettings,
     pub recording: RecordingSettings,
+    pub history: HistorySettings,
     pub hotkeys: Hotkeys,
 }
 
@@ -148,13 +149,17 @@ pub struct TextSettings {
     pub language_correction: bool,
 }
 
+impl TextSettings {
+    pub const DEFAULT: TextSettings = TextSettings {
+        keep_line_breaks: true,
+        languages: Vec::new(),
+        language_correction: false,
+    };
+}
+
 impl Default for TextSettings {
     fn default() -> Self {
-        Self {
-            keep_line_breaks: true,
-            languages: Vec::new(),
-            language_correction: false,
-        }
+        Self::DEFAULT
     }
 }
 
@@ -292,6 +297,31 @@ impl RecordingSettings {
             Codec::Auto => Codec::Hevc,
             other => other,
         }
+    }
+}
+
+/// Capture history.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HistorySettings {
+    pub enabled: bool,
+    /// Days to keep history entries (and unsaved captures); 0 keeps them.
+    pub retention_days: u32,
+    /// Recognize text in screenshots so history can be searched by it.
+    pub recognize_text: bool,
+}
+
+impl HistorySettings {
+    pub const DEFAULT: HistorySettings = HistorySettings {
+        enabled: true,
+        retention_days: 30,
+        recognize_text: true,
+    };
+}
+
+impl Default for HistorySettings {
+    fn default() -> Self {
+        Self::DEFAULT
     }
 }
 
@@ -469,6 +499,7 @@ mod tests {
         assert_eq!(config.quick_access, QuickAccessSettings::default());
         assert_eq!(config.text, TextSettings::default());
         assert_eq!(config.recording, RecordingSettings::default());
+        assert_eq!(config.history, HistorySettings::default());
     }
 
     #[test]

@@ -977,6 +977,7 @@ impl EditorController {
                 let format = format_for(file);
                 output::save_to(file, &image, format, 0.92).map(|_| {
                     crate::quick_access::refresh(file, image.clone());
+                    crate::history::refresh(file.clone(), image.clone(), None);
                     file.clone()
                 })
             }
@@ -987,6 +988,7 @@ impl EditorController {
             Source::File { .. } | Source::Clipboard => {
                 let settings = crate::quick_access::capture_settings();
                 output::save_to_directory(&image, scale, &settings, None).map(|(path, png)| {
+                    crate::history::record_image(image.clone(), path.clone());
                     crate::quick_access::add(
                         self.mtm(),
                         output::Delivered {

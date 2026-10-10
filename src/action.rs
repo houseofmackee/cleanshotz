@@ -122,15 +122,6 @@ impl Action {
             .into_iter()
             .find(|a| a.url_command() == Some(command))
     }
-
-    /// The milestone that implements this action, for actions that are not
-    /// available yet.
-    pub fn pending_milestone(self) -> Option<&'static str> {
-        match self {
-            Action::OpenHistory => Some("M9"),
-            _ => None,
-        }
-    }
 }
 
 #[cfg(test)]

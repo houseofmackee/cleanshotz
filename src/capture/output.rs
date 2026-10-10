@@ -56,6 +56,7 @@ pub fn deliver(mtm: MainThreadMarker, captured: Captured, settings: &CaptureSett
         };
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
+            crate::history::record_image(delivered.image.clone(), delivered.file.clone());
             crate::quick_access::add(mtm, delivered);
         });
     });
@@ -97,7 +98,7 @@ fn process(captured: Captured, settings: &CaptureSettings) -> Option<Delivered> 
                 &chrono::Local::now(),
                 captured.scale > 1.0,
             );
-            let dir = temp_dir();
+            let dir = unsaved_dir();
             let path = naming::unique_path(&dir, &stem, "png");
             let written = fs::create_dir_all(&dir)
                 .and_then(|()| fs::write(&path, png.as_deref().unwrap_or_default()));
@@ -161,6 +162,16 @@ pub fn copy_png(png: &[u8]) {
 /// `~/Library/Caches/CleanShotZ/Quick Access`.
 pub fn temp_dir() -> PathBuf {
     naming::expand_home("~/Library/Caches/CleanShotZ/Quick Access")
+}
+
+/// Where captures that are not saved go: the history folder while history
+/// is on (kept as long as history keeps them), otherwise the temp folder.
+pub fn unsaved_dir() -> PathBuf {
+    if crate::history::settings().enabled {
+        crate::history::files_dir()
+    } else {
+        temp_dir()
+    }
 }
 
 /// Removes temporary capture files left from a previous run.
