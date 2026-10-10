@@ -12,6 +12,9 @@ pub enum Action {
     CaptureText,
     RecordScreen,
     OpenHistory,
+    RestoreRecentlyClosed,
+    UnlockPins,
+    CloseAllPins,
     OpenSettingsFile,
     ReloadSettings,
     ToggleLaunchAtLogin,
@@ -24,7 +27,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 18] = [
+    pub const ALL: [Action; 21] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -34,6 +37,9 @@ impl Action {
         Action::CaptureText,
         Action::RecordScreen,
         Action::OpenHistory,
+        Action::RestoreRecentlyClosed,
+        Action::UnlockPins,
+        Action::CloseAllPins,
         Action::OpenSettingsFile,
         Action::ReloadSettings,
         Action::ToggleLaunchAtLogin,
@@ -68,6 +74,9 @@ impl Action {
             Action::CaptureText => "Capture Text",
             Action::RecordScreen => "Record Screen",
             Action::OpenHistory => "Capture History…",
+            Action::RestoreRecentlyClosed => "Restore Recently Closed",
+            Action::UnlockPins => "Unlock Pinned Screenshots",
+            Action::CloseAllPins => "Close All Pinned Screenshots",
             Action::OpenSettingsFile => "Open Settings File…",
             Action::ReloadSettings => "Reload Settings",
             Action::ToggleLaunchAtLogin => "Launch at Login",
@@ -93,6 +102,7 @@ impl Action {
             Action::CaptureText => "capture-text",
             Action::RecordScreen => "record-screen",
             Action::OpenHistory => "open-history",
+            Action::RestoreRecentlyClosed => "restore-recently-closed",
             _ => return None,
         })
     }

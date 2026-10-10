@@ -3,9 +3,12 @@ mod app;
 mod capture;
 mod config;
 mod logging;
+mod pin;
 mod platform;
+mod quick_access;
 mod shortcut;
 mod state;
+mod ui;
 
 use std::process::ExitCode;
 

@@ -42,6 +42,12 @@ pub fn screen_under_mouse(mtm: MainThreadMarker) -> Option<Retained<NSScreen>> {
     under.or_else(|| NSScreen::mainScreen(mtm))
 }
 
+/// A display's global frame in CoreGraphics points (top-left origin).
+pub fn display_bounds(display_id: u32) -> Rect {
+    let b = objc2_core_graphics::CGDisplayBounds(display_id);
+    Rect::new(b.origin.x, b.origin.y, b.size.width, b.size.height)
+}
+
 fn output_scale(settings: &CaptureSettings, native: f64) -> f64 {
     if settings.downscale_retina {
         1.0
@@ -77,7 +83,16 @@ pub fn capture_fullscreen(
             shadow: false,
         },
     )?;
-    output::deliver(mtm, Captured { image, scale }, settings);
+    let source = Some(display_bounds(display_id));
+    output::deliver(
+        mtm,
+        Captured {
+            image,
+            scale,
+            source,
+        },
+        settings,
+    );
     Ok(())
 }
 
@@ -108,13 +123,24 @@ pub fn capture_rect(
             shadow: false,
         },
     )?;
-    output::deliver(mtm, Captured { image, scale }, settings);
+    let source = Some(display_bounds(display_id).offset(rect.x, rect.y));
+    let source = source.map(|s| Rect::new(s.x, s.y, rect.width, rect.height));
+    output::deliver(
+        mtm,
+        Captured {
+            image,
+            scale,
+            source,
+        },
+        settings,
+    );
     Ok(())
 }
 
 /// Crops a frozen display snapshot instead of capturing again.
 pub fn deliver_from_snapshot(
     mtm: MainThreadMarker,
+    display_id: u32,
     snapshot: &objc2_core_graphics::CGImage,
     snapshot_scale: f64,
     rect: Rect,
@@ -128,7 +154,22 @@ pub fn deliver_from_snapshot(
         let height = (rect.height * scale).round() as usize;
         image = image::resize(&image, width, height).ok_or_else(failed)?;
     }
-    output::deliver(mtm, Captured { image, scale }, settings);
+    let origin = display_bounds(display_id);
+    let source = Some(Rect::new(
+        origin.x + rect.x,
+        origin.y + rect.y,
+        rect.width,
+        rect.height,
+    ));
+    output::deliver(
+        mtm,
+        Captured {
+            image,
+            scale,
+            source,
+        },
+        settings,
+    );
     Ok(())
 }
 
@@ -173,6 +214,22 @@ pub fn capture_window(
         )
         .ok_or_else(|| failed("could not be resized"))?;
     }
-    output::deliver(mtm, Captured { image, scale }, settings);
+    // SAFETY: plain property read.
+    let frame = unsafe { window.frame() };
+    let source = Some(Rect::new(
+        frame.origin.x,
+        frame.origin.y,
+        frame.size.width,
+        frame.size.height,
+    ));
+    output::deliver(
+        mtm,
+        Captured {
+            image,
+            scale,
+            source,
+        },
+        settings,
+    );
     Ok(())
 }

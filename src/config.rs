@@ -12,6 +12,7 @@ use crate::action::Action;
 pub struct Config {
     pub general: General,
     pub capture: CaptureSettings,
+    pub quick_access: QuickAccessSettings,
     pub hotkeys: Hotkeys,
 }
 
@@ -96,6 +97,38 @@ impl CaptureSettings {
 
     pub fn self_timer_seconds(&self) -> u32 {
         self.self_timer_seconds.clamp(1, 60)
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Side {
+    #[default]
+    Left,
+    Right,
+}
+
+/// The floating thumbnail shown after each capture.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct QuickAccessSettings {
+    pub enabled: bool,
+    /// Bottom-left or bottom-right corner of the screen.
+    pub position: Side,
+    /// Close each thumbnail after this many seconds (0: keep until closed).
+    pub auto_close_seconds: u32,
+    /// Close a thumbnail after it is dragged into another app.
+    pub close_after_drag: bool,
+}
+
+impl Default for QuickAccessSettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            position: Side::Left,
+            auto_close_seconds: 0,
+            close_after_drag: true,
+        }
     }
 }
 
@@ -270,6 +303,7 @@ mod tests {
         assert_eq!(config.hotkeys.capture_fullscreen, "alt+shift+3");
         assert!(!config.general.onboarding_completed);
         assert_eq!(config.capture, CaptureSettings::default());
+        assert_eq!(config.quick_access, QuickAccessSettings::default());
     }
 
     #[test]

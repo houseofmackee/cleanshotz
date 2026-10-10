@@ -122,10 +122,10 @@ fn capture_selection(
 ) -> Result<(), CaptureError> {
     match selection {
         Selection::Area {
+            display_id,
             rect,
             frozen: Some((snapshot, scale)),
-            ..
-        } => deliver_from_snapshot(mtm, &snapshot, scale, rect, settings),
+        } => deliver_from_snapshot(mtm, display_id, &snapshot, scale, rect, settings),
         Selection::Area {
             display_id, rect, ..
         } => capture_rect(mtm, display_id, rect, settings),

@@ -15,24 +15,23 @@
 use std::cell::RefCell;
 
 use objc2::rc::Retained;
-use objc2::runtime::AnyObject;
 use objc2::{
     AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
 };
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationOptions, NSBackingStoreType, NSBezierPath, NSColor,
-    NSCompositingOperation, NSCursor, NSEvent, NSEventModifierFlags, NSFont, NSFontAttributeName,
-    NSFontWeightMedium, NSForegroundColorAttributeName, NSGraphicsContext, NSImage,
+    NSCompositingOperation, NSCursor, NSEvent, NSEventModifierFlags, NSGraphicsContext, NSImage,
     NSImageInterpolation, NSResponder, NSRunningApplication, NSScreen, NSScreenSaverWindowLevel,
-    NSStringDrawing, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindow,
-    NSWindowCollectionBehavior, NSWindowStyleMask, NSWorkspace,
+    NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindow, NSWindowCollectionBehavior,
+    NSWindowStyleMask, NSWorkspace,
 };
 use objc2_core_foundation::{CFRetained, CGPoint};
 use objc2_core_graphics::{CGImage, CGWarpMouseCursorPosition};
-use objc2_foundation::{NSDictionary, NSPoint, NSRect, NSSize, NSString};
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 
 use super::geometry::{self, Point, Rect};
 use super::sck::WindowInfo;
+use crate::ui::draw::{draw_label, inset, ns_rect, stroke_rect};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -614,50 +613,6 @@ fn label_origin(rect: Rect, bounds: Rect) -> Point {
     } else {
         Point::new(x + 6.0, rect.y + 6.0)
     }
-}
-
-/// White text on a dark rounded background, top-left at `origin`.
-fn draw_label(text: &str, origin: Point, size: f64) {
-    let font = NSFont::monospacedDigitSystemFontOfSize_weight(size, unsafe { NSFontWeightMedium });
-    let color = NSColor::whiteColor();
-    let font_obj: &AnyObject = font.as_ref();
-    let color_obj: &AnyObject = color.as_ref();
-    // SAFETY: reading AppKit constants.
-    let keys = unsafe { [NSFontAttributeName, NSForegroundColorAttributeName] };
-    let attributes = NSDictionary::from_slices(&keys, &[font_obj, color_obj]);
-    let text = NSString::from_str(text);
-    // SAFETY: the attributes map AppKit text attribute keys to valid values.
-    let size = unsafe { text.sizeWithAttributes(Some(&attributes)) };
-    let padding = NSSize::new(6.0, 3.0);
-    let background = Rect::new(
-        origin.x,
-        origin.y,
-        size.width + padding.width * 2.0,
-        size.height + padding.height * 2.0,
-    );
-    NSColor::colorWithWhite_alpha(0.0, 0.75).setFill();
-    NSBezierPath::bezierPathWithRoundedRect_xRadius_yRadius(ns_rect(background), 5.0, 5.0).fill();
-    // SAFETY: as above.
-    unsafe {
-        text.drawAtPoint_withAttributes(
-            NSPoint::new(origin.x + padding.width, origin.y + padding.height),
-            Some(&attributes),
-        );
-    }
-}
-
-fn stroke_rect(rect: Rect, width: f64) {
-    let path = NSBezierPath::bezierPathWithRect(ns_rect(rect));
-    path.setLineWidth(width);
-    path.stroke();
-}
-
-fn inset(r: Rect, by: f64) -> Rect {
-    Rect::new(r.x + by, r.y + by, r.width - 2.0 * by, r.height - 2.0 * by)
-}
-
-fn ns_rect(r: Rect) -> NSRect {
-    NSRect::new(NSPoint::new(r.x, r.y), NSSize::new(r.width, r.height))
 }
 
 define_class!(

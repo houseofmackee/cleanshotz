@@ -123,11 +123,35 @@ default. Options live in the `[capture]` section of the settings file:
 | `self_timer_seconds` | `5` | Countdown length, 1 to 60 |
 | `play_sound` | `true` | Play the macOS screenshot sound |
 
+### Quick Access Overlay
+
+Each capture appears as a thumbnail in the bottom-left corner. Hover it to
+Copy, Save (or Show in Finder once saved), Pin or Close it. Drag it into any
+app to drop the image file there, or double-click it to open it. Closed
+thumbnails can be brought back with Restore Recently Closed in the menu.
+Options live in the `[quick_access]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Show thumbnails after capturing |
+| `position` | `"left"` | `"left"` or `"right"` corner |
+| `auto_close_seconds` | `0` | Close thumbnails after this many seconds; 0 keeps them |
+| `close_after_drag` | `true` | Close a thumbnail after dragging it into an app |
+
+### Pinned screenshots
+
+Pin a thumbnail to keep the capture floating above all windows, at the
+place it was captured. Drag to move it. Pinch, Cmd+= and Cmd+- zoom; Cmd+0
+returns to actual size; Cmd+C copies; Escape or Cmd+W closes. Right click
+for opacity, Save As and Lock (clicks pass through to the windows below).
+Unlock pins from the menu bar.
+
 ### URL scheme
 
 Other apps and scripts can trigger captures with `open cleanshotz://<command>`:
 `capture-area`, `capture-previous-area`, `capture-fullscreen`,
-`capture-window` and `self-timer`. The names match CleanShot X's URL scheme.
+`capture-window`, `self-timer` and `restore-recently-closed`. The names match
+CleanShot X's URL scheme.
 
 ## License
 

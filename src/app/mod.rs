@@ -57,6 +57,8 @@ define_class!(
     unsafe impl NSApplicationDelegate for AppDelegate {
         #[unsafe(method(applicationDidFinishLaunching:))]
         fn did_finish_launching(&self, _notification: &NSNotification) {
+            capture::output::clear_temp_dir();
+            self.configure_quick_access();
             self.install_status_item();
             self.install_hotkeys();
             self.run_onboarding_if_needed();
@@ -225,6 +227,7 @@ impl AppDelegate {
         match Config::load_or_create(&ivars.config_path) {
             Ok(config) => {
                 *ivars.config.borrow_mut() = config;
+                self.configure_quick_access();
                 let errors = self.register_hotkeys();
                 if !errors.is_empty() {
                     self.show_hotkey_errors(&errors);
@@ -270,6 +273,9 @@ impl AppDelegate {
                 }
             }
             Action::ReloadSettings => self.reload_settings(),
+            Action::RestoreRecentlyClosed => crate::quick_access::restore_recently_closed(mtm),
+            Action::UnlockPins => crate::pin::unlock_all(),
+            Action::CloseAllPins => crate::pin::close_all(),
             Action::ToggleLaunchAtLogin => {
                 let enable = !login_item::is_enabled();
                 if let Err(e) = login_item::set_enabled(enable) {
@@ -289,6 +295,11 @@ impl AppDelegate {
             Action::Quit => NSApplication::sharedApplication(mtm).terminate(None),
             _ => unreachable!("{action:?} has a pending milestone"),
         }
+    }
+
+    fn configure_quick_access(&self) {
+        let config = self.ivars().config.borrow();
+        crate::quick_access::configure(config.quick_access.clone(), config.capture.clone());
     }
 
     fn capture(&self, action: Action) {
@@ -360,6 +371,15 @@ impl AppDelegate {
         menu.addItem(&self.menu_item(Action::RecordScreen));
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         menu.addItem(&self.menu_item(Action::OpenHistory));
+        let restore = self.menu_item(Action::RestoreRecentlyClosed);
+        restore.setEnabled(crate::quick_access::has_recently_closed());
+        menu.addItem(&restore);
+        if crate::pin::count() > 0 {
+            if crate::pin::any_locked() {
+                menu.addItem(&self.menu_item(Action::UnlockPins));
+            }
+            menu.addItem(&self.menu_item(Action::CloseAllPins));
+        }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
 
         let permissions = NSMenu::new(mtm);

@@ -156,10 +156,15 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   WebP output moves to M9 with the other export formats (ImageIO cannot
   write WebP). All-in-One mode is not planned yet.
 
-### M3: Quick Access Overlay and pinning
+### M3: Quick Access Overlay and pinning (done)
 - Stacked thumbnails in a screen corner; drag out as file; hover actions
   (copy, save, annotate, pin, upload, close); auto-close timer; restore recently closed.
 - Pinned screenshots: always on top, resize, opacity, lock/click-through, arrange.
+- Notes: the Annotate and Upload card buttons arrive with M4 and M9. Pins
+  zoom by pinch and keyboard rather than edge dragging. "Arrange" (tiling
+  several pins) is not done yet. Captures that are not saved get a
+  temporary file so they can still be dragged out; temporary files are
+  cleared on the next launch.
 
 ### M4: Annotation editor
 - Document model (layers of shapes with z-order), undo/redo, serialization to `.cszdoc`.
