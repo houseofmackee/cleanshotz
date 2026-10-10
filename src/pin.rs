@@ -246,11 +246,18 @@ fn save_as(mtm: MainThreadMarker, pin: &Pin) {
         return;
     };
     let path = PathBuf::from(path.to_string());
-    let format = match path.extension().and_then(|e| e.to_str()) {
-        Some("jpg" | "jpeg") => ImageFormat::Jpeg,
-        _ => ImageFormat::Png,
+    let format = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .and_then(ImageFormat::from_extension)
+        .unwrap_or(ImageFormat::Png);
+    // High quality for JPEG; lossless for WebP.
+    let quality = if format == ImageFormat::Webp {
+        1.0
+    } else {
+        0.9
     };
-    match output::save_to(&path, &pin.image, format, 0.9) {
+    match output::save_to(&path, &pin.image, format, quality) {
         Ok(_) => tracing::info!(path = %path.display(), "pinned screenshot saved"),
         Err(e) => tracing::error!(error = %e, "could not save pinned screenshot"),
     }

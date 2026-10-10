@@ -18,6 +18,9 @@ pub struct Config {
     pub history: HistorySettings,
     pub upload: UploadSettings,
     pub hotkeys: Hotkeys,
+    /// Named post-capture pipelines: lists of steps such as
+    /// `["resize 50%", "upload", "copy-link"]` (see `crate::pipeline`).
+    pub pipelines: std::collections::BTreeMap<String, Vec<String>>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -33,6 +36,7 @@ pub enum ImageFormat {
     #[default]
     Png,
     Jpeg,
+    Webp,
 }
 
 impl ImageFormat {
@@ -40,6 +44,18 @@ impl ImageFormat {
         match self {
             ImageFormat::Png => "png",
             ImageFormat::Jpeg => "jpg",
+            ImageFormat::Webp => "webp",
+        }
+    }
+
+    /// The format for a file name's extension, if it is one CleanShotZ
+    /// writes.
+    pub fn from_extension(ext: &str) -> Option<ImageFormat> {
+        match ext.to_ascii_lowercase().as_str() {
+            "png" => Some(ImageFormat::Png),
+            "jpg" | "jpeg" => Some(ImageFormat::Jpeg),
+            "webp" => Some(ImageFormat::Webp),
+            _ => None,
         }
     }
 }
@@ -57,6 +73,8 @@ pub struct CaptureSettings {
     pub format: ImageFormat,
     /// JPEG quality from 0.0 to 1.0.
     pub jpeg_quality: f64,
+    /// WebP quality from 0.0 to 1.0; 1.0 is lossless.
+    pub webp_quality: f64,
     /// Save Retina captures at 1x (point) resolution.
     pub downscale_retina: bool,
     /// Include the mouse pointer in fullscreen and area captures.
@@ -71,10 +89,13 @@ pub struct CaptureSettings {
     pub show_magnifier: bool,
     pub self_timer_seconds: u32,
     pub play_sound: bool,
-    /// From a URL or command-line request: what to do with the capture
-    /// instead of copying and saving it. Never saved.
+    /// A pipeline from `[pipelines]` to run after every screenshot instead
+    /// of the copy, save and Quick Access settings; empty for none.
+    pub pipeline: String,
+    /// From a URL or command-line request: steps to run instead of the
+    /// usual handling. Never saved.
     #[serde(skip)]
-    pub after: Option<crate::command::After>,
+    pub steps: Option<Vec<crate::pipeline::Step>>,
     /// From a `capture-text` request: overrides `keep_line_breaks`.
     #[serde(skip)]
     pub line_breaks: Option<bool>,
@@ -89,6 +110,7 @@ impl Default for CaptureSettings {
             file_name: "CleanShotZ {date} at {time}".into(),
             format: ImageFormat::Png,
             jpeg_quality: 0.9,
+            webp_quality: 1.0,
             downscale_retina: false,
             show_cursor: false,
             freeze_screen: false,
@@ -97,7 +119,8 @@ impl Default for CaptureSettings {
             show_magnifier: true,
             self_timer_seconds: 5,
             play_sound: true,
-            after: None,
+            pipeline: String::new(),
+            steps: None,
             line_breaks: None,
         }
     }
@@ -106,6 +129,14 @@ impl Default for CaptureSettings {
 impl CaptureSettings {
     pub fn jpeg_quality(&self) -> f64 {
         self.jpeg_quality.clamp(0.0, 1.0)
+    }
+
+    /// The quality setting for `format` (ignored for PNG).
+    pub fn quality(&self, format: ImageFormat) -> f64 {
+        match format {
+            ImageFormat::Webp => self.webp_quality.clamp(0.0, 1.0),
+            _ => self.jpeg_quality(),
+        }
     }
 
     pub fn self_timer_seconds(&self) -> u32 {

@@ -14,6 +14,7 @@ use objc2::MainThreadMarker;
 use objc2_app_kit::{
     NSAlert, NSApplication, NSImage, NSModalResponseOK, NSOpenPanel, NSPasteboard,
 };
+use objc2_core_foundation::Type;
 use objc2_foundation::NSString;
 
 use self::model::Document;
@@ -198,6 +199,68 @@ pub fn open_clipboard(mtm: MainThreadMarker) {
         Source::Clipboard,
         "Clipboard Image",
     );
+}
+
+/// `image` on the default background, as the Background tool draws it.
+/// Main thread (it draws with AppKit).
+pub fn with_background(
+    image: &objc2_core_graphics::CGImage,
+    scale: f64,
+) -> Option<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>> {
+    let base = BaseImage::new(image.retain(), scale);
+    let doc = Document {
+        background: Some(model::Background::default()),
+        ..Document::default()
+    };
+    render::export(&doc, &base)
+}
+
+/// Where `image` shows sensitive text (emails, keys, card numbers and
+/// similar), in points. Recognizes text, so call it off the main thread.
+pub fn sensitive_rects(
+    image: &objc2_core_graphics::CGImage,
+    scale: f64,
+) -> Result<Vec<crate::capture::geometry::Rect>, String> {
+    let (w, h) = image::pixel_size(image);
+    let (width, height) = (w as f64 / scale, h as f64 / scale);
+    let lines = crate::ocr::recognize(image, &crate::ocr::settings(), |text| {
+        crate::ocr::sensitive::find(text)
+            .into_iter()
+            .map(|(_, r)| r)
+            .collect()
+    })?;
+    Ok(lines
+        .iter()
+        .flat_map(|l| l.matches.iter())
+        .map(|m| {
+            crate::capture::geometry::Rect::new(
+                m.x * width,
+                m.y * height,
+                m.width * width,
+                m.height * height,
+            )
+        })
+        .collect())
+}
+
+/// `image` with opaque boxes over `rects` (points), as the editor's
+/// Redact command draws them. Main thread.
+pub fn with_redactions(
+    image: &objc2_core_graphics::CGImage,
+    scale: f64,
+    rects: &[crate::capture::geometry::Rect],
+) -> Option<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>> {
+    let base = BaseImage::new(image.retain(), scale);
+    let bounds = crate::capture::geometry::Rect::new(0.0, 0.0, base.width, base.height);
+    let mut doc = Document::default();
+    for rect in session::redaction_boxes(rects, bounds) {
+        doc.add(
+            model::Shape::Rectangle { rect, filled: true },
+            session::REDACTION,
+            1.0,
+        );
+    }
+    render::export(&doc, &base)
 }
 
 fn show_error(mtm: MainThreadMarker, title: &str, message: &str) {

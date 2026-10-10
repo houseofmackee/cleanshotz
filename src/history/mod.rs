@@ -66,7 +66,8 @@ fn thumbnail(image: &CGImage) -> Vec<u8> {
 
 /// Records a screenshot, then recognizes its text for search. Runs in the
 /// background; returns at once.
-pub fn record_image(image: CFRetained<CGImage>, path: PathBuf) {
+/// Records a screenshot (with its upload link, if it already has one).
+pub fn record_image(image: CFRetained<CGImage>, path: PathBuf, link: Option<String>) {
     let settings = settings();
     if !settings.enabled {
         return;
@@ -91,6 +92,11 @@ pub fn record_image(image: CFRetained<CGImage>, path: PathBuf) {
             Ok(id) => id,
             Err(e) => return tracing::error!(error = %e, "could not record capture in history"),
         };
+        if let Some(link) = &link
+            && let Err(e) = store.set_link(&entry.path, link)
+        {
+            tracing::warn!(error = %e, "could not save the upload link");
+        }
         changed();
         if settings.recognize_text {
             let text_settings = crate::ocr::settings();

@@ -160,21 +160,7 @@ impl Session {
     /// step. Opaque rather than pixelated: pixelated text can sometimes be
     /// reconstructed. Returns how many were added.
     pub fn add_redactions(&mut self, rects: &[Rect]) -> usize {
-        let rects: Vec<Rect> = rects
-            .iter()
-            .map(|r| {
-                // A little padding so no edge of a tall glyph shows.
-                let pad = (r.height * 0.15).max(2.0);
-                Rect::new(
-                    r.x - pad,
-                    r.y - pad,
-                    r.width + 2.0 * pad,
-                    r.height + 2.0 * pad,
-                )
-                .intersection(&self.image)
-            })
-            .filter(|r| r.width > 0.0 && r.height > 0.0)
-            .collect();
+        let rects = redaction_boxes(rects, self.image);
         if rects.is_empty() {
             return 0;
         }
@@ -185,7 +171,7 @@ impl Session {
                     rect: *rect,
                     filled: true,
                 },
-                Color::rgb(0.1, 0.1, 0.1),
+                REDACTION,
                 self.width,
             );
         }
@@ -557,6 +543,28 @@ fn square_corner(anchor: Point, p: Point) -> Point {
         anchor.y + side.copysign(p.y - anchor.y),
     )
 }
+
+/// The boxes that cover text found at `rects` (image points), padded so
+/// no edge of a tall glyph shows and kept inside `image`.
+pub fn redaction_boxes(rects: &[Rect], image: Rect) -> Vec<Rect> {
+    rects
+        .iter()
+        .map(|r| {
+            let pad = (r.height * 0.15).max(2.0);
+            Rect::new(
+                r.x - pad,
+                r.y - pad,
+                r.width + 2.0 * pad,
+                r.height + 2.0 * pad,
+            )
+            .intersection(&image)
+        })
+        .filter(|r| r.width > 0.0 && r.height > 0.0)
+        .collect()
+}
+
+/// The color redaction boxes are filled with.
+pub const REDACTION: Color = Color::rgb(0.1, 0.1, 0.1);
 
 #[cfg(test)]
 mod tests {

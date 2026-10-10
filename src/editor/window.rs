@@ -975,7 +975,8 @@ impl EditorController {
         let result = match &source {
             Source::Capture { file } => {
                 let format = format_for(file);
-                output::save_to(file, &image, format, 0.92).map(|_| {
+                let quality = crate::quick_access::capture_settings().quality(format);
+                output::save_to(file, &image, format, quality).map(|_| {
                     crate::quick_access::refresh(file, image.clone());
                     crate::history::refresh(file.clone(), image.clone(), None);
                     file.clone()
@@ -988,7 +989,7 @@ impl EditorController {
             Source::File { .. } | Source::Clipboard => {
                 let settings = crate::quick_access::capture_settings();
                 output::save_to_directory(&image, scale, &settings, None).map(|(path, png)| {
-                    crate::history::record_image(image.clone(), path.clone());
+                    crate::history::record_image(image.clone(), path.clone(), None);
                     crate::quick_access::add(
                         self.mtm(),
                         output::Delivered {
@@ -1048,7 +1049,12 @@ impl EditorController {
         let Some(path) = self.save_panel(&format!("{}.png", self.suggested_stem())) else {
             return;
         };
-        match output::save_to(&path, &image, format_for(&path), 0.92) {
+        match output::save_to(
+            &path,
+            &image,
+            format_for(&path),
+            quality_for(format_for(&path)),
+        ) {
             Ok(_) => {
                 self.ivars().session.borrow_mut().dirty = false;
                 tracing::info!(path = %path.display(), "annotated image saved");
@@ -1160,14 +1166,18 @@ impl EditorController {
 }
 
 fn format_for(path: &std::path::Path) -> ImageFormat {
-    match path
-        .extension()
+    path.extension()
         .and_then(|e| e.to_str())
-        .map(str::to_ascii_lowercase)
-        .as_deref()
-    {
-        Some("jpg" | "jpeg") => ImageFormat::Jpeg,
-        _ => ImageFormat::Png,
+        .and_then(ImageFormat::from_extension)
+        .unwrap_or(ImageFormat::Png)
+}
+
+/// Save As quality: high for JPEG, lossless for WebP.
+fn quality_for(format: ImageFormat) -> f64 {
+    if format == ImageFormat::Webp {
+        1.0
+    } else {
+        0.92
     }
 }
 

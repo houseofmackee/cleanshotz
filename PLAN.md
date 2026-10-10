@@ -265,6 +265,13 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   Unix socket, reports errors and starts the app when needed. Not done
   yet: App Intents and an AppleScript dictionary.
 - Post-capture action pipeline (improvement #8).
+  Done: named pipelines in `[pipelines]` with resize, background, redact,
+  format, save, copy, upload, copy-link, open, run, annotate, pin and
+  quick-access steps; run after every screenshot, per request
+  (`pipeline=`), or on a file (`run-pipeline`). The URL `action` values
+  are built-in pipelines.
+- WebP output (lossless by default, or lossy with a quality) through
+  libwebp, since ImageIO cannot write WebP.
 
 ### M10: Polish
 - Accessibility (VoiceOver labels), localization scaffolding, performance pass.

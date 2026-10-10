@@ -10,6 +10,7 @@ mod history;
 mod logging;
 mod ocr;
 mod pin;
+mod pipeline;
 mod platform;
 mod quick_access;
 mod record;

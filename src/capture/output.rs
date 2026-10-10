@@ -15,7 +15,6 @@ use objc2_foundation::{NSData, NSString};
 
 use super::geometry::Rect;
 use super::{image, naming};
-use crate::command::After;
 use crate::config::{CaptureSettings, ImageFormat};
 
 /// The macOS screenshot sound. CleanShot's own sounds are not used.
@@ -47,45 +46,46 @@ pub struct Delivered {
 /// background thread so large captures do not block the UI. Finally shows
 /// it in the Quick Access Overlay.
 ///
-/// A requested `after` action replaces the copy and save settings: `copy`
-/// only copies, `save` only saves, and the others keep the capture in the
-/// unsaved folder and then annotate, upload or pin it.
+/// Steps from a request, or the pipeline chosen in the settings, replace
+/// all of that (see [`crate::pipeline`]).
 pub fn deliver(mtm: MainThreadMarker, captured: Captured, settings: &CaptureSettings) {
     if settings.play_sound {
         play_shutter(mtm);
     }
-    let mut settings = settings.clone();
-    if let Some(after) = settings.after {
-        settings.copy_to_clipboard = after == After::Copy;
-        settings.save_to_file = after == After::Save;
+    match steps_for(settings) {
+        Ok(Some(steps)) => return crate::pipeline::run(captured, settings, steps),
+        Ok(None) => {}
+        Err(e) => {
+            // Better a normal capture than none.
+            tracing::error!(error = %e, "pipeline not run");
+            crate::ui::toast::show(mtm, "Pipeline not run: see the settings");
+        }
     }
+    let settings = settings.clone();
     std::thread::spawn(move || {
         let Some(delivered) = process(captured, &settings) else {
             return;
         };
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
-            crate::history::record_image(delivered.image.clone(), delivered.file.clone());
-            let upload = settings.after == Some(After::Upload) || crate::upload::auto_upload();
-            if upload {
+            crate::history::record_image(delivered.image.clone(), delivered.file.clone(), None);
+            if crate::upload::auto_upload() {
                 crate::upload::start(mtm, delivered.file.clone());
             }
-            let item = || {
-                crate::quick_access::Item::new(
-                    delivered.image.clone(),
-                    delivered.scale,
-                    delivered.source,
-                    delivered.file.clone(),
-                    delivered.saved,
-                )
-            };
-            match settings.after {
-                Some(After::Annotate) => crate::editor::open_capture(mtm, &item()),
-                Some(After::Pin) => crate::pin::pin(mtm, &item()),
-                _ => crate::quick_access::add(mtm, delivered),
-            }
+            crate::quick_access::add(mtm, delivered);
         });
     });
+}
+
+/// The steps to run instead of the usual handling, if any.
+fn steps_for(settings: &CaptureSettings) -> Result<Option<Vec<crate::pipeline::Step>>, String> {
+    if let Some(steps) = &settings.steps {
+        return Ok(Some(steps.clone()));
+    }
+    if settings.pipeline.trim().is_empty() {
+        return Ok(None);
+    }
+    crate::pipeline::named(&crate::pipeline::configured(), settings.pipeline.trim()).map(Some)
 }
 
 fn process(captured: Captured, settings: &CaptureSettings) -> Option<Delivered> {
@@ -160,7 +160,12 @@ pub fn save_to_directory(
         None => naming::file_stem(&settings.file_name, &chrono::Local::now(), scale > 1.0),
     };
     let path = naming::unique_path(&dir, &stem, settings.format.extension());
-    let bytes = save_to(&path, image, settings.format, settings.jpeg_quality())?;
+    let bytes = save_to(
+        &path,
+        image,
+        settings.format,
+        settings.quality(settings.format),
+    )?;
     Ok((path, bytes))
 }
 

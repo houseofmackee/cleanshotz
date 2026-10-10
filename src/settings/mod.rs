@@ -142,6 +142,10 @@ enum Bind {
 }
 
 struct Bound {
+    /// The control that sends the action.
+    control: Retained<NSView>,
+    /// The view that shows the value (the control itself, except for
+    /// folders, where a label shows it and a button changes it).
     view: Retained<NSView>,
     bind: Bind,
 }
@@ -382,6 +386,9 @@ impl SettingsWindow {
         if let Some(toolbar) = window.toolbar() {
             toolbar.setSelectedItemIdentifier(Some(&NSString::from_str(tab.id())));
         }
+        // Finish any edit while its binding still exists: a field that
+        // loses focus later would report to the next tab's bindings.
+        window.makeFirstResponder(None);
         window.setTitle(&NSString::from_str(tab.title()));
         self.ivars().tab.set(tab);
         self.ivars().bound.borrow_mut().clear();
@@ -390,7 +397,7 @@ impl SettingsWindow {
         let config = (self.ivars().host.config)();
         let mut form = Form::new(self, mtm);
         match tab {
-            Tab::General => general(&mut form),
+            Tab::General => general(&mut form, &config),
             Tab::Screenshots => screenshots(&mut form),
             Tab::QuickAccess => quick_access(&mut form),
             Tab::Recording => recording(&mut form),
@@ -474,6 +481,10 @@ impl SettingsWindow {
             let Some(b) = index.and_then(|i| bound.get(i)) else {
                 return;
             };
+            // A control from a tab that is gone.
+            if !std::ptr::eq(&*b.control, sender) {
+                return;
+            }
             (b.bind_copy(), b.view.clone())
         };
         let host = &self.ivars().host;
@@ -681,6 +692,7 @@ impl<'a> Form<'a> {
     fn bind(&mut self, control: &NSView, bind: Bind) {
         let mut bound = self.owner.ivars().bound.borrow_mut();
         bound.push(Bound {
+            control: control.retain(),
             view: control.retain(),
             bind,
         });
@@ -766,6 +778,7 @@ impl<'a> Form<'a> {
         let choose = push_button(self.mtm, "Choose…");
         // The label shows the value; the button changes it.
         self.owner.ivars().bound.borrow_mut().push(Bound {
+            control: into_view(choose.clone()),
             view: into_view(path.clone()),
             bind: Bind::Folder(get, set),
         });
@@ -781,8 +794,10 @@ impl<'a> Form<'a> {
 
     fn shortcut(&mut self, action: Action, current: &str) {
         let recorder = ShortcutRecorder::new(self.mtm, action, current);
+        let recorder_view = into_view(Retained::into_super(recorder.clone()));
         self.owner.ivars().bound.borrow_mut().push(Bound {
-            view: into_view(Retained::into_super(recorder.clone())),
+            control: recorder_view.clone(),
+            view: recorder_view,
             bind: Bind::Shortcut(recorder.action()),
         });
         let clear = NSButton::new(self.mtm);
@@ -900,7 +915,7 @@ fn hstack(views: &[Retained<NSView>]) -> Retained<NSView> {
 
 // The tabs. Choice getters map settings to menu positions.
 
-fn general(f: &mut Form) {
+fn general(f: &mut Form, config: &Config) {
     f.login_item("Startup:");
     f.gap();
     f.check(
@@ -921,6 +936,7 @@ fn general(f: &mut Form) {
         |c| c.capture.play_sound,
         |c, v| c.capture.play_sound = v,
     );
+    pipeline_choice(f, config);
     f.gap();
     f.folder(
         "Save to:",
@@ -949,17 +965,44 @@ fn general(f: &mut Form) {
     );
 }
 
+/// "Run pipeline" with the pipelines from the settings file.
+fn pipeline_choice(f: &mut Form, config: &Config) {
+    if config.pipelines.is_empty() {
+        f.note("Or run a pipeline of steps instead: add one to [pipelines] in the settings file.");
+        return;
+    }
+    let mut options = vec!["None"];
+    options.extend(config.pipelines.keys().map(String::as_str));
+    f.choice(
+        "Instead, run:",
+        &options,
+        |c| {
+            c.pipelines
+                .keys()
+                .position(|k| *k == c.capture.pipeline)
+                .map_or(0, |i| i + 1)
+        },
+        |c, i| {
+            c.capture.pipeline = match i {
+                0 => String::new(),
+                i => c.pipelines.keys().nth(i - 1).cloned().unwrap_or_default(),
+            }
+        },
+    );
+    f.note("A pipeline replaces copying, saving and the thumbnail above.");
+}
+
 fn screenshots(f: &mut Form) {
     f.choice(
         "Format:",
-        &["PNG", "JPEG"],
-        |c| (c.capture.format == ImageFormat::Jpeg) as usize,
+        &["PNG", "JPEG", "WebP"],
+        |c| match c.capture.format {
+            ImageFormat::Png => 0,
+            ImageFormat::Jpeg => 1,
+            ImageFormat::Webp => 2,
+        },
         |c, i| {
-            c.capture.format = if i == 1 {
-                ImageFormat::Jpeg
-            } else {
-                ImageFormat::Png
-            }
+            c.capture.format = [ImageFormat::Png, ImageFormat::Jpeg, ImageFormat::Webp][i.min(2)]
         },
     );
     f.number(
@@ -967,6 +1010,12 @@ fn screenshots(f: &mut Form) {
         "%",
         |c| (c.capture.jpeg_quality() * 100.0).round(),
         |c, v| c.capture.jpeg_quality = (v / 100.0).clamp(0.0, 1.0),
+    );
+    f.number(
+        "WebP quality:",
+        "% (100 is lossless)",
+        |c| (c.capture.quality(ImageFormat::Webp) * 100.0).round(),
+        |c, v| c.capture.webp_quality = (v / 100.0).clamp(0.0, 1.0),
     );
     f.check(
         "",

@@ -7,9 +7,10 @@ use std::path::PathBuf;
 
 use crate::capture::geometry::Rect;
 use crate::capture::naming::expand_home;
+use crate::pipeline::Step;
 
 /// Every command, in the order `--help` lists them.
-pub const NAMES: [&str; 20] = [
+pub const NAMES: [&str; 21] = [
     "capture-area",
     "capture-previous-area",
     "capture-fullscreen",
@@ -29,6 +30,7 @@ pub const NAMES: [&str; 20] = [
     "open-history",
     "restore-recently-closed",
     "open-settings",
+    "run-pipeline",
     "quit",
 ];
 
@@ -41,6 +43,27 @@ pub enum After {
     Annotate,
     Upload,
     Pin,
+}
+
+impl After {
+    /// The same as pipeline steps.
+    pub fn steps(self) -> Vec<Step> {
+        match self {
+            After::Copy => vec![Step::Copy, Step::QuickAccess],
+            After::Save => vec![Step::Save(None), Step::QuickAccess],
+            After::Annotate => vec![Step::Annotate],
+            After::Upload => vec![Step::Upload, Step::CopyLink, Step::QuickAccess],
+            After::Pin => vec![Step::Pin],
+        }
+    }
+}
+
+/// A screenshot request's `action` or `pipeline` parameter.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Then {
+    Action(After),
+    /// A pipeline from the settings file, by name.
+    Pipeline(String),
 }
 
 /// An area given in the request: points with a bottom-left origin on a
@@ -80,19 +103,19 @@ pub enum Desktop {
 pub enum Request {
     CaptureArea {
         region: Option<Region>,
-        after: Option<After>,
+        after: Option<Then>,
     },
     CapturePreviousArea {
-        after: Option<After>,
+        after: Option<Then>,
     },
     CaptureFullscreen {
-        after: Option<After>,
+        after: Option<Then>,
     },
     CaptureWindow {
-        after: Option<After>,
+        after: Option<Then>,
     },
     SelfTimer {
-        after: Option<After>,
+        after: Option<Then>,
     },
     ScrollingCapture {
         region: Option<Region>,
@@ -121,6 +144,10 @@ pub enum Request {
     RestoreRecentlyClosed,
     OpenSettings {
         tab: Option<String>,
+    },
+    RunPipeline {
+        name: String,
+        file: PathBuf,
     },
     Quit,
 }
@@ -224,6 +251,15 @@ pub fn parse(command: &str, params: &[(String, String)]) -> Result<Request, Stri
             }
             Request::OpenSettings { tab }
         }
+        "run-pipeline" => Request::RunPipeline {
+            name: p
+                .get("name")
+                .filter(|n| !n.trim().is_empty())
+                .ok_or("run-pipeline needs a name")?
+                .trim()
+                .to_string(),
+            file: p.file()?.ok_or("run-pipeline needs a filepath")?,
+        },
         "quit" => Request::Quit,
         "" => return Err("no command given".into()),
         other => return Err(format!("unknown command {other:?}")),
@@ -236,11 +272,12 @@ pub fn parse(command: &str, params: &[(String, String)]) -> Result<Request, Stri
 fn allowed(command: &str) -> &'static [&'static str] {
     const REGION: [&str; 5] = ["x", "y", "width", "height", "display"];
     match command {
-        "capture-area" => &["x", "y", "width", "height", "display", "action"],
+        "capture-area" => &["x", "y", "width", "height", "display", "action", "pipeline"],
         "all-in-one" | "record-screen" => &REGION,
         "capture-previous-area" | "capture-fullscreen" | "capture-window" | "self-timer" => {
-            &["action"]
+            &["action", "pipeline"]
         }
+        "run-pipeline" => &["name", "filepath"],
         "scrolling-capture" => &[
             "x",
             "y",
@@ -332,7 +369,17 @@ impl<'a> Params<'a> {
         }
     }
 
-    fn after(&self) -> Result<Option<After>, String> {
+    fn after(&self) -> Result<Option<Then>, String> {
+        let action = self.action()?.map(Then::Action);
+        match (action, self.get("pipeline").map(str::trim)) {
+            (Some(_), Some(_)) => Err("use action or pipeline, not both".into()),
+            (_, Some("")) => Err("pipeline needs a name".into()),
+            (action, Some(name)) => Ok(action.or(Some(Then::Pipeline(name.to_string())))),
+            (action, None) => Ok(action),
+        }
+    }
+
+    fn action(&self) -> Result<Option<After>, String> {
         self.get("action")
             .map(|v| match v.to_ascii_lowercase().as_str() {
                 "copy" => Ok(After::Copy),
@@ -446,7 +493,7 @@ mod tests {
                     height: 200.0,
                     display: Some(2)
                 }),
-                after: Some(After::Pin)
+                after: Some(Then::Action(After::Pin))
             }
         );
         assert_eq!(
@@ -460,6 +507,12 @@ mod tests {
             parse_url("cleanshotz://open-settings?tab=Shortcuts").unwrap(),
             Request::OpenSettings {
                 tab: Some("shortcuts".into())
+            }
+        );
+        assert_eq!(
+            parse_url("cleanshotz://capture-window?pipeline=share").unwrap(),
+            Request::CaptureWindow {
+                after: Some(Then::Pipeline("share".into()))
             }
         );
         assert_eq!(
@@ -514,6 +567,10 @@ mod tests {
             "cleanshotz://pin?filepath=relative.png",
             "cleanshotz://pin?filepath=/no/such/file.png",
             "cleanshotz://capture-text?linebreaks=maybe",
+            "cleanshotz://capture-area?action=copy&pipeline=share",
+            "cleanshotz://capture-fullscreen?pipeline=",
+            "cleanshotz://run-pipeline?name=share",
+            "cleanshotz://record-screen?pipeline=share",
         ] {
             assert!(parse_url(url).is_err(), "{url} should be rejected");
         }
@@ -543,7 +600,7 @@ mod tests {
     fn every_command_parses_without_parameters() {
         for name in NAMES {
             let result = parse(name, &[]);
-            if name == "add-quick-access-overlay" {
+            if name == "add-quick-access-overlay" || name == "run-pipeline" {
                 assert!(result.is_err());
             } else {
                 assert!(result.is_ok(), "{name}: {result:?}");

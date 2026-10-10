@@ -12,7 +12,8 @@ use crate::command;
 
 pub const COMMANDS_HELP: &str = "\
 Commands (sent to the running app, which is started if needed):
-  capture-area [--x X --y Y --width W --height H] [--display N] [--action A]
+  capture-area [--x X --y Y --width W --height H] [--display N]
+               [--action A | --pipeline NAME]
                           Select an area, or capture the given one at once
   capture-previous-area [--action A]
   capture-fullscreen [--action A]
@@ -34,10 +35,14 @@ Commands (sent to the running app, which is started if needed):
   open-history
   restore-recently-closed
   open-settings [--tab TAB]
+  run-pipeline --name NAME --filepath FILE
+                          Run a pipeline from the settings file on an image
   quit
 
   --action is copy, save, annotate, upload or pin: what to do with the
-  screenshot instead of the usual copy and save settings.
+  screenshot instead of the usual copy and save settings. --pipeline NAME
+  runs a pipeline from the settings file instead (capture commands that
+  take --action take it too).
   Areas are in points from the bottom-left corner of the display; display 1
   is the main display, and without --display the one under the pointer.";
 

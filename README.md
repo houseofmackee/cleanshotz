@@ -139,8 +139,9 @@ default. Options live in the `[capture]` section of the settings file:
 | `save_to_file` | `true` | Save each capture to `save_directory` |
 | `save_directory` | `"~/Desktop"` | Where captures are saved |
 | `file_name` | `"CleanShotZ {date} at {time}"` | File name; Retina captures get an `@2x` suffix |
-| `format` | `"png"` | `"png"` or `"jpeg"` |
+| `format` | `"png"` | `"png"`, `"jpeg"` or `"webp"` |
 | `jpeg_quality` | `0.9` | 0.0 to 1.0 |
+| `webp_quality` | `1.0` | 0.0 to 1.0; 1.0 is lossless |
 | `downscale_retina` | `false` | Save Retina captures at 1x |
 | `show_cursor` | `false` | Include the pointer in area and fullscreen captures |
 | `freeze_screen` | `false` | Freeze the screen while selecting |
@@ -149,6 +150,44 @@ default. Options live in the `[capture]` section of the settings file:
 | `show_magnifier` | `true` | Show the pixel magnifier while selecting |
 | `self_timer_seconds` | `5` | Countdown length, 1 to 60 |
 | `play_sound` | `true` | Play the macOS screenshot sound |
+| `pipeline` | `""` | A pipeline to run after every screenshot instead (see below) |
+
+The clipboard always gets PNG. WebP files are written in sRGB; lossless
+WebP files are usually noticeably smaller than PNG for screenshots.
+
+### Pipelines
+
+A pipeline is a list of steps run on a screenshot instead of the usual
+copy, save and thumbnail handling. Define pipelines in the `[pipelines]`
+section of the settings file, then pick one under Settings > General to run
+after every screenshot, pass `pipeline=NAME` with a capture command (URL or
+command line), or run one on an existing image with
+`cleanshotz run-pipeline --name NAME --filepath FILE`.
+
+```toml
+[pipelines]
+share = ["resize 50%", "background", "format webp 85%", "upload", "copy-link"]
+safe = ["redact", "save", "copy"]
+slack = ["save", "open Slack"]
+```
+
+| Step | Does |
+| --- | --- |
+| `resize 50%`, `resize 1280px`, `resize 1x` | Scale by a percentage, to at most a width, or to one pixel per point |
+| `background` | Put the image on the editor's default background |
+| `redact` | Cover emails, API keys, tokens, card numbers and similar text |
+| `format png`, `format jpeg 80%`, `format webp [85%]` | The format of files written after this step (WebP without a quality is lossless) |
+| `save [folder]` | Save to the save folder, or to `folder` |
+| `copy` | Copy the image to the clipboard |
+| `upload` | Upload with the configured destination |
+| `copy-link` | Copy the upload link |
+| `open [app]` | Open the file in its default app, or in `app` |
+| `run <command>` | Run a shell command with the file as `$1`; `CLEANSHOTZ_FILE` and `CLEANSHOTZ_LINK` are set |
+| `annotate`, `pin`, `quick-access` | Open in the editor, pin, or show the thumbnail |
+
+Steps that need a file use the last one saved, or write the current image to
+the history folder. If a step fails, the pipeline stops and says why; the
+capture is still recorded in history.
 
 ### Text recognition
 
@@ -351,11 +390,11 @@ into your `PATH` to use it.
 
 | Command | Parameters |
 | --- | --- |
-| `capture-area` | `x`, `y`, `width`, `height`, `display`, `action` |
-| `capture-previous-area` | `action` |
-| `capture-fullscreen` | `action` |
-| `capture-window` | `action` |
-| `self-timer` | `action` |
+| `capture-area` | `x`, `y`, `width`, `height`, `display`, `action` or `pipeline` |
+| `capture-previous-area` | `action` or `pipeline` |
+| `capture-fullscreen` | `action` or `pipeline` |
+| `capture-window` | `action` or `pipeline` |
+| `self-timer` | `action` or `pipeline` |
 | `scrolling-capture` | `x`, `y`, `width`, `height`, `display`, `autoscroll`, `start` |
 | `all-in-one` | `x`, `y`, `width`, `height`, `display` (same as `capture-area`) |
 | `capture-text` | `filepath`, `x`, `y`, `width`, `height`, `display`, `linebreaks` |
@@ -368,6 +407,7 @@ into your `PATH` to use it.
 | `open-history` | none |
 | `restore-recently-closed` | none |
 | `open-settings` | `tab`: CleanShot's names, plus `history` and `uploads` |
+| `run-pipeline` | `name`, `filepath` |
 | `quit` | none (command line only) |
 
 - `x`, `y`, `width` and `height` are points from the bottom-left corner of
@@ -375,7 +415,9 @@ into your `PATH` to use it.
   instead of being selected. `display` is 1 for the main display, 2 for the
   next and so on; without it, the display under the pointer.
 - `action` is `copy`, `save`, `annotate`, `upload` or `pin`: what to do with
-  the screenshot instead of the usual copy and save settings.
+  the screenshot instead of the usual copy and save settings. `pipeline`
+  runs a [pipeline](#pipelines) instead. `run-pipeline` and `pipeline` are
+  CleanShotZ additions.
 - `linebreaks=false` joins recognized lines with spaces.
 - `autoscroll=true` starts Auto-scroll. `start` is accepted for
   compatibility; scrolling capture always starts once the area is chosen.

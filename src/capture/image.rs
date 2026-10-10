@@ -142,17 +142,20 @@ pub fn pixel_size(image: &CGImage) -> (usize, usize) {
     (CGImage::width(Some(image)), CGImage::height(Some(image)))
 }
 
-/// Encodes `image` as PNG or JPEG (`quality` 0.0 to 1.0, JPEG only).
+/// Encodes `image` as PNG, JPEG or WebP. `quality` runs from 0.0 to 1.0;
+/// PNG ignores it, and for WebP 1.0 means lossless.
 pub fn encode(image: &CGImage, format: ImageFormat, quality: f64) -> Option<Vec<u8>> {
     let data = CFMutableData::new(None, 0)?;
     let type_id = CFString::from_static_str(match format {
         ImageFormat::Png => "public.png",
         ImageFormat::Jpeg => "public.jpeg",
+        // ImageIO reads WebP but cannot write it.
+        ImageFormat::Webp => return encode_webp(image, quality),
     });
     // SAFETY: valid data object and UTType identifier.
     let destination = unsafe { CGImageDestination::with_data(&data, &type_id, 1, None) }?;
     let properties = match format {
-        ImageFormat::Png => None,
+        ImageFormat::Png | ImageFormat::Webp => None,
         ImageFormat::Jpeg => {
             // SAFETY: reading an ImageIO constant.
             let key = unsafe { kCGImageDestinationLossyCompressionQuality };
@@ -170,6 +173,73 @@ pub fn encode(image: &CGImage, format: ImageFormat, quality: f64) -> Option<Vec<
         }
     }
     Some(data.to_vec())
+}
+
+/// Encodes with libwebp, after converting to sRGB (WebP files carry no
+/// color profile here, and viewers assume sRGB).
+fn encode_webp(image: &CGImage, quality: f64) -> Option<Vec<u8>> {
+    let (width, height, rgba) = to_srgb_rgba(image)?;
+    let (w, h) = (i32::try_from(width).ok()?, i32::try_from(height).ok()?);
+    // WebP's limit.
+    if w > 16383 || h > 16383 {
+        return None;
+    }
+    let mut out: *mut u8 = ptr::null_mut();
+    // SAFETY: `rgba` holds `width * height` tightly packed RGBA pixels;
+    // libwebp allocates `out`, which is freed below with WebPFree.
+    let size = unsafe {
+        if quality >= 1.0 {
+            libwebp_sys::WebPEncodeLosslessRGBA(rgba.as_ptr(), w, h, w * 4, &mut out)
+        } else {
+            let q = (quality.clamp(0.0, 1.0) * 100.0) as f32;
+            libwebp_sys::WebPEncodeRGBA(rgba.as_ptr(), w, h, w * 4, q, &mut out)
+        }
+    };
+    if out.is_null() {
+        return None;
+    }
+    // SAFETY: libwebp wrote `size` bytes at `out`.
+    let bytes = (size > 0).then(|| unsafe { std::slice::from_raw_parts(out, size) }.to_vec());
+    // SAFETY: `out` came from libwebp.
+    unsafe { libwebp_sys::WebPFree(out.cast()) };
+    bytes
+}
+
+/// The image in sRGB as straight (not premultiplied) RGBA bytes.
+fn to_srgb_rgba(image: &CGImage) -> Option<(usize, usize, Vec<u8>)> {
+    let (width, height) = pixel_size(image);
+    let context = bitmap_context(width, height, None)?;
+    CGContext::draw_image(
+        Some(&context),
+        CGRect::new(
+            CGPoint::new(0.0, 0.0),
+            CGSize::new(width as f64, height as f64),
+        ),
+        Some(image),
+    );
+    let data = CGBitmapContextGetData(Some(&context)) as *const u8;
+    let stride = CGBitmapContextGetBytesPerRow(Some(&context));
+    if data.is_null() {
+        return None;
+    }
+    let mut rgba = Vec::with_capacity(width * height * 4);
+    for y in 0..height {
+        // SAFETY: each row has at least `width * 4` bytes, alive as long
+        // as `context`.
+        let row = unsafe { std::slice::from_raw_parts(data.add(y * stride), width * 4) };
+        for &[b, g, r, a] in row.as_chunks::<4>().0 {
+            rgba.extend_from_slice(&unpremultiply([r, g, b], a));
+            rgba.push(a);
+        }
+    }
+    Some((width, height, rgba))
+}
+
+fn unpremultiply(rgb: [u8; 3], a: u8) -> [u8; 3] {
+    if a == 0 {
+        return [0, 0, 0];
+    }
+    rgb.map(|c| ((u32::from(c) * 255 + u32::from(a) / 2) / u32::from(a)).min(255) as u8)
 }
 
 /// Decodes the first image in `bytes` (PNG, JPEG, HEIC, TIFF, ...).
@@ -246,4 +316,64 @@ pub fn from_pixels(width: usize, height: usize, pixels: &[u32]) -> Option<CFReta
         }
     }
     CGBitmapContextCreateImage(Some(&context))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A gradient with a transparent corner, in the layout `to_pixels`
+    /// uses (premultiplied BGRA).
+    fn sample() -> CFRetained<CGImage> {
+        let (w, h) = (64, 48);
+        let pixels: Vec<u32> = (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                let a: u32 = if x < 8 && y < 8 { 0 } else { 255 };
+                let r = (x * 4) as u32 * a / 255;
+                let g = (y * 5) as u32 * a / 255;
+                let b = 128 * a / 255;
+                u32::from_ne_bytes([b as u8, g as u8, r as u8, a as u8])
+            })
+            .collect();
+        from_pixels(w, h, &pixels).unwrap()
+    }
+
+    #[test]
+    fn lossless_webp_round_trips() {
+        let image = sample();
+        let webp = encode(&image, ImageFormat::Webp, 1.0).unwrap();
+        assert_eq!(&webp[..4], b"RIFF");
+        assert_eq!(&webp[8..12], b"WEBP");
+        let decoded = decode(&webp).unwrap();
+        assert_eq!(pixel_size(&decoded), (64, 48));
+        let (_, _, a) = to_srgb_rgba(&image).unwrap();
+        let (_, _, b) = to_srgb_rgba(&decoded).unwrap();
+        let worst = a.iter().zip(&b).map(|(x, y)| x.abs_diff(*y)).max().unwrap();
+        assert!(worst <= 1, "pixels differ by up to {worst}");
+    }
+
+    #[test]
+    fn lossy_webp_is_smaller() {
+        // Noise, like a photo; a smooth gradient is smaller lossless.
+        let mut seed = 1u32;
+        let pixels: Vec<u32> = (0..128 * 128)
+            .map(|_| {
+                seed = seed.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                (seed >> 8) | 0xff00_0000
+            })
+            .collect();
+        let image = from_pixels(128, 128, &pixels).unwrap();
+        let lossless = encode(&image, ImageFormat::Webp, 1.0).unwrap();
+        let lossy = encode(&image, ImageFormat::Webp, 0.5).unwrap();
+        assert!(lossy.len() < lossless.len());
+        assert!(decode(&lossy).is_some());
+    }
+
+    #[test]
+    fn unpremultiplies() {
+        assert_eq!(unpremultiply([0, 0, 0], 0), [0, 0, 0]);
+        assert_eq!(unpremultiply([64, 128, 255], 255), [64, 128, 255]);
+        assert_eq!(unpremultiply([64, 32, 0], 128), [128, 64, 0]);
+    }
 }

@@ -20,7 +20,7 @@ use objc2_foundation::{NSArray, NSNotification, NSObjectProtocol, NSString, NSUR
 
 use crate::action::Action;
 use crate::capture::{self, flow};
-use crate::command::{Desktop, Region, Request};
+use crate::command::{Desktop, Region, Request, Then};
 use crate::config::Config;
 use crate::platform::hotkeys::Hotkeys;
 use crate::platform::login_item;
@@ -252,7 +252,13 @@ impl AppDelegate {
     fn update_config(&self, change: impl FnOnce(&mut Config)) {
         let ivars = self.ivars();
         let mut config = ivars.config.borrow_mut();
+        let before = config.clone();
         change(&mut config);
+        // Leave the file alone (and hand-written formatting in it) when
+        // nothing changed.
+        if *config == before {
+            return;
+        }
         if let Err(e) = config.save(&ivars.config_path) {
             tracing::error!(error = %e, "could not save settings");
         }
@@ -361,6 +367,7 @@ impl AppDelegate {
         crate::video_editor::configure(config.recording.clone());
         crate::history::configure(config.history);
         crate::upload::configure(config.upload.clone());
+        crate::pipeline::configure(config.pipelines.clone());
     }
 
     /// Runs a `cleanshotz://` URL from Launch Services or the command line.
@@ -387,7 +394,7 @@ impl AppDelegate {
         match request {
             Request::CaptureArea { region, after } => {
                 self.require_screen_recording()?;
-                settings.after = after;
+                settings.steps = steps_for(after)?;
                 match region {
                     Some(region) => {
                         let (display_id, rect) = resolve_region(mtm, region)?;
@@ -398,23 +405,23 @@ impl AppDelegate {
             }
             Request::CapturePreviousArea { after } => {
                 self.require_screen_recording()?;
-                settings.after = after;
+                settings.steps = steps_for(after)?;
                 flow::capture_previous_area(mtm, settings, state_path.clone(), show_capture_error)
                     .map_err(error)
             }
             Request::CaptureFullscreen { after } => {
                 self.require_screen_recording()?;
-                settings.after = after;
+                settings.steps = steps_for(after)?;
                 capture::capture_fullscreen(mtm, &settings).map_err(error)
             }
             Request::CaptureWindow { after } => {
                 self.require_screen_recording()?;
-                settings.after = after;
+                settings.steps = steps_for(after)?;
                 interactive(flow::Kind::Window, settings)
             }
             Request::SelfTimer { after } => {
                 self.require_screen_recording()?;
-                settings.after = after;
+                settings.steps = steps_for(after)?;
                 interactive(flow::Kind::SelfTimer, settings)
             }
             Request::CaptureText {
@@ -507,6 +514,10 @@ impl AppDelegate {
                     }
                 }
                 Ok(())
+            }
+            Request::RunPipeline { name, file } => {
+                let steps = crate::pipeline::named(&crate::pipeline::configured(), &name)?;
+                crate::pipeline::run_on_file(&file, &settings, steps)
             }
             Request::Quit => {
                 // After replying, so the command line hears back.
@@ -669,6 +680,17 @@ impl AppDelegate {
 fn show_capture_error(mtm: MainThreadMarker, error: capture::sck::CaptureError) {
     tracing::error!(error = %error, "capture failed");
     alert::show(mtm, "Capture failed", &error.to_string(), &["OK"]);
+}
+
+/// The pipeline steps for a request's `action` or `pipeline` parameter.
+fn steps_for(then: Option<Then>) -> Result<Option<Vec<crate::pipeline::Step>>, String> {
+    match then {
+        None => Ok(None),
+        Some(Then::Action(after)) => Ok(Some(after.steps())),
+        Some(Then::Pipeline(name)) => {
+            crate::pipeline::named(&crate::pipeline::configured(), &name).map(Some)
+        }
+    }
 }
 
 /// The display id and display-local rect (top-left origin) for a region
