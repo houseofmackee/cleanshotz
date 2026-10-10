@@ -415,6 +415,9 @@ impl EditorController {
         window.center();
         NSApplication::sharedApplication(mtm).activate();
         window.makeKeyAndOrderFront(None);
+        // Front even when macOS declines to activate the app (opened from
+        // the command line while the terminal is active).
+        window.orderFrontRegardless();
         window.makeFirstResponder(Some(&canvas));
     }
 

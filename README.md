@@ -208,7 +208,7 @@ elapsed time and Pause, Stop and Discard; a red border marks the recorded
 area. Neither shows up in the recording. Press the shortcut again (or
 choose Stop Recording in the menu) to stop. The recording appears in Quick
 Access: drag it out, Copy (puts the file on the clipboard), Save, or
-double-click to play it.
+double-click to open it in the video editor.
 
 Options live in the `[recording]` section of the settings file:
 

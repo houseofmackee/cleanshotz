@@ -26,6 +26,9 @@ use crate::record::media;
 use crate::ui::toast;
 
 const BAR_HEIGHT: f64 = 52.0;
+/// Narrowest window that fits the bottom bar: the controls on the left end
+/// at 554 points, Save As and Save take 194 on the right.
+const MIN_WIDTH: f64 = 760.0;
 
 pub struct Ivars {
     pub id: u64,
@@ -186,7 +189,7 @@ impl VideoEditor {
         let fit = (visible.size.width * 0.75 / vw)
             .min(visible.size.height * 0.75 / vh)
             .min(1.0);
-        let width = (vw * fit).max(640.0);
+        let width = (vw * fit).max(MIN_WIDTH);
         let height = (vh * fit).max(300.0) + BAR_HEIGHT;
         let frame = NSRect::new(NSPoint::ZERO, NSSize::new(width, height));
 
@@ -211,7 +214,7 @@ impl VideoEditor {
             .file_name()
             .map_or_else(|| "Video".into(), |n| n.to_string_lossy().into_owned());
         window.setTitle(&NSString::from_str(&title));
-        window.setContentMinSize(NSSize::new(640.0, 360.0));
+        window.setContentMinSize(NSSize::new(MIN_WIDTH, 360.0));
         window.setDelegate(Some(ProtocolObject::from_ref(self)));
         let content = window.contentView().expect("windows have a content view");
 
@@ -248,6 +251,9 @@ impl VideoEditor {
         window.center();
         NSApplication::sharedApplication(mtm).activate();
         window.makeKeyAndOrderFront(None);
+        // Front even when macOS declines to activate the app (opened from
+        // the command line while the terminal is active).
+        window.orderFrontRegardless();
     }
 
     fn build_bar(
@@ -311,6 +317,9 @@ impl VideoEditor {
         let length = NSTextField::labelWithString(&NSString::from_str(""), mtm);
         length.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
         place(&length, 404.0, 150.0, left);
+        // Labels draw at the top of their frame; line the text up with
+        // the buttons' titles.
+        length.setFrameOrigin(NSPoint::new(404.0, y - 6.0));
         let save = button("Save", sel!(save:));
         place(&save, width - 92.0, 80.0, right);
         let save_as = button("Save As…", sel!(saveAs:));

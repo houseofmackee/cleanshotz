@@ -470,14 +470,14 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
     }
 }
 
-/// Double-click: annotate an image, play a recording.
+/// Double-click: like the Annotate button, the editor for a screenshot
+/// and the video editor for a recording.
 fn annotate(mtm: MainThreadMarker, id: u64) {
     let Some(item) = item_for(id) else {
         return;
     };
     if item.is_video() {
-        let url = NSURL::fileURLWithPath(&NSString::from_str(&item.file().to_string_lossy()));
-        NSWorkspace::sharedWorkspace().openURL(&url);
+        crate::video_editor::open(mtm, &item.file());
     } else {
         crate::editor::open_capture(mtm, &item);
     }
