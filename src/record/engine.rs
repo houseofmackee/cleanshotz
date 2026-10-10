@@ -17,7 +17,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
 use objc2_av_foundation::{
-    AVAssetWriter, AVAssetWriterInput, AVAssetWriterStatus, AVFileTypeMPEG4, AVMediaTypeAudio,
+    AVAssetWriter, AVAssetWriterInput, AVAssetWriterStatus, AVCaptureAudioDataOutput,
+    AVCaptureAudioDataOutputSampleBufferDelegate, AVCaptureConnection, AVCaptureDevice,
+    AVCaptureDeviceInput, AVCaptureOutput, AVCaptureSession, AVFileTypeMPEG4, AVMediaTypeAudio,
     AVMediaTypeVideo, AVVideoAverageBitRateKey, AVVideoCodecKey, AVVideoCodecTypeH264,
     AVVideoCodecTypeHEVC, AVVideoCompressionPropertiesKey, AVVideoExpectedSourceFrameRateKey,
     AVVideoHeightKey, AVVideoMaxKeyFrameIntervalKey, AVVideoWidthKey,
@@ -192,6 +194,104 @@ impl StreamOutput {
     }
 }
 
+define_class!(
+    // SAFETY: NSObject has no subclassing requirements; no Drop.
+    #[unsafe(super(NSObject))]
+    #[ivars = Retained<StreamOutput>]
+    struct MicrophoneOutput;
+
+    unsafe impl NSObjectProtocol for MicrophoneOutput {}
+
+    unsafe impl AVCaptureAudioDataOutputSampleBufferDelegate for MicrophoneOutput {
+        #[unsafe(method(captureOutput:didOutputSampleBuffer:fromConnection:))]
+        fn did_output(
+            &self,
+            _output: &AVCaptureOutput,
+            buffer: &CMSampleBuffer,
+            _connection: &AVCaptureConnection,
+        ) {
+            self.ivars().handle(buffer, SCStreamOutputType::Microphone);
+        }
+    }
+);
+
+/// Microphone capture where ScreenCaptureKit cannot record it (before
+/// macOS 15): a capture session delivering to the recording queue, so its
+/// samples are written exactly like ScreenCaptureKit's.
+struct Microphone {
+    session: Retained<AVCaptureSession>,
+    _delegate: Retained<MicrophoneOutput>,
+}
+
+impl Microphone {
+    fn start(output: &Retained<StreamOutput>, queue: &DispatchQueue) -> Result<Microphone, String> {
+        // SAFETY: standard capture session setup with the default
+        // microphone; the delegate and queue outlive the session's use.
+        unsafe {
+            let audio = AVMediaTypeAudio.ok_or("no audio media type")?;
+            let device = AVCaptureDevice::defaultDeviceWithMediaType(audio)
+                .ok_or("no microphone is connected")?;
+            let input = AVCaptureDeviceInput::deviceInputWithDevice_error(&device)
+                .map_err(|e| e.localizedDescription().to_string())?;
+            let session = AVCaptureSession::new();
+            session.beginConfiguration();
+            if !session.canAddInput(&input) {
+                return Err("the microphone cannot be used".into());
+            }
+            session.addInput(&input);
+            let data = AVCaptureAudioDataOutput::new();
+            // Mono 48 kHz float PCM, the format the writer's microphone
+            // input expects to encode.
+            let number = |n: f64| -> Retained<AnyObject> { NSNumber::new_f64(n).into() };
+            let keys = [
+                NSString::from_str("AVFormatIDKey"),
+                NSString::from_str("AVSampleRateKey"),
+                NSString::from_str("AVNumberOfChannelsKey"),
+                NSString::from_str("AVLinearPCMBitDepthKey"),
+                NSString::from_str("AVLinearPCMIsFloatKey"),
+                NSString::from_str("AVLinearPCMIsNonInterleaved"),
+            ];
+            let key_refs: Vec<&NSString> = keys.iter().map(|k| &**k).collect();
+            const LPCM: f64 = 0x6c70_636d as f64; // 'lpcm'
+            let settings = NSDictionary::from_retained_objects(
+                &key_refs,
+                &[
+                    number(LPCM),
+                    number(48_000.0),
+                    number(1.0),
+                    number(32.0),
+                    number(1.0),
+                    number(0.0),
+                ],
+            );
+            data.setAudioSettings(Some(&settings));
+            let delegate: Retained<MicrophoneOutput> = {
+                let this = MicrophoneOutput::alloc().set_ivars(output.clone());
+                msg_send![super(this), init]
+            };
+            data.setSampleBufferDelegate_queue(
+                Some(ProtocolObject::from_ref(&*delegate)),
+                Some(queue),
+            );
+            if !session.canAddOutput(&data) {
+                return Err("the microphone cannot be recorded".into());
+            }
+            session.addOutput(&data);
+            session.commitConfiguration();
+            session.startRunning();
+            Ok(Microphone {
+                session,
+                _delegate: delegate,
+            })
+        }
+    }
+
+    fn stop(&self) {
+        // SAFETY: stopping a running session.
+        unsafe { self.session.stopRunning() };
+    }
+}
+
 /// A copy of `buffer` with its timestamps moved back by `offset`.
 fn retime(buffer: &CMSampleBuffer, offset: CMTime) -> Option<CFRetained<CMSampleBuffer>> {
     // SAFETY: pure CMTime query.
@@ -258,6 +358,7 @@ fn invalid_time() -> CMTime {
 pub struct Recorder {
     stream: Retained<SCStream>,
     output: Retained<StreamOutput>,
+    microphone: Option<Microphone>,
     queue: DispatchRetained<DispatchQueue>,
     path: PathBuf,
 }
@@ -336,10 +437,25 @@ impl Recorder {
             // SAFETY: the completion block has the expected signature.
             unsafe { stream.startCaptureWithCompletionHandler(Some(&done)) }
         })?;
+        let microphone = if options.microphone && !macos_at_least(15) {
+            match Microphone::start(&output, &queue) {
+                Ok(m) => Some(m),
+                Err(e) => {
+                    // SAFETY: the completion block has the expected signature.
+                    let _ = wait_for(|done| unsafe {
+                        stream.stopCaptureWithCompletionHandler(Some(&done))
+                    });
+                    return Err(format!("could not record the microphone: {e}"));
+                }
+            }
+        } else {
+            None
+        };
         tracing::info!(path = %options.output.display(), width = options.width, height = options.height, "recording started");
         Ok(Recorder {
             stream,
             output,
+            microphone,
             queue,
             path: options.output,
         })
@@ -357,9 +473,13 @@ impl Recorder {
         let Recorder {
             stream,
             output,
+            microphone,
             queue,
             path,
         } = self;
+        if let Some(m) = &microphone {
+            m.stop();
+        }
         let stop_result = wait_for(|done| {
             // SAFETY: the completion block has the expected signature.
             unsafe { stream.stopCaptureWithCompletionHandler(Some(&done)) }
@@ -531,9 +651,7 @@ fn new_writer(options: &Options) -> Result<WriterState, String> {
         Ok(input)
     };
     let audio = options.system_audio.then(|| audio_input(2.0)).transpose()?;
-    let microphone = (options.microphone && macos_at_least(15))
-        .then(|| audio_input(1.0))
-        .transpose()?;
+    let microphone = options.microphone.then(|| audio_input(1.0)).transpose()?;
 
     // SAFETY: inputs are added; start the writer.
     if !unsafe { writer.startWriting() } {
@@ -590,6 +708,15 @@ fn wait_for(start: impl FnOnce(RcBlock<dyn Fn(*mut NSError)>)) -> Result<(), Str
 }
 
 pub fn macos_at_least(major: isize) -> bool {
+    // Debug builds: CLEANSHOTZ_PRETEND_MACOS=14 takes the code paths for
+    // older systems (the macOS 14 microphone and click fallbacks).
+    #[cfg(debug_assertions)]
+    if let Some(pretend) = std::env::var("CLEANSHOTZ_PRETEND_MACOS")
+        .ok()
+        .and_then(|v| v.parse::<isize>().ok())
+    {
+        return pretend >= major;
+    }
     let version = objc2_foundation::NSProcessInfo::processInfo().operatingSystemVersion();
     version.majorVersion >= major
 }

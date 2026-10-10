@@ -220,9 +220,12 @@ Options live in the `[recording]` section of the settings file:
 | `quality` | `"high"` | `"low"`, `"medium"` or `"high"` |
 | `downscale_retina` | `false` | Record at 1x instead of Retina resolution |
 | `show_cursor` | `true` | Include the pointer |
-| `show_clicks` | `true` | Highlight clicks (macOS 15 and later) |
+| `show_clicks` | `true` | Highlight clicks |
+| `highlight_cursor` | `false` | Keep a soft yellow circle around the pointer, stronger while a button is held |
+| `hide_notifications` | `true` | Leave notification banners out of recordings |
 | `system_audio` | `false` | Record sound from apps |
-| `microphone` | `false` | Record the microphone (macOS 15 and later), as a separate track |
+| `microphone` | `false` | Record the microphone |
+| `separate_audio_tracks` | `false` | Keep system audio and the microphone on two tracks instead of mixing them into one |
 | `countdown_seconds` | `3` | Countdown before recording; `0` starts at once |
 | `gif_fps` | `15` | GIF frame rate |
 | `gif_max_width` | `1280` | Larger GIFs are scaled down to this width in pixels |
@@ -236,7 +239,15 @@ Monitoring; macOS asks the first time. `"shortcuts"` only shows presses with
 Command, Control or Option and keys that never type text (arrows, Return,
 Escape, function keys), so typed text such as passwords never appears in a
 recording. Both are shown in area and full-screen recordings, not in window
-recordings.
+recordings, and so is the cursor highlight.
+
+With both system audio and the microphone on, the two are mixed into one
+track after recording (many players and websites only play the first
+track); the video is copied, not re-encoded. Notification banners are left
+out of recordings instead of switching on Do Not Disturb, so they still
+reach you; desktop widgets stay in the recording. On macOS 14 the
+microphone is recorded through AVFoundation and clicks are drawn by the
+cursor overlay, since ScreenCaptureKit can do neither there.
 
 ### Video editor
 

@@ -27,7 +27,7 @@ pub fn record_sample(output: &std::path::Path, seconds: f64, audio: bool) -> Res
     let content = Content::fetch().map_err(|e| e.to_string())?;
     let display_id = objc2_core_graphics::CGMainDisplayID();
     let display = content.display(display_id).ok_or("no main display")?;
-    let filter = sck::recording_filter(&content, &display);
+    let filter = sck::recording_filter(&content, &display, true);
     let scale = sck::pixel_scale(&filter);
     let rect = Rect::new(100.0, 100.0, 800.0, 500.0);
     let options = engine::Options {

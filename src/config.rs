@@ -273,11 +273,19 @@ pub struct RecordingSettings {
     /// Record at 1x instead of the display's Retina resolution.
     pub downscale_retina: bool,
     pub show_cursor: bool,
-    /// Highlight mouse clicks (macOS 15 and later).
+    /// Highlight mouse clicks.
     pub show_clicks: bool,
+    /// Keep a soft circle around the pointer, stronger while a button is
+    /// held.
+    pub highlight_cursor: bool,
+    /// Leave notification banners out of recordings.
+    pub hide_notifications: bool,
     pub system_audio: bool,
-    /// Record the microphone (macOS 15 and later).
+    /// Record the microphone.
     pub microphone: bool,
+    /// Keep system audio and the microphone as two audio tracks instead of
+    /// mixing them into one (many players only play the first track).
+    pub separate_audio_tracks: bool,
     /// Seconds of countdown before recording starts; 0 starts at once.
     pub countdown_seconds: u32,
     pub gif_fps: u32,
@@ -302,8 +310,11 @@ impl Default for RecordingSettings {
             downscale_retina: false,
             show_cursor: true,
             show_clicks: true,
+            highlight_cursor: false,
+            hide_notifications: true,
             system_audio: false,
             microphone: false,
+            separate_audio_tracks: false,
             countdown_seconds: 3,
             gif_fps: 15,
             gif_max_width: 1280,

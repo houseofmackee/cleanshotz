@@ -18,7 +18,7 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
 use super::engine::{self, Recorder};
 use super::media;
-use super::overlays::{Camera, KeyDisplay};
+use super::overlays::{Camera, CursorHighlight, KeyDisplay};
 use crate::capture::flow::{overlay_displays, screen_for};
 use crate::capture::geometry::{Point, Rect};
 use crate::capture::overlay::{self, Mode, Selection};
@@ -41,10 +41,31 @@ enum Target {
     },
 }
 
-struct Active {
-    recorder: Recorder,
+/// Overlays that are part of the recording.
+#[derive(Default)]
+struct Overlays {
     camera: Option<Camera>,
     keys: Option<KeyDisplay>,
+    cursor: Option<CursorHighlight>,
+}
+
+impl Overlays {
+    fn stop(self) {
+        if let Some(c) = self.camera {
+            c.stop();
+        }
+        if let Some(k) = self.keys {
+            k.stop();
+        }
+        if let Some(c) = self.cursor {
+            c.stop();
+        }
+    }
+}
+
+struct Active {
+    recorder: Recorder,
+    overlays: Overlays,
     controls: Retained<NSPanel>,
     time_label: Retained<NSTextField>,
     pause_button: Retained<NSButton>,
@@ -67,6 +88,8 @@ struct Finish {
     scale: f64,
     gif_fps: u32,
     gif_max_width: u32,
+    /// Mix system audio and the microphone into one track afterwards.
+    mix_audio: bool,
 }
 
 enum State {
@@ -184,9 +207,9 @@ fn begin(
     capture: &CaptureSettings,
     settings: &RecordingSettings,
 ) -> Result<(), String> {
-    // The camera and keystroke overlays must exist before the content is
-    // fetched, so the recording filter can include them.
-    let (camera, keys) = match target {
+    // The overlays must exist before the content is fetched, so the
+    // recording filter can include them.
+    let overlays = match target {
         Target::Area { display_id, rect } => {
             let screen = screen_for(mtm, display_id).ok_or("the display is no longer available")?;
             let f = screen.frame();
@@ -200,27 +223,26 @@ fn begin(
             start_overlays(mtm, area, settings)
         }
         Target::Window { .. } => {
-            if settings.camera || settings.keystrokes != KeystrokeMode::Off {
+            if settings.camera
+                || settings.keystrokes != KeystrokeMode::Off
+                || settings.highlight_cursor
+            {
                 toast::show(
                     mtm,
-                    "The camera and keystrokes are not shown in window recordings",
+                    "The camera, keystrokes and cursor highlight are not shown in window recordings",
                 );
             }
-            (None, None)
+            Overlays::default()
         }
     };
     // On failure `begin_recording` stops the overlays itself.
-    begin_recording(mtm, target, capture, settings, camera, keys)
+    begin_recording(mtm, target, capture, settings, overlays)
 }
 
 /// Starts the camera and keystroke overlays the settings ask for. Problems
 /// (such as missing permissions) are shown and the recording goes ahead
 /// without that overlay.
-fn start_overlays(
-    mtm: MainThreadMarker,
-    area: NSRect,
-    settings: &RecordingSettings,
-) -> (Option<Camera>, Option<KeyDisplay>) {
+fn start_overlays(mtm: MainThreadMarker, area: NSRect, settings: &RecordingSettings) -> Overlays {
     let camera = settings.camera.then(|| {
         Camera::start(
             mtm,
@@ -242,7 +264,16 @@ fn start_overlays(
             })
             .ok()
     });
-    (camera.flatten(), keys.flatten())
+    // ScreenCaptureKit draws clicks from macOS 15 on; before that, the
+    // pointer overlay shows them.
+    let clicks = settings.show_clicks && !engine::macos_at_least(15);
+    let cursor = (settings.highlight_cursor || clicks)
+        .then(|| CursorHighlight::start(mtm, settings.highlight_cursor, clicks));
+    Overlays {
+        camera: camera.flatten(),
+        keys: keys.flatten(),
+        cursor,
+    }
 }
 
 fn begin_recording(
@@ -250,22 +281,13 @@ fn begin_recording(
     target: Target,
     capture: &CaptureSettings,
     settings: &RecordingSettings,
-    camera: Option<Camera>,
-    keys: Option<KeyDisplay>,
+    overlays: Overlays,
 ) -> Result<(), String> {
-    let stop_overlays = |camera: Option<Camera>, keys: Option<KeyDisplay>| {
-        if let Some(c) = camera {
-            c.stop();
-        }
-        if let Some(k) = keys {
-            k.stop();
-        }
-    };
     // All windows, so the (still transparent) keystroke display is listed.
     let content = match Content::fetch_all() {
         Ok(content) => content,
         Err(e) => {
-            stop_overlays(camera, keys);
+            overlays.stop();
             return Err(e.to_string());
         }
     };
@@ -274,7 +296,7 @@ fn begin_recording(
             let display = content
                 .display(display_id)
                 .ok_or("the display is no longer available")?;
-            let filter = sck::recording_filter(&content, &display);
+            let filter = sck::recording_filter(&content, &display, settings.hide_notifications);
             let screen = screen_for(mtm, display_id).ok_or("the display is no longer available")?;
             let f = screen.frame();
             let cocoa = NSRect::new(
@@ -351,7 +373,7 @@ fn begin_recording(
     }) {
         Ok(recorder) => recorder,
         Err(e) => {
-            stop_overlays(camera, keys);
+            overlays.stop();
             return Err(e);
         }
     };
@@ -364,8 +386,7 @@ fn begin_recording(
     STATE.with(|s| {
         *s.borrow_mut() = State::Recording(Box::new(Active {
             recorder,
-            camera,
-            keys,
+            overlays,
             controls,
             time_label,
             pause_button,
@@ -381,6 +402,7 @@ fn begin_recording(
                 scale,
                 gif_fps: settings.gif_fps(),
                 gif_max_width: settings.gif_max_width,
+                mix_audio: settings.system_audio && microphone && !settings.separate_audio_tracks,
             },
         }))
     });
@@ -390,10 +412,6 @@ fn begin_recording(
 /// Requests microphone access if needed. Returns whether it can be used
 /// for this recording.
 fn microphone_ready(mtm: MainThreadMarker) -> bool {
-    if !engine::macos_at_least(15) {
-        toast::show(mtm, "Microphone recording needs macOS 15 or later");
-        return false;
-    }
     match Permission::Microphone.status() {
         Status::Granted => true,
         Status::NotDetermined => {
@@ -428,8 +446,7 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
     };
     let Active {
         recorder,
-        camera,
-        keys,
+        overlays,
         controls,
         border,
         timer,
@@ -437,12 +454,7 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
         ..
     } = *active;
     timer.invalidate();
-    if let Some(camera) = camera {
-        camera.stop();
-    }
-    if let Some(keys) = keys {
-        keys.stop();
-    }
+    overlays.stop();
     controls.orderOut(None);
     if let Some(border) = &border {
         border.orderOut(None);
@@ -472,6 +484,13 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
 /// shows the recording in Quick Access.
 fn deliver(finish: Finish) {
     std::thread::spawn(move || {
+        if finish.mix_audio
+            && finish.gif.is_none()
+            && let Err(e) = media::mix_audio_tracks(&finish.video)
+        {
+            // The recording is still fine, with two audio tracks.
+            tracing::warn!(error = %e, "could not mix the audio tracks");
+        }
         let thumbnail = media::thumbnail(&finish.video);
         let duration = media::duration(&finish.video);
         let file = match &finish.gif {

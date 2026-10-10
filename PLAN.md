@@ -214,9 +214,13 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   include them while still leaving the control bar out. Keystrokes default
   to shortcuts only, so typed text never appears. Neither is shown in
   window recordings, which capture only the chosen window.
-- Still to do: cursor highlight beyond clicks, Do Not Disturb, mixing
-  system audio and microphone into one track, and a microphone fallback
-  for macOS 14.
+- Cursor highlight (a pointer overlay that also draws clicks on macOS 14),
+  hiding notification banners from recordings (instead of toggling Do Not
+  Disturb, which has no public API), mixing system audio and the
+  microphone into one track after recording, and an AVFoundation
+  microphone fallback for macOS 14: done. The macOS 14 paths can be
+  exercised on newer systems with `CLEANSHOTZ_PRETEND_MACOS=14` in debug
+  builds.
 - Platform limits: ScreenCaptureKit records audio from applications only,
   not command-line tools such as `afplay`.
 

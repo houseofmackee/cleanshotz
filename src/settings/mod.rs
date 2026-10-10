@@ -1179,6 +1179,12 @@ fn recording(f: &mut Form) {
         |c| c.recording.show_clicks,
         |c, v| c.recording.show_clicks = v,
     );
+    f.check(
+        "",
+        "Cursor highlight",
+        |c| c.recording.highlight_cursor,
+        |c, v| c.recording.highlight_cursor = v,
+    );
     f.choice(
         "Keystrokes:",
         &["Off", "Shortcuts only", "All keys"],
@@ -1207,6 +1213,20 @@ fn recording(f: &mut Form) {
         "Microphone",
         |c| c.recording.microphone,
         |c, v| c.recording.microphone = v,
+    );
+    f.check(
+        "",
+        "Keep them on separate tracks",
+        |c| c.recording.separate_audio_tracks,
+        |c, v| c.recording.separate_audio_tracks = v,
+    );
+    f.note("Otherwise they are mixed into one track, which every player plays.");
+    f.gap();
+    f.check(
+        "Notifications:",
+        "Hide notification banners in recordings",
+        |c| c.recording.hide_notifications,
+        |c, v| c.recording.hide_notifications = v,
     );
     f.gap();
     f.check(

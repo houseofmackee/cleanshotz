@@ -315,6 +315,132 @@ impl KeyDisplay {
     }
 }
 
+const CURSOR_PANEL: f64 = 64.0;
+const CURSOR_DOT: f64 = 52.0;
+
+struct CursorState {
+    panel: Retained<NSPanel>,
+    dot: Retained<NSBox>,
+    timer: Retained<NSTimer>,
+    highlight: bool,
+    clicks: bool,
+    pressed: Option<bool>,
+}
+
+thread_local! {
+    static CURSOR: RefCell<Option<CursorState>> = const { RefCell::new(None) };
+}
+
+/// A circle that follows the pointer: a soft highlight around it, and/or a
+/// ring while a mouse button is held (click feedback where ScreenCaptureKit
+/// cannot draw clicks itself). Polls the pointer, so it needs no
+/// permission.
+pub struct CursorHighlight;
+
+impl CursorHighlight {
+    pub fn start(mtm: MainThreadMarker, highlight: bool, clicks: bool) -> CursorHighlight {
+        let panel = overlay_panel(
+            mtm,
+            NSRect::new(NSPoint::ZERO, NSSize::new(CURSOR_PANEL, CURSOR_PANEL)),
+        );
+        panel.setIgnoresMouseEvents(true);
+        panel.setHasShadow(false);
+        let inset = (CURSOR_PANEL - CURSOR_DOT) / 2.0;
+        let dot = NSBox::initWithFrame(
+            NSBox::alloc(mtm),
+            NSRect::new(
+                NSPoint::new(inset, inset),
+                NSSize::new(CURSOR_DOT, CURSOR_DOT),
+            ),
+        );
+        dot.setBoxType(NSBoxType::Custom);
+        dot.setTitlePosition(NSTitlePosition::NoTitle);
+        dot.setCornerRadius(CURSOR_DOT / 2.0);
+        let content = NSView::initWithFrame(
+            NSView::alloc(mtm),
+            NSRect::new(NSPoint::ZERO, NSSize::new(CURSOR_PANEL, CURSOR_PANEL)),
+        );
+        content.addSubview(&dot);
+        panel.setContentView(Some(&content));
+        panel.orderFrontRegardless();
+
+        let block = RcBlock::new(|_timer: NonNull<NSTimer>| follow_cursor());
+        // SAFETY: the block has the expected signature; the timer is
+        // invalidated in `stop`. Common modes keep it running while menus
+        // are open.
+        let timer = unsafe {
+            let timer = NSTimer::timerWithTimeInterval_repeats_block(1.0 / 60.0, true, &block);
+            objc2_foundation::NSRunLoop::mainRunLoop()
+                .addTimer_forMode(&timer, objc2_foundation::NSRunLoopCommonModes);
+            timer
+        };
+        CURSOR.with(|c| {
+            *c.borrow_mut() = Some(CursorState {
+                panel,
+                dot,
+                timer,
+                highlight,
+                clicks,
+                pressed: None,
+            })
+        });
+        follow_cursor();
+        CursorHighlight
+    }
+
+    pub fn stop(self) {
+        CURSOR.with(|c| {
+            if let Some(state) = c.borrow_mut().take() {
+                state.timer.invalidate();
+                state.panel.orderOut(None);
+            }
+        });
+    }
+}
+
+fn follow_cursor() {
+    CURSOR.with(|c| {
+        let mut cursor = c.borrow_mut();
+        let Some(state) = cursor.as_mut() else {
+            return;
+        };
+        let mouse = objc2_app_kit::NSEvent::mouseLocation();
+        state.panel.setFrameOrigin(NSPoint::new(
+            (mouse.x - CURSOR_PANEL / 2.0).round(),
+            (mouse.y - CURSOR_PANEL / 2.0).round(),
+        ));
+        // Left or right button.
+        let pressed = objc2_app_kit::NSEvent::pressedMouseButtons() & 0b11 != 0;
+        if state.pressed == Some(pressed) {
+            return;
+        }
+        state.pressed = Some(pressed);
+        let (fill, border, width) = cursor_style(state.highlight, state.clicks, pressed);
+        state.dot.setFillColor(&fill);
+        state.dot.setBorderColor(&border);
+        state.dot.setBorderWidth(width);
+        state
+            .panel
+            .setAlphaValue(if state.highlight || pressed { 1.0 } else { 0.0 });
+    });
+}
+
+/// Fill, border color and border width for the pointer circle.
+fn cursor_style(
+    highlight: bool,
+    clicks: bool,
+    pressed: bool,
+) -> (Retained<NSColor>, Retained<NSColor>, f64) {
+    let yellow = |a| NSColor::colorWithSRGBRed_green_blue_alpha(1.0, 0.84, 0.1, a);
+    let blue = |a| NSColor::colorWithSRGBRed_green_blue_alpha(0.15, 0.5, 1.0, a);
+    match (highlight, pressed && clicks) {
+        (true, true) => (yellow(0.55), blue(0.9), 3.0),
+        (true, false) if pressed => (yellow(0.6), NSColor::clearColor(), 0.0),
+        (true, false) => (yellow(0.35), NSColor::clearColor(), 0.0),
+        (false, _) => (blue(0.15), blue(0.9), 3.0),
+    }
+}
+
 fn event_tap() -> Result<CFRetained<CFMachPort>, String> {
     let mask = 1u64 << CGEventType::KeyDown.0;
     // SAFETY: a listen-only session tap with a valid callback; no user data.

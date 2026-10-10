@@ -114,6 +114,16 @@ fn main() -> ExitCode {
             }
         }
         #[cfg(debug_assertions)]
+        Some("--dev-mix-audio") if args.len() == 2 => {
+            match record::media::mix_audio_tracks(args[1].as_ref()) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        #[cfg(debug_assertions)]
         Some("--dev-gif") if args.len() == 3 => {
             match record::media::to_gif(args[1].as_ref(), args[2].as_ref(), 15, 1280) {
                 Ok(()) => ExitCode::SUCCESS,

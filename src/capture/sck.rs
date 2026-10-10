@@ -255,25 +255,41 @@ pub fn wallpaper_filter(
 
 /// A filter for recording a whole display, with audio from every app
 /// except this one. Leaves out our transient UI (control bar, overlay)
-/// but keeps our editor windows and pins.
-pub fn recording_filter(content: &Content, display: &SCDisplay) -> Retained<SCContentFilter> {
+/// but keeps our editor windows and pins. With `hide_notifications`,
+/// notification banners are left out too (Notification Center's desktop
+/// widgets stay).
+pub fn recording_filter(
+    content: &Content,
+    display: &SCDisplay,
+    hide_notifications: bool,
+) -> Retained<SCContentFilter> {
+    const NOTIFICATION_CENTER: &str = "com.apple.notificationcenterui";
     let own_pid = std::process::id() as i32;
+    let normal_level = CGWindowLevelForKey(CGWindowLevelKey::NormalWindowLevelKey) as isize;
     // SAFETY: plain property reads.
     let (own_apps, keep): (Vec<Retained<SCRunningApplication>>, Vec<Retained<SCWindow>>) = unsafe {
+        let is_notification_center =
+            |a: &SCRunningApplication| a.bundleIdentifier().to_string() == NOTIFICATION_CENTER;
         let apps = content
             .inner
             .applications()
             .iter()
-            .filter(|a| a.processID() == own_pid)
+            .filter(|a| a.processID() == own_pid || hide_notifications && is_notification_center(a))
             .collect();
         let keep = content
             .inner
             .windows()
             .iter()
             .filter(|w| {
-                w.owningApplication()
-                    .is_some_and(|a| a.processID() == own_pid)
-                    && w.windowLayer() < OWN_UI_LEVEL
+                w.owningApplication().is_some_and(|a| {
+                    if a.processID() == own_pid {
+                        w.windowLayer() < OWN_UI_LEVEL
+                    } else {
+                        // Widgets sit on the desktop, below normal windows;
+                        // banners appear above them.
+                        is_notification_center(&a) && w.windowLayer() < normal_level
+                    }
+                })
             })
             .collect();
         (apps, keep)

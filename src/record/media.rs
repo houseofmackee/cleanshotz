@@ -140,3 +140,166 @@ pub fn to_gif(video: &Path, gif: &Path, fps: u32, max_width: u32) -> Result<(), 
         Err("could not write the GIF".into())
     }
 }
+
+/// Mixes all audio tracks of a recording (system audio and microphone)
+/// into one stereo track, in place. The video is copied, not re-encoded.
+/// Does nothing for recordings with fewer than two audio tracks.
+pub fn mix_audio_tracks(path: &Path) -> Result<(), String> {
+    use objc2_av_foundation::{
+        AVAssetReader, AVAssetReaderAudioMixOutput, AVAssetReaderStatus, AVAssetReaderTrackOutput,
+        AVAssetWriter, AVAssetWriterInput, AVAssetWriterStatus, AVFileTypeMPEG4, AVMediaTypeAudio,
+        AVMediaTypeVideo,
+    };
+    use objc2_core_media::CMFormatDescription;
+    use objc2_foundation::{NSDictionary, NSNumber};
+
+    let source = asset(path);
+    let mixed = path.with_extension("mixing.mp4");
+    let constant =
+        |c: Option<&'static objc2_foundation::NSString>| c.ok_or("missing AVFoundation constant");
+    // SAFETY: track queries, reader and writer setup on local files; all
+    // objects stay on this thread.
+    unsafe {
+        let (video_type, audio_type) = (constant(AVMediaTypeVideo)?, constant(AVMediaTypeAudio)?);
+        #[allow(deprecated)]
+        let audio_tracks = source.tracksWithMediaType(audio_type);
+        if audio_tracks.count() < 2 {
+            return Ok(());
+        }
+        #[allow(deprecated)]
+        let video_track = source
+            .tracksWithMediaType(video_type)
+            .firstObject()
+            .ok_or("the recording has no video")?;
+
+        let reader = AVAssetReader::assetReaderWithAsset_error(&source)
+            .map_err(|e| e.localizedDescription().to_string())?;
+        let video_out = AVAssetReaderTrackOutput::assetReaderTrackOutputWithTrack_outputSettings(
+            &video_track,
+            None,
+        );
+        video_out.setAlwaysCopiesSampleData(false);
+        reader.addOutput(&video_out);
+        let number =
+            |n: f64| -> Retained<objc2::runtime::AnyObject> { NSNumber::new_f64(n).into() };
+        let settings = |pairs: &[(&str, f64)]| {
+            let keys: Vec<Retained<NSString>> =
+                pairs.iter().map(|(k, _)| NSString::from_str(k)).collect();
+            let key_refs: Vec<&NSString> = keys.iter().map(|k| &**k).collect();
+            let values: Vec<_> = pairs.iter().map(|(_, v)| number(*v)).collect();
+            NSDictionary::from_retained_objects(&key_refs, &values)
+        };
+        const LPCM: f64 = 0x6c70_636d as f64; // 'lpcm'
+        const AAC: f64 = 0x6161_6320 as f64; // 'aac '
+        let pcm = settings(&[
+            ("AVFormatIDKey", LPCM),
+            ("AVSampleRateKey", 48_000.0),
+            ("AVNumberOfChannelsKey", 2.0),
+            ("AVLinearPCMBitDepthKey", 32.0),
+            ("AVLinearPCMIsFloatKey", 1.0),
+            ("AVLinearPCMIsNonInterleaved", 0.0),
+        ]);
+        let audio_out =
+            AVAssetReaderAudioMixOutput::assetReaderAudioMixOutputWithAudioTracks_audioSettings(
+                &audio_tracks,
+                Some(&pcm),
+            );
+        reader.addOutput(&audio_out);
+
+        let _ = std::fs::remove_file(&mixed);
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&mixed.to_string_lossy()));
+        let writer =
+            AVAssetWriter::assetWriterWithURL_fileType_error(&url, constant(AVFileTypeMPEG4)?)
+                .map_err(|e| e.localizedDescription().to_string())?;
+        // The array keeps the description alive while the input is made.
+        let descriptions = video_track.formatDescriptions();
+        let first = descriptions.firstObject();
+        let hint = first
+            .as_ref()
+            .map(|d| &*(Retained::as_ptr(d) as *const CMFormatDescription));
+        let video_in =
+            AVAssetWriterInput::assetWriterInputWithMediaType_outputSettings_sourceFormatHint(
+                video_type, None, hint,
+            );
+        video_in.setTransform(video_track.preferredTransform());
+        let aac = settings(&[
+            ("AVFormatIDKey", AAC),
+            ("AVSampleRateKey", 48_000.0),
+            ("AVNumberOfChannelsKey", 2.0),
+            ("AVEncoderBitRateKey", 192_000.0),
+        ]);
+        let audio_in = AVAssetWriterInput::assetWriterInputWithMediaType_outputSettings(
+            audio_type,
+            Some(&aac),
+        );
+        for input in [&video_in, &audio_in] {
+            if !writer.canAddInput(input) {
+                return Err("could not set up the mixed recording".into());
+            }
+            writer.addInput(input);
+        }
+        if !reader.startReading() || !writer.startWriting() {
+            return Err("could not start mixing the audio".into());
+        }
+        writer.startSessionAtSourceTime(CMTime::with_seconds(0.0, 600));
+
+        // Copy both streams, feeding whichever input is ready.
+        let mut done = [false, false];
+        let pairs = [
+            (
+                &*video_out as &objc2_av_foundation::AVAssetReaderOutput,
+                &video_in,
+            ),
+            (&*audio_out, &audio_in),
+        ];
+        while !done.iter().all(|d| *d) {
+            let mut progressed = false;
+            for (i, (out, input)) in pairs.iter().enumerate() {
+                if done[i] || !input.isReadyForMoreMediaData() {
+                    continue;
+                }
+                progressed = true;
+                match out.copyNextSampleBuffer() {
+                    Some(sample) => {
+                        if !input.appendSampleBuffer(&sample) {
+                            reader.cancelReading();
+                            writer.cancelWriting();
+                            let _ = std::fs::remove_file(&mixed);
+                            return Err(writer
+                                .error()
+                                .map(|e| e.localizedDescription().to_string())
+                                .unwrap_or_else(|| "mixing the audio failed".into()));
+                        }
+                    }
+                    None => {
+                        input.markAsFinished();
+                        done[i] = true;
+                    }
+                }
+            }
+            if !progressed {
+                std::thread::sleep(std::time::Duration::from_millis(2));
+            }
+        }
+        if reader.status() == AVAssetReaderStatus::Failed {
+            writer.cancelWriting();
+            let _ = std::fs::remove_file(&mixed);
+            return Err("could not read the recording to mix its audio".into());
+        }
+        let (tx, rx) = std::sync::mpsc::channel();
+        let block = block2::RcBlock::new(move || {
+            let _ = tx.send(());
+        });
+        writer.finishWritingWithCompletionHandler(&block);
+        rx.recv_timeout(std::time::Duration::from_secs(120))
+            .map_err(|_| "mixing the audio timed out".to_string())?;
+        if writer.status() != AVAssetWriterStatus::Completed {
+            let _ = std::fs::remove_file(&mixed);
+            return Err(writer
+                .error()
+                .map(|e| e.localizedDescription().to_string())
+                .unwrap_or_else(|| "mixing the audio failed".into()));
+        }
+    }
+    std::fs::rename(&mixed, path).map_err(|e| format!("{}: {e}", path.display()))
+}
