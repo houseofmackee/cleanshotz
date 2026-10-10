@@ -18,6 +18,10 @@ CleanShotZ is in early development; see [CHANGELOG.md](CHANGELOG.md).
 | --- | --- |
 | <img src="docs/screenshots/quick-access.png" width="286" alt="A Quick Access card with its actions"> | <img src="docs/screenshots/history.png" width="460" alt="The capture history window"> |
 
+| Video editor | Recording controls |
+| --- | --- |
+| <img src="docs/screenshots/video-editor.png" width="460" alt="The video editor trimming a recording, with crop, speed, size, format and quality controls"> | <img src="docs/screenshots/recording-bar.png" width="220" alt="The recording bar with the timer, pause, stop and discard buttons"> |
+
 <img src="docs/screenshots/settings.png" width="448" alt="The Screenshots tab of the Settings window">
 
 ## Install
@@ -238,6 +242,8 @@ Options live in the `[text]` section of the settings file:
 
 ### Screen recording
 
+<img src="docs/screenshots/recording-bar.png" width="220" alt="The recording bar">
+
 Record Screen (`alt+shift+5`) shows the selection overlay: drag to record an
 area, click to record the whole screen, or press Space and click a window.
 After a short countdown a control bar appears below the area with the
@@ -287,6 +293,8 @@ microphone is recorded through AVFoundation and clicks are drawn by the
 cursor overlay, since ScreenCaptureKit can do neither there.
 
 ### Video editor
+
+<img src="docs/screenshots/video-editor.png" width="560" alt="The video editor trimming a recording">
 
 Click the scissors on a recording's thumbnail, double-click it, or open a
 video with Open in Editor…. Trim… shows QuickTime's trim bar: drag the
