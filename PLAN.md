@@ -245,9 +245,12 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   needs Accessibility and stops at the end of the content). Row hashes
   match exactly on screen content, so the cross-correlation fallback was
   not needed. Sticky headers and footers are kept once; overlay scroll
-  bars are removed from the result. A status line replaces the live
-  preview image. Images are capped at 30,000 px. Not done yet: horizontal
-  scrolling and a live preview thumbnail.
+  bars are removed from the result. Images are capped at 30,000 px.
+  Horizontal scrolling (detected from the first scroll and stitched as
+  transposed frames) and a live preview beside the area are done. When
+  rows never match exactly (text drawn at subpixel offsets, slight color
+  noise), the best hash candidates and their neighbors are checked pixel
+  by pixel with a small tolerance.
 
 ### M9: History, uploads, automation
 - History window with thumbnails, search, re-open, re-copy, delete.

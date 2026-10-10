@@ -123,10 +123,12 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
 - **Capture Previous Area:** the last selected area again, without the overlay.
 - **Self-Timer:** select an area or window, then capture after a countdown.
 - **Scrolling Capture** (`alt+shift+s`): select the part of a window that
-  scrolls (stay inside the window), then scroll down slowly, or click
-  Auto-scroll and it scrolls to the end by itself (needs Accessibility).
-  Click Done to stitch everything into one tall image; sticky headers
-  appear once and scroll bars are removed.
+  scrolls (stay inside the window), then scroll slowly, down or sideways:
+  the direction is picked up from your first scroll. Or click Auto-scroll
+  and it scrolls to the end by itself (needs Accessibility). A preview
+  beside the area grows as you go. Click Done to stitch everything into
+  one tall (or wide) image; sticky headers and sidebars appear once and
+  scroll bars are removed.
 - **Capture Text:** select an area (or press Space and pick a window); the
   text in it is recognized on your Mac and copied to the clipboard.
 

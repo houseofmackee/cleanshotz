@@ -125,6 +125,29 @@ fn main() -> ExitCode {
             }
         }
         #[cfg(debug_assertions)]
+        Some("--dev-stitch") if args.len() >= 3 => {
+            let mut scroller = scroll::stitch::Scroller::new(30_000);
+            for path in &args[1..] {
+                let Some((width, height, pixels)) =
+                    capture::image::load(path.as_ref()).and_then(|i| capture::image::to_pixels(&i))
+                else {
+                    eprintln!("cleanshotz: cannot read {path}");
+                    return ExitCode::FAILURE;
+                };
+                let push = scroller.push(scroll::stitch::Frame {
+                    width,
+                    height,
+                    pixels,
+                });
+                println!(
+                    "{path}: {push:?} axis={:?} size={:?}",
+                    scroller.axis(),
+                    scroller.size()
+                );
+            }
+            ExitCode::SUCCESS
+        }
+        #[cfg(debug_assertions)]
         Some("--dev-mix-audio") if args.len() == 2 => {
             match record::media::mix_audio_tracks(args[1].as_ref()) {
                 Ok(()) => ExitCode::SUCCESS,
