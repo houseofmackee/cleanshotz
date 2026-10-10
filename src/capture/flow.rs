@@ -18,6 +18,8 @@ pub enum Kind {
     Area,
     Window,
     SelfTimer,
+    /// Select an area and copy the text in it.
+    Text,
 }
 
 /// Called with errors that happen after the overlay closes (the flow is
@@ -88,6 +90,28 @@ fn on_selection(
         let mut state = State::load(state_path);
         state.last_area = Some(SavedArea::new(*display_id, *rect));
         state.save(state_path);
+    }
+
+    if kind == Kind::Text {
+        // Recognize text at full resolution, whatever the output settings.
+        let settings = CaptureSettings {
+            downscale_retina: false,
+            show_cursor: false,
+            ..settings.clone()
+        };
+        let captured = match selection {
+            Selection::Area {
+                display_id,
+                rect,
+                frozen: Some((snapshot, scale)),
+            } => super::grab_from_snapshot(display_id, &snapshot, scale, rect, &settings)?,
+            Selection::Area {
+                display_id, rect, ..
+            } => super::grab_rect(display_id, rect, &settings)?,
+            Selection::Window { window_id } => super::grab_window(window_id, &settings)?,
+        };
+        crate::ocr::copy_text(captured.image);
+        return Ok(());
     }
 
     if kind == Kind::SelfTimer {

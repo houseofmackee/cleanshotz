@@ -290,6 +290,7 @@ impl AppDelegate {
             | Action::CapturePreviousArea
             | Action::CaptureFullscreen
             | Action::CaptureWindow
+            | Action::CaptureText
             | Action::SelfTimer => self.capture(action),
             Action::OpenSettingsFile => {
                 // `open -t` uses the default text editor regardless of how
@@ -329,6 +330,7 @@ impl AppDelegate {
     fn configure_quick_access(&self) {
         let config = self.ivars().config.borrow();
         crate::quick_access::configure(config.quick_access.clone(), config.capture.clone());
+        crate::ocr::configure(config.text.clone());
     }
 
     fn capture(&self, action: Action) {
@@ -370,6 +372,13 @@ impl AppDelegate {
             Action::SelfTimer => flow::start(
                 mtm,
                 flow::Kind::SelfTimer,
+                settings,
+                state_path,
+                show_capture_error,
+            ),
+            Action::CaptureText => flow::start(
+                mtm,
+                flow::Kind::Text,
                 settings,
                 state_path,
                 show_capture_error,

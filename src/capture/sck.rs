@@ -25,6 +25,9 @@ use super::geometry::Rect;
 
 const TIMEOUT: Duration = Duration::from_secs(5);
 
+/// Window level of our transient UI (`NSStatusWindowLevel`).
+const OWN_UI_LEVEL: isize = 25;
+
 #[derive(Debug, thiserror::Error)]
 pub enum CaptureError {
     #[error("{0}")]
@@ -102,7 +105,7 @@ impl Content {
         unsafe { self.inner.windows().iter().find(|w| w.windowID() == id) }
     }
 
-    /// Windows to leave out of display captures: our own (overlays, HUDs)
+    /// Windows to leave out of display captures: our own transient UI
     /// and, if requested, desktop icons and widgets.
     pub fn excluded_windows(&self, hide_desktop_icons: bool) -> Retained<NSArray<SCWindow>> {
         let own_pid = std::process::id() as i32;
@@ -117,8 +120,11 @@ impl Content {
                     let Some(app) = w.owningApplication() else {
                         return false;
                     };
+                    // Our transient UI (selection overlay, Quick Access,
+                    // toasts, countdown) floats at status level or above.
+                    // Editor windows and pins are normal content and stay.
                     if app.processID() == own_pid {
-                        return true;
+                        return w.windowLayer() >= OWN_UI_LEVEL;
                     }
                     // Desktop icons (Finder) and widgets (Notification
                     // Center) sit between the wallpaper and normal windows.
@@ -145,10 +151,14 @@ impl Content {
             self.inner
                 .windows()
                 .iter()
-                .filter(|w| w.isOnScreen() && w.windowLayer() == 0)
+                .filter(|w| w.isOnScreen())
                 .filter_map(|w| {
                     let app = w.owningApplication()?;
-                    if app.processID() == own_pid {
+                    // Normal windows, plus our own editor windows and
+                    // floating pins.
+                    let own = app.processID() == own_pid;
+                    let layer = w.windowLayer();
+                    if !(layer == 0 || own && layer < OWN_UI_LEVEL) {
                         return None;
                     }
                     let f = w.frame();

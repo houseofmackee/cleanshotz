@@ -358,3 +358,76 @@ pub fn render_sample(input: &std::path::Path, output: &std::path::Path) -> Resul
     );
     Ok(())
 }
+
+/// Development aid (debug builds): draws sample text with fake secrets on
+/// a blank image, runs OCR and the sensitive-info detectors, and prints
+/// what was found. Writes the redacted result to `output`.
+#[cfg(debug_assertions)]
+pub fn ocr_sample(output: &std::path::Path) -> Result<(), String> {
+    use crate::capture::geometry::{Point, Rect};
+    use crate::capture::{image, output as out};
+    use crate::config::ImageFormat;
+    use model::*;
+
+    let (w, h) = (900usize, 360usize);
+    let blank = image::bitmap_context(w * 2, h * 2, None).ok_or("no context")?;
+    objc2_core_graphics::CGContext::set_rgb_fill_color(Some(&blank), 1.0, 1.0, 1.0, 1.0);
+    objc2_core_graphics::CGContext::fill_rect(
+        Some(&blank),
+        objc2_core_foundation::CGRect::new(
+            objc2_core_foundation::CGPoint::new(0.0, 0.0),
+            objc2_core_foundation::CGSize::new((w * 2) as f64, (h * 2) as f64),
+        ),
+    );
+    let cg = objc2_core_graphics::CGBitmapContextCreateImage(Some(&blank)).ok_or("no image")?;
+    let base = render::BaseImage::new(cg, 2.0);
+    let mut doc = Document::default();
+    let lines = [
+        "Contact: jane.doe@example.com or ops@corp.io",
+        "Server 192.168.10.42 key AKIAIOSFODNN7EXAMPLE",
+        "Card 4111 1111 1111 1111 expires 12/29",
+        "Nothing sensitive on this line at all.",
+    ];
+    for (i, text) in lines.iter().enumerate() {
+        let origin = Point::new(30.0, 30.0 + i as f64 * 70.0);
+        let s = render::text_size(text, 28.0, TextStyle::Plain);
+        doc.add(
+            Shape::Text {
+                origin,
+                text: (*text).into(),
+                size: 28.0,
+                style: TextStyle::Plain,
+                bounds: Rect::new(origin.x, origin.y, s.width, s.height),
+            },
+            Color::BLACK,
+            1.0,
+        );
+    }
+    let rendered = render::export(&doc, &base).ok_or("render failed")?;
+
+    let started = std::time::Instant::now();
+    let found = crate::ocr::recognize(&rendered, &Default::default(), |t| {
+        crate::ocr::sensitive::find(t)
+            .into_iter()
+            .map(|(_, r)| r)
+            .collect()
+    })?;
+    println!("OCR took {:?}", started.elapsed());
+    println!("{}", crate::ocr::assemble(&found, true));
+    let flat = render::BaseImage::new(rendered, 2.0);
+    let mut redacted = Document::default();
+    for line in &found {
+        for m in &line.matches {
+            let r = Rect::new(
+                m.x * flat.width,
+                m.y * flat.height,
+                m.width * flat.width,
+                m.height * flat.height,
+            );
+            println!("match {:?} in {:?}", r, line.text);
+            redacted.add(Shape::Pixelate { rect: r }, Color::BLACK, 1.0);
+        }
+    }
+    let result = render::export(&redacted, &flat).ok_or("render failed")?;
+    out::save_to(output, &result, ImageFormat::Png, 1.0).map(|_| ())
+}

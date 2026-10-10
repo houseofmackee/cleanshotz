@@ -156,6 +156,43 @@ impl Session {
         }
     }
 
+    /// Covers each rect (image points) with an opaque box, as one undo
+    /// step. Opaque rather than pixelated: pixelated text can sometimes be
+    /// reconstructed. Returns how many were added.
+    pub fn add_redactions(&mut self, rects: &[Rect]) -> usize {
+        let rects: Vec<Rect> = rects
+            .iter()
+            .map(|r| {
+                // A little padding so no edge of a tall glyph shows.
+                let pad = (r.height * 0.15).max(2.0);
+                Rect::new(
+                    r.x - pad,
+                    r.y - pad,
+                    r.width + 2.0 * pad,
+                    r.height + 2.0 * pad,
+                )
+                .intersection(&self.image)
+            })
+            .filter(|r| r.width > 0.0 && r.height > 0.0)
+            .collect();
+        if rects.is_empty() {
+            return 0;
+        }
+        self.change();
+        for rect in &rects {
+            self.doc.add(
+                Shape::Rectangle {
+                    rect: *rect,
+                    filled: true,
+                },
+                Color::rgb(0.1, 0.1, 0.1),
+                self.width,
+            );
+        }
+        self.selection = None;
+        rects.len()
+    }
+
     pub fn delete_selection(&mut self) -> bool {
         let Some(id) = self.selection.take() else {
             return false;
@@ -660,6 +697,26 @@ mod tests {
         );
         s.commit_text(Some(id), Point::new(5.0, 5.0), "", (0.0, 0.0));
         assert!(s.doc.annotations.is_empty());
+    }
+
+    #[test]
+    fn redactions_are_padded_clamped_and_one_undo_step() {
+        let mut s = session();
+        let n = s.add_redactions(&[
+            Rect::new(100.0, 100.0, 50.0, 20.0),
+            Rect::new(790.0, 590.0, 30.0, 30.0),
+        ]);
+        assert_eq!(n, 2);
+        assert_eq!(
+            s.doc.annotations[0].bounds(),
+            Rect::new(97.0, 97.0, 56.0, 26.0)
+        );
+        // Clamped to the image.
+        assert_eq!(s.doc.annotations[1].bounds().max_x(), 800.0);
+        assert!(s.undo());
+        assert!(s.doc.annotations.is_empty());
+        assert_eq!(s.add_redactions(&[]), 0);
+        assert!(!s.history.can_undo());
     }
 
     #[test]

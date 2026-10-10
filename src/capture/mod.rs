@@ -98,12 +98,11 @@ pub fn capture_fullscreen(
 
 /// Captures `rect` (display-local points, top-left origin) of a display as
 /// it looks now.
-pub fn capture_rect(
-    mtm: MainThreadMarker,
+pub fn grab_rect(
     display_id: u32,
     rect: Rect,
     settings: &CaptureSettings,
-) -> Result<(), CaptureError> {
+) -> Result<Captured, CaptureError> {
     let content = Content::fetch()?;
     let display = content
         .display(display_id)
@@ -125,27 +124,21 @@ pub fn capture_rect(
     )?;
     let source = Some(display_bounds(display_id).offset(rect.x, rect.y));
     let source = source.map(|s| Rect::new(s.x, s.y, rect.width, rect.height));
-    output::deliver(
-        mtm,
-        Captured {
-            image,
-            scale,
-            source,
-        },
-        settings,
-    );
-    Ok(())
+    Ok(Captured {
+        image,
+        scale,
+        source,
+    })
 }
 
 /// Crops a frozen display snapshot instead of capturing again.
-pub fn deliver_from_snapshot(
-    mtm: MainThreadMarker,
+pub fn grab_from_snapshot(
     display_id: u32,
     snapshot: &objc2_core_graphics::CGImage,
     snapshot_scale: f64,
     rect: Rect,
     settings: &CaptureSettings,
-) -> Result<(), CaptureError> {
+) -> Result<Captured, CaptureError> {
     let failed = || CaptureError::Failed("could not crop the frozen screen image".into());
     let mut image = image::crop(snapshot, rect, snapshot_scale).ok_or_else(failed)?;
     let scale = output_scale(settings, snapshot_scale);
@@ -161,24 +154,15 @@ pub fn deliver_from_snapshot(
         rect.width,
         rect.height,
     ));
-    output::deliver(
-        mtm,
-        Captured {
-            image,
-            scale,
-            source,
-        },
-        settings,
-    );
-    Ok(())
+    Ok(Captured {
+        image,
+        scale,
+        source,
+    })
 }
 
 /// Captures one window by id, on a transparent background.
-pub fn capture_window(
-    mtm: MainThreadMarker,
-    window_id: u32,
-    settings: &CaptureSettings,
-) -> Result<(), CaptureError> {
+pub fn grab_window(window_id: u32, settings: &CaptureSettings) -> Result<Captured, CaptureError> {
     let content = Content::fetch()?;
     let window = content.window(window_id).ok_or(CaptureError::WindowGone)?;
     let filter = sck::window_filter(&window);
@@ -222,14 +206,44 @@ pub fn capture_window(
         frame.size.width,
         frame.size.height,
     ));
-    output::deliver(
-        mtm,
-        Captured {
-            image,
-            scale,
-            source,
-        },
-        settings,
-    );
+    Ok(Captured {
+        image,
+        scale,
+        source,
+    })
+}
+
+/// Captures `rect` of a display and delivers it (save, copy, Quick Access).
+pub fn capture_rect(
+    mtm: MainThreadMarker,
+    display_id: u32,
+    rect: Rect,
+    settings: &CaptureSettings,
+) -> Result<(), CaptureError> {
+    let captured = grab_rect(display_id, rect, settings)?;
+    output::deliver(mtm, captured, settings);
+    Ok(())
+}
+
+pub fn deliver_from_snapshot(
+    mtm: MainThreadMarker,
+    display_id: u32,
+    snapshot: &objc2_core_graphics::CGImage,
+    snapshot_scale: f64,
+    rect: Rect,
+    settings: &CaptureSettings,
+) -> Result<(), CaptureError> {
+    let captured = grab_from_snapshot(display_id, snapshot, snapshot_scale, rect, settings)?;
+    output::deliver(mtm, captured, settings);
+    Ok(())
+}
+
+pub fn capture_window(
+    mtm: MainThreadMarker,
+    window_id: u32,
+    settings: &CaptureSettings,
+) -> Result<(), CaptureError> {
+    let captured = grab_window(window_id, settings)?;
+    output::deliver(mtm, captured, settings);
     Ok(())
 }

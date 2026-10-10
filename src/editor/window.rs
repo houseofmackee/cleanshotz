@@ -102,6 +102,8 @@ const ASPECTS: &[(&str, Aspect)] = &[
 const MORE_SAVE_AS: isize = 1;
 const MORE_SAVE_PROJECT: isize = 2;
 const MORE_PIN: isize = 3;
+const MORE_COPY_TEXT: isize = 4;
+const MORE_REDACT: isize = 5;
 
 struct Ui {
     tools: Retained<NSSegmentedControl>,
@@ -284,6 +286,8 @@ define_class!(
                 MORE_SAVE_AS => self.save_as(),
                 MORE_SAVE_PROJECT => self.save_project(),
                 MORE_PIN => self.pin(),
+                MORE_COPY_TEXT => self.copy_text(),
+                MORE_REDACT => self.redact(),
                 _ => {}
             }
         }
@@ -509,7 +513,14 @@ impl EditorController {
             NSRect::new(NSPoint::ZERO, NSSize::new(54.0, 28.0)),
             true,
         );
-        for title in ["•••", "Save As…", "Save Project…", "Pin to Screen"] {
+        for title in [
+            "•••",
+            "Save As…",
+            "Save Project…",
+            "Pin to Screen",
+            "Copy Text",
+            "Redact Sensitive Info",
+        ] {
             more.addItemWithTitle(&NSString::from_str(title));
         }
         // SAFETY: the action exists on the controller.
@@ -1075,6 +1086,63 @@ impl EditorController {
         let item =
             crate::quick_access::Item::new(image, self.ivars().base.scale, None, file, false);
         crate::pin::pin(self.mtm(), &item);
+    }
+
+    fn copy_text(&self) {
+        if let Some(image) = self.rendered() {
+            crate::ocr::copy_text(image);
+        }
+    }
+
+    /// Finds sensitive information in the original image (on a background
+    /// thread) and covers it.
+    fn redact(&self) {
+        let id = self.ivars().id;
+        let image = self.ivars().base.cg.clone();
+        let (width, height) = (self.ivars().base.width, self.ivars().base.height);
+        let settings = crate::ocr::settings();
+        crate::ui::toast::show(self.mtm(), "Looking for sensitive info…");
+        std::thread::spawn(move || {
+            let result = crate::ocr::recognize(&image, &settings, |text| {
+                crate::ocr::sensitive::find(text)
+                    .into_iter()
+                    .map(|(_, r)| r)
+                    .collect()
+            });
+            let rects: Result<Vec<Rect>, String> = result.map(|lines| {
+                lines
+                    .iter()
+                    .flat_map(|l| l.matches.iter())
+                    .map(|m| {
+                        Rect::new(
+                            m.x * width,
+                            m.y * height,
+                            m.width * width,
+                            m.height * height,
+                        )
+                    })
+                    .collect()
+            });
+            dispatch2::DispatchQueue::main().exec_async(move || {
+                let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
+                let Some(editor) = registry::get(id) else {
+                    return;
+                };
+                match rects {
+                    Ok(rects) => {
+                        let n = editor.ivars().session.borrow_mut().add_redactions(&rects);
+                        editor.refresh();
+                        let message = match n {
+                            0 => "No sensitive info found".to_string(),
+                            1 => "Redacted 1 item".to_string(),
+                            n => format!("Redacted {n} items"),
+                        };
+                        crate::ui::toast::show(mtm, &message);
+                    }
+                    Err(e) => editor.show_error("Text recognition failed", &e),
+                }
+            });
+        });
     }
 
     fn show_error(&self, title: &str, message: &str) {

@@ -6,8 +6,8 @@ use objc2_app_kit::NSWorkspace;
 use objc2_av_foundation::{
     AVAuthorizationStatus, AVCaptureDevice, AVMediaType, AVMediaTypeAudio, AVMediaTypeVideo,
 };
-use objc2_core_graphics::{CGPreflightScreenCaptureAccess, CGRequestScreenCaptureAccess};
 use objc2_core_foundation::{CFBoolean, CFDictionary, CFString};
+use objc2_core_graphics::{CGPreflightScreenCaptureAccess, CGRequestScreenCaptureAccess};
 use objc2_foundation::{NSString, NSURL};
 
 #[link(name = "ApplicationServices", kind = "framework")]

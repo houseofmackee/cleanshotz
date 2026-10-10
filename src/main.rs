@@ -4,6 +4,7 @@ mod capture;
 mod config;
 mod editor;
 mod logging;
+mod ocr;
 mod pin;
 mod platform;
 mod quick_access;
@@ -50,6 +51,14 @@ fn main() -> ExitCode {
                 }
             }
         }
+        #[cfg(debug_assertions)]
+        Some("--dev-ocr-sample") if args.len() == 2 => match editor::ocr_sample(args[1].as_ref()) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("cleanshotz: {e}");
+                ExitCode::FAILURE
+            }
+        },
         Some(other) => {
             eprintln!("cleanshotz: unknown argument {other:?}\n\n{USAGE}");
             ExitCode::from(2)

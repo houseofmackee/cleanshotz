@@ -180,10 +180,17 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   background presets and an app icon. Quitting asks before discarding
   unsaved annotations.
 
-### M5: OCR and redaction
+### M5: OCR and redaction (done)
 - Capture Text: region OCR to clipboard, language selection, line break handling.
 - Redaction suggestions in the editor (improvement #3).
 - OCR indexing for history search (improvement #4).
+- Notes: redaction applies solid boxes in one undo step instead of
+  suggestions to accept one by one (each box can still be deleted). Vision
+  sometimes returns Cyrillic or Greek look-alike letters inside Latin
+  words; those are mapped back to Latin. Language correction is off by
+  default because it splits identifiers. History search indexing moves to
+  M9, where history is built. Captures now only exclude CleanShotZ's
+  transient UI, so editor windows and pins can be captured.
 
 ### M6: Screen recording
 - SCStream for area/window/display; AVAssetWriter H.264/HEVC; fps and quality presets.

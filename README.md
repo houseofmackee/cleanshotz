@@ -102,6 +102,8 @@ a shortcut.
 - **Capture Fullscreen:** the display under the pointer.
 - **Capture Previous Area:** the last selected area again, without the overlay.
 - **Self-Timer:** select an area or window, then capture after a countdown.
+- **Capture Text:** select an area (or press Space and pick a window); the
+  text in it is recognized on your Mac and copied to the clipboard.
 
 Captures are copied to the clipboard (as PNG) and saved to the Desktop by
 default. Options live in the `[capture]` section of the settings file:
@@ -122,6 +124,16 @@ default. Options live in the `[capture]` section of the settings file:
 | `show_magnifier` | `true` | Show the pixel magnifier while selecting |
 | `self_timer_seconds` | `5` | Countdown length, 1 to 60 |
 | `play_sound` | `true` | Play the macOS screenshot sound |
+
+### Text recognition
+
+Options live in the `[text]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `keep_line_breaks` | `true` | Keep line breaks; `false` joins lines with spaces |
+| `languages` | `[]` | Languages to recognize, for example `["en-US", "de-DE"]`; empty uses your system's preferred languages |
+| `language_correction` | `false` | Dictionary-based correction; helps with photos of text, hurts code and identifiers |
 
 ### Quick Access Overlay
 
@@ -171,7 +183,14 @@ Hold Shift for squares, circles and 45-degree lines. Color, width and style
 changes apply to the selected annotation too. Cmd+Z and Shift+Cmd+Z undo and
 redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
 for opened images, saves a new capture). The ••• menu has Save As…, Save
-Project… and Pin to Screen.
+Project…, Pin to Screen, Copy Text and Redact Sensitive Info.
+
+**Redact Sensitive Info** finds emails, IP addresses, card numbers (checked
+with the Luhn algorithm), US Social Security numbers, API keys and tokens
+(AWS, GitHub, Slack, Stripe, Google, OpenAI, Anthropic, GitLab, npm), JWTs,
+private keys and other random-looking secrets, and covers them with solid
+boxes in one undo step. Solid boxes, not pixelation: pixelated text can
+sometimes be reconstructed. Text recognition runs entirely on your Mac.
 
 Projects (`.cszdoc`) keep the original image and every annotation editable.
 They are plain JSON, documented in `src/editor/project.rs`.

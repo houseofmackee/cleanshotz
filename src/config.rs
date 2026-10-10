@@ -13,6 +13,7 @@ pub struct Config {
     pub general: General,
     pub capture: CaptureSettings,
     pub quick_access: QuickAccessSettings,
+    pub text: TextSettings,
     pub hotkeys: Hotkeys,
 }
 
@@ -128,6 +129,30 @@ impl Default for QuickAccessSettings {
             position: Side::Left,
             auto_close_seconds: 0,
             close_after_drag: true,
+        }
+    }
+}
+
+/// Text recognition (Capture Text, Copy Text, redaction).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct TextSettings {
+    /// Keep line breaks in captured text; off joins lines with spaces.
+    pub keep_line_breaks: bool,
+    /// Recognition languages as BCP 47 codes, for example `["en-US",
+    /// "de-DE"]`. Empty uses the system's preferred languages.
+    pub languages: Vec<String>,
+    /// Let Vision correct words using a dictionary. Better for photos of
+    /// text, worse for code and identifiers on screen.
+    pub language_correction: bool,
+}
+
+impl Default for TextSettings {
+    fn default() -> Self {
+        Self {
+            keep_line_breaks: true,
+            languages: Vec::new(),
+            language_correction: false,
         }
     }
 }
@@ -304,6 +329,7 @@ mod tests {
         assert!(!config.general.onboarding_completed);
         assert_eq!(config.capture, CaptureSettings::default());
         assert_eq!(config.quick_access, QuickAccessSettings::default());
+        assert_eq!(config.text, TextSettings::default());
     }
 
     #[test]
