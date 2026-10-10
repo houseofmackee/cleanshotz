@@ -1,7 +1,9 @@
 //! Screen recording.
 
 pub mod engine;
+pub mod keys;
 pub mod media;
+pub mod overlays;
 mod session;
 
 pub use session::{is_recording, toggle};

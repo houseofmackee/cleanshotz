@@ -44,7 +44,10 @@ cargo clippy --workspace --all-targets -- -D warnings
 its own bundle id and `cleanshotz-test://` URL scheme, for automated
 testing next to a running CleanShotZ. Debug builds started with
 `CLEANSHOTZ_NO_CONFIRM=1` discard unsaved annotations without asking, so
-test runs never leave a dialog behind.
+test runs never leave a dialog behind. `CLEANSHOTZ_FAKE_CAMERA=1` shows a
+placeholder camera bubble and `CLEANSHOTZ_FAKE_KEYS=1` a keystroke display
+fed by `cleanshotz-test://dev-show-key?code=8&flags=1048576`, so both can
+be tested without camera or Input Monitoring access.
 
 The app must run from its `.app` bundle (not the bare binary) for macOS to
 attribute privacy permissions and the login item to it.
@@ -168,6 +171,17 @@ Options live in the `[recording]` section of the settings file:
 | `countdown_seconds` | `3` | Countdown before recording; `0` starts at once |
 | `gif_fps` | `15` | GIF frame rate |
 | `gif_max_width` | `1280` | Larger GIFs are scaled down to this width in pixels |
+| `camera` | `false` | Show your camera in a bubble that is part of the recording; drag it anywhere |
+| `camera_size` | `180` | Bubble size in points |
+| `camera_shape` | `"circle"` | `"circle"` or `"rounded"` |
+| `keystrokes` | `"off"` | Show pressed keys: `"off"`, `"shortcuts"` or `"all"` |
+
+The camera needs camera access and the keystroke display needs Input
+Monitoring; macOS asks the first time. `"shortcuts"` only shows presses with
+Command, Control or Option and keys that never type text (arrows, Return,
+Escape, function keys), so typed text such as passwords never appears in a
+recording. Both are shown in area and full-screen recordings, not in window
+recordings.
 
 ### Quick Access Overlay
 

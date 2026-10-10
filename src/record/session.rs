@@ -19,12 +19,13 @@ use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
 use super::engine::{self, Recorder};
 use super::media;
+use super::overlays::{Camera, KeyDisplay};
 use crate::capture::flow::{overlay_displays, screen_for};
 use crate::capture::geometry::{Point, Rect};
 use crate::capture::overlay::{self, Mode, Selection};
 use crate::capture::sck::{self, CaptureError, Content};
 use crate::capture::{countdown, naming, output};
-use crate::config::{CaptureSettings, RecordingSettings, VideoFormat};
+use crate::config::{CaptureSettings, KeystrokeMode, RecordingSettings, VideoFormat};
 use crate::platform::permissions::{Permission, Status};
 use crate::ui::toast;
 
@@ -43,6 +44,8 @@ enum Target {
 
 struct Active {
     recorder: Recorder,
+    camera: Option<Camera>,
+    keys: Option<KeyDisplay>,
     controls: Retained<NSPanel>,
     time_label: Retained<NSTextField>,
     pause_button: Retained<NSButton>,
@@ -166,7 +169,91 @@ fn begin(
     capture: &CaptureSettings,
     settings: &RecordingSettings,
 ) -> Result<(), String> {
-    let content = Content::fetch().map_err(|e| e.to_string())?;
+    // The camera and keystroke overlays must exist before the content is
+    // fetched, so the recording filter can include them.
+    let (camera, keys) = match target {
+        Target::Area { display_id, rect } => {
+            let screen = screen_for(mtm, display_id).ok_or("the display is no longer available")?;
+            let f = screen.frame();
+            let area = NSRect::new(
+                NSPoint::new(
+                    f.origin.x + rect.x,
+                    f.origin.y + f.size.height - rect.y - rect.height,
+                ),
+                NSSize::new(rect.width, rect.height),
+            );
+            start_overlays(mtm, area, settings)
+        }
+        Target::Window { .. } => {
+            if settings.camera || settings.keystrokes != KeystrokeMode::Off {
+                toast::show(
+                    mtm,
+                    "The camera and keystrokes are not shown in window recordings",
+                );
+            }
+            (None, None)
+        }
+    };
+    // On failure `begin_recording` stops the overlays itself.
+    begin_recording(mtm, target, capture, settings, camera, keys)
+}
+
+/// Starts the camera and keystroke overlays the settings ask for. Problems
+/// (such as missing permissions) are shown and the recording goes ahead
+/// without that overlay.
+fn start_overlays(
+    mtm: MainThreadMarker,
+    area: NSRect,
+    settings: &RecordingSettings,
+) -> (Option<Camera>, Option<KeyDisplay>) {
+    let camera = settings.camera.then(|| {
+        Camera::start(
+            mtm,
+            area,
+            settings.camera_size as f64,
+            settings.camera_shape,
+        )
+        .inspect_err(|e| {
+            tracing::warn!(error = %e, "camera not shown");
+            toast::show(mtm, e);
+        })
+        .ok()
+    });
+    let keys = (settings.keystrokes != KeystrokeMode::Off).then(|| {
+        KeyDisplay::start(mtm, area, settings.keystrokes)
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "keystrokes not shown");
+                toast::show(mtm, e);
+            })
+            .ok()
+    });
+    (camera.flatten(), keys.flatten())
+}
+
+fn begin_recording(
+    mtm: MainThreadMarker,
+    target: Target,
+    capture: &CaptureSettings,
+    settings: &RecordingSettings,
+    camera: Option<Camera>,
+    keys: Option<KeyDisplay>,
+) -> Result<(), String> {
+    let stop_overlays = |camera: Option<Camera>, keys: Option<KeyDisplay>| {
+        if let Some(c) = camera {
+            c.stop();
+        }
+        if let Some(k) = keys {
+            k.stop();
+        }
+    };
+    // All windows, so the (still transparent) keystroke display is listed.
+    let content = match Content::fetch_all() {
+        Ok(content) => content,
+        Err(e) => {
+            stop_overlays(camera, keys);
+            return Err(e.to_string());
+        }
+    };
     let (filter, source_rect, size, cocoa_rect, ignore_shadows) = match target {
         Target::Area { display_id, rect } => {
             let display = content
@@ -231,7 +318,7 @@ fn begin(
         ),
     };
 
-    let recorder = Recorder::start(engine::Options {
+    let recorder = match Recorder::start(engine::Options {
         filter,
         source_rect,
         width,
@@ -245,7 +332,13 @@ fn begin(
         system_audio: settings.system_audio,
         microphone,
         output: video.clone(),
-    })?;
+    }) {
+        Ok(recorder) => recorder,
+        Err(e) => {
+            stop_overlays(camera, keys);
+            return Err(e);
+        }
+    };
 
     let full_screen = matches!(target, Target::Area { display_id, rect }
         if screen_for(mtm, display_id).is_some_and(|s| s.frame().size.width <= rect.width));
@@ -255,6 +348,8 @@ fn begin(
     STATE.with(|s| {
         *s.borrow_mut() = State::Recording(Box::new(Active {
             recorder,
+            camera,
+            keys,
             controls,
             time_label,
             pause_button,
@@ -317,6 +412,8 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
     };
     let Active {
         recorder,
+        camera,
+        keys,
         controls,
         border,
         timer,
@@ -324,6 +421,12 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
         ..
     } = *active;
     timer.invalidate();
+    if let Some(camera) = camera {
+        camera.stop();
+    }
+    if let Some(keys) = keys {
+        keys.stop();
+    }
     controls.orderOut(None);
     if let Some(border) = &border {
         border.orderOut(None);

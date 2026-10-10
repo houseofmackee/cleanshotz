@@ -90,6 +90,16 @@ define_class!(
         fn open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
             for url in urls.iter() {
                 let command = url.host().map(|h| h.to_string()).unwrap_or_default();
+                // Debug builds: cleanshotz://dev-show-key?code=8&flags=1048576
+                // shows a key in the keystroke display, for testing it
+                // without Input Monitoring permission.
+                #[cfg(debug_assertions)]
+                if command == "dev-show-key" {
+                    let code = query_value(&url, "code").and_then(|v| v.parse().ok()).unwrap_or(0);
+                    let flags = query_value(&url, "flags").and_then(|v| v.parse().ok()).unwrap_or(0);
+                    crate::record::overlays::simulate_key(code, flags);
+                    continue;
+                }
                 // cleanshotz://open-annotate?filepath=/path/to/image.png
                 if command == "open-annotate" {
                     match query_value(&url, "filepath") {

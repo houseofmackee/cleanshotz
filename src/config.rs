@@ -196,6 +196,26 @@ impl Quality {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum KeystrokeMode {
+    #[default]
+    Off,
+    /// Only presses with Command, Control or Option, and keys that never
+    /// type text, so typed text (passwords too) is never shown.
+    Shortcuts,
+    /// Every key.
+    All,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum CameraShape {
+    #[default]
+    Circle,
+    Rounded,
+}
+
 /// Screen recording.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(default)]
@@ -217,6 +237,13 @@ pub struct RecordingSettings {
     pub gif_fps: u32,
     /// Maximum GIF width in pixels; larger recordings are scaled down.
     pub gif_max_width: u32,
+    /// Show the camera in a draggable bubble that is part of the recording.
+    pub camera: bool,
+    /// Camera bubble size in points.
+    pub camera_size: u32,
+    pub camera_shape: CameraShape,
+    /// Show pressed keys in the recording.
+    pub keystrokes: KeystrokeMode,
 }
 
 impl Default for RecordingSettings {
@@ -234,6 +261,10 @@ impl Default for RecordingSettings {
             countdown_seconds: 3,
             gif_fps: 15,
             gif_max_width: 1280,
+            camera: false,
+            camera_size: 180,
+            camera_shape: CameraShape::Circle,
+            keystrokes: KeystrokeMode::Off,
         }
     }
 }

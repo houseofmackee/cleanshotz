@@ -70,6 +70,17 @@ pub struct WindowInfo {
 
 impl Content {
     pub fn fetch() -> Result<Content, CaptureError> {
+        Self::fetch_windows(true)
+    }
+
+    /// Like [`Content::fetch`], but also lists windows that are not on
+    /// screen right now (for example a fully transparent overlay that a
+    /// recording must include once it appears).
+    pub fn fetch_all() -> Result<Content, CaptureError> {
+        Self::fetch_windows(false)
+    }
+
+    fn fetch_windows(on_screen_only: bool) -> Result<Content, CaptureError> {
         let (tx, rx) = mpsc::sync_channel(1);
         let handler = RcBlock::new(
             move |content: *mut SCShareableContent, error: *mut NSError| {
@@ -85,7 +96,7 @@ impl Content {
         // SAFETY: the handler has the expected signature.
         unsafe {
             SCShareableContent::getShareableContentExcludingDesktopWindows_onScreenWindowsOnly_completionHandler(
-                false, true, &handler,
+                false, on_screen_only, &handler,
             );
         }
         let inner = rx

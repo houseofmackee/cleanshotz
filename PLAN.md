@@ -205,9 +205,15 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   and discard from an on-screen control bar; red border around the area;
   recordings appear in Quick Access. GIFs use ImageIO's own palette
   reduction, so no extra quantizer is needed.
-- Still to do: webcam overlay, keystroke display, cursor highlight beyond
-  clicks, Do Not Disturb, mixing system audio and microphone into one
-  track, and a microphone fallback for macOS 14.
+- Webcam overlay and keystroke display: done. The camera bubble and the
+  keystroke pill float just below status level and are created before the
+  recording filter (which lists off-screen windows too), so recordings
+  include them while still leaving the control bar out. Keystrokes default
+  to shortcuts only, so typed text never appears. Neither is shown in
+  window recordings, which capture only the chosen window.
+- Still to do: cursor highlight beyond clicks, Do Not Disturb, mixing
+  system audio and microphone into one track, and a microphone fallback
+  for macOS 14.
 - Platform limits: ScreenCaptureKit records audio from applications only,
   not command-line tools such as `afplay`.
 

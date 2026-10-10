@@ -95,6 +95,12 @@ static KEYS: &[Key] = keys! {
     "f10" => 109, '\u{F70D}'; "f11" => 103, '\u{F70E}'; "f12" => 111, '\u{F70F}';
 };
 
+/// The name of a virtual key code in the ANSI table (`"a"`, `"return"`,
+/// `"f5"`), if known.
+pub fn key_name(code: u32) -> Option<&'static str> {
+    KEYS.iter().find(|k| k.code == code).map(|k| k.name)
+}
+
 fn key_alias(token: &str) -> &str {
     match token {
         "enter" => "return",
