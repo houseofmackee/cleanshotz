@@ -32,6 +32,7 @@ pub fn run(config: Config, config_path: PathBuf) {
     // this covers running the bare binary during development.
     app.setActivationPolicy(NSApplicationActivationPolicy::Accessory);
 
+    app.setMainMenu(Some(&main_menu(mtm)));
     let delegate = AppDelegate::new(mtm, config, config_path);
     app.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
     app.run();
@@ -65,12 +66,38 @@ define_class!(
             tracing::info!("CleanShotZ started");
         }
 
+        #[unsafe(method(applicationShouldTerminate:))]
+        fn should_terminate(&self, _app: &NSApplication) -> objc2_app_kit::NSApplicationTerminateReply {
+            if !crate::editor::has_unsaved_changes() {
+                return objc2_app_kit::NSApplicationTerminateReply::TerminateNow;
+            }
+            let choice = alert::show(
+                self.mtm(),
+                "Quit and discard annotations?",
+                "An editor window has changes that were not saved or copied.",
+                &["Cancel", "Quit"],
+            );
+            if choice == 1 {
+                objc2_app_kit::NSApplicationTerminateReply::TerminateNow
+            } else {
+                objc2_app_kit::NSApplicationTerminateReply::TerminateCancel
+            }
+        }
+
         /// `cleanshotz://<command>` URLs, for example
         /// `open cleanshotz://capture-area`.
         #[unsafe(method(application:openURLs:))]
         fn open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
             for url in urls.iter() {
                 let command = url.host().map(|h| h.to_string()).unwrap_or_default();
+                // cleanshotz://open-annotate?filepath=/path/to/image.png
+                if command == "open-annotate" {
+                    match query_value(&url, "filepath") {
+                        Some(path) => crate::editor::open_file(self.mtm(), std::path::Path::new(&path)),
+                        None => tracing::warn!("open-annotate needs a filepath parameter"),
+                    }
+                    continue;
+                }
                 match Action::from_url_command(&command) {
                     Some(action) => {
                         tracing::info!(?action, "URL command");
@@ -273,6 +300,8 @@ impl AppDelegate {
                 }
             }
             Action::ReloadSettings => self.reload_settings(),
+            Action::OpenInEditor => crate::editor::open_with_panel(mtm),
+            Action::AnnotateClipboard => crate::editor::open_clipboard(mtm),
             Action::RestoreRecentlyClosed => crate::quick_access::restore_recently_closed(mtm),
             Action::UnlockPins => crate::pin::unlock_all(),
             Action::CloseAllPins => crate::pin::close_all(),
@@ -371,6 +400,8 @@ impl AppDelegate {
         menu.addItem(&self.menu_item(Action::RecordScreen));
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         menu.addItem(&self.menu_item(Action::OpenHistory));
+        menu.addItem(&self.menu_item(Action::OpenInEditor));
+        menu.addItem(&self.menu_item(Action::AnnotateClipboard));
         let restore = self.menu_item(Action::RestoreRecentlyClosed);
         restore.setEnabled(crate::quick_access::has_recently_closed());
         menu.addItem(&restore);
@@ -447,6 +478,61 @@ impl AppDelegate {
 fn show_capture_error(mtm: MainThreadMarker, error: capture::sck::CaptureError) {
     tracing::error!(error = %error, "capture failed");
     alert::show(mtm, "Capture failed", &error.to_string(), &["OK"]);
+}
+
+/// The value of query parameter `name` in `url`, percent-decoded.
+fn query_value(url: &NSURL, name: &str) -> Option<String> {
+    let components =
+        objc2_foundation::NSURLComponents::componentsWithURL_resolvingAgainstBaseURL(url, false)?;
+    components
+        .queryItems()?
+        .iter()
+        .find(|item| item.name().to_string() == name)
+        .and_then(|item| item.value())
+        .map(|v| v.to_string())
+}
+
+/// The app has no visible menu bar, but the main menu still routes key
+/// equivalents: the Edit menu gives text fields and the editor Cut, Copy,
+/// Paste, Select All, Undo and Redo.
+fn main_menu(mtm: MainThreadMarker) -> Retained<NSMenu> {
+    let item = |title: &str, action: objc2::runtime::Sel, key: &str, shift: bool| {
+        // SAFETY: standard responder-chain selectors with a nil target.
+        let item = unsafe {
+            NSMenuItem::initWithTitle_action_keyEquivalent(
+                NSMenuItem::alloc(mtm),
+                &NSString::from_str(title),
+                Some(action),
+                &NSString::from_str(key),
+            )
+        };
+        if shift {
+            item.setKeyEquivalentModifierMask(
+                NSEventModifierFlags::Command | NSEventModifierFlags::Shift,
+            );
+        }
+        item
+    };
+    let edit = NSMenu::new(mtm);
+    edit.setTitle(ns_string!("Edit"));
+    edit.addItem(&item("Undo", sel!(undo:), "z", false));
+    edit.addItem(&item("Redo", sel!(redo:), "z", true));
+    edit.addItem(&NSMenuItem::separatorItem(mtm));
+    edit.addItem(&item("Cut", sel!(cut:), "x", false));
+    edit.addItem(&item("Copy", sel!(copy:), "c", false));
+    edit.addItem(&item("Paste", sel!(paste:), "v", false));
+    edit.addItem(&item("Select All", sel!(selectAll:), "a", false));
+
+    let app_menu = NSMenu::new(mtm);
+    app_menu.addItem(&item("Quit CleanShotZ", sel!(terminate:), "q", false));
+
+    let main = NSMenu::new(mtm);
+    for (title, submenu) in [("CleanShotZ", app_menu), ("Edit", edit)] {
+        let top = titled_item(mtm, title);
+        top.setSubmenu(Some(&submenu));
+        main.addItem(&top);
+    }
+    main
 }
 
 fn titled_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {

@@ -73,6 +73,33 @@ fn attributes(
     NSDictionary::from_slices(&keys, &[font, color])
 }
 
+fn font_attributes(
+    font: &NSFont,
+    color: &NSColor,
+) -> Retained<NSDictionary<NSAttributedStringKey, AnyObject>> {
+    let font: &AnyObject = font.as_ref();
+    let color: &AnyObject = color.as_ref();
+    // SAFETY: reading AppKit constants.
+    let keys = unsafe { [NSFontAttributeName, NSForegroundColorAttributeName] };
+    NSDictionary::from_slices(&keys, &[font, color])
+}
+
+pub fn text_size_with_font(text: &str, font: &NSFont) -> NSSize {
+    let attributes = font_attributes(font, &NSColor::whiteColor());
+    // SAFETY: the attributes map text attribute keys to valid values.
+    unsafe { NSString::from_str(text).sizeWithAttributes(Some(&attributes)) }
+}
+
+/// Draws `text` in `font` with its top-left at `origin`.
+pub fn draw_text_with_font(text: &str, origin: Point, font: &NSFont, color: &NSColor) {
+    let attributes = font_attributes(font, color);
+    // SAFETY: the attributes map text attribute keys to valid values.
+    unsafe {
+        NSString::from_str(text)
+            .drawAtPoint_withAttributes(NSPoint::new(origin.x, origin.y), Some(&attributes));
+    }
+}
+
 pub fn text_size(text: &str, size: f64, weight: Weight) -> NSSize {
     let attributes = attributes(size, weight, &NSColor::whiteColor());
     // SAFETY: the attributes map text attribute keys to valid values.

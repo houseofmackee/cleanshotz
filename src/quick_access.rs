@@ -46,7 +46,7 @@ const RECENTLY_CLOSED_LIMIT: usize = 10;
 
 /// A capture shown (or recently shown) in Quick Access.
 pub struct Item {
-    pub image: CFRetained<CGImage>,
+    image: RefCell<CFRetained<CGImage>>,
     pub scale: f64,
     pub source: Option<Rect>,
     file: RefCell<PathBuf>,
@@ -55,6 +55,27 @@ pub struct Item {
 }
 
 impl Item {
+    pub fn new(
+        image: CFRetained<CGImage>,
+        scale: f64,
+        source: Option<Rect>,
+        file: PathBuf,
+        saved: bool,
+    ) -> Self {
+        Self {
+            image: RefCell::new(image),
+            scale,
+            source,
+            file: RefCell::new(file),
+            saved: Cell::new(saved),
+            png: RefCell::new(None),
+        }
+    }
+
+    pub fn image(&self) -> CFRetained<CGImage> {
+        self.image.borrow().clone()
+    }
+
     pub fn file(&self) -> PathBuf {
         self.file.borrow().clone()
     }
@@ -67,25 +88,26 @@ impl Item {
     pub fn png(&self) -> Option<Vec<u8>> {
         let mut png = self.png.borrow_mut();
         if png.is_none() {
-            *png = image::encode(&self.image, ImageFormat::Png, 1.0);
+            *png = image::encode(&self.image.borrow(), ImageFormat::Png, 1.0);
         }
         png.clone()
     }
 
     /// Size in points.
     pub fn point_size(&self) -> NSSize {
-        let (w, h) = image::pixel_size(&self.image);
+        let (w, h) = image::pixel_size(&self.image.borrow());
         NSSize::new(w as f64 / self.scale, h as f64 / self.scale)
     }
 
     pub fn ns_image(&self) -> Retained<NSImage> {
-        NSImage::initWithCGImage_size(NSImage::alloc(), &self.image, self.point_size())
+        NSImage::initWithCGImage_size(NSImage::alloc(), &self.image.borrow(), self.point_size())
     }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Button {
     Close,
+    Annotate,
     Pin,
     Copy,
     Save,
@@ -131,7 +153,7 @@ pub fn configure(settings: QuickAccessSettings, capture: CaptureSettings) {
 /// have finished.
 pub fn add(mtm: MainThreadMarker, delivered: Delivered) {
     let item = Rc::new(Item {
-        image: delivered.image,
+        image: RefCell::new(delivered.image),
         scale: delivered.scale,
         source: delivered.source,
         file: RefCell::new(delivered.file),
@@ -341,7 +363,7 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
             // Keep the capture-time name the temporary file already has.
             let file = item.file();
             let stem = file.file_stem().map(|s| s.to_string_lossy().into_owned());
-            match output::save_to_directory(&item.image, item.scale, &settings, stem.as_deref()) {
+            match output::save_to_directory(&item.image(), item.scale, &settings, stem.as_deref()) {
                 Ok((path, _)) => {
                     tracing::info!(path = %path.display(), "capture saved from Quick Access");
                     *item.file.borrow_mut() = path;
@@ -355,14 +377,35 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
             pin::pin(mtm, &item);
             close(id, true);
         }
+        Button::Annotate => crate::editor::open_capture(mtm, &item),
     }
 }
 
-fn open_in_default_app(id: u64) {
+fn annotate(mtm: MainThreadMarker, id: u64) {
     if let Some(item) = item_for(id) {
-        let url = NSURL::fileURLWithPath(&NSString::from_str(&item.file().to_string_lossy()));
-        NSWorkspace::sharedWorkspace().openURL(&url);
+        crate::editor::open_capture(mtm, &item);
     }
+}
+
+/// The capture settings Quick Access was configured with.
+pub fn capture_settings() -> CaptureSettings {
+    SHELF.with(|s| s.borrow().capture.clone())
+}
+
+/// After `file` was edited and saved: shows `image` in the cards for it.
+pub fn refresh(file: &std::path::Path, image: CFRetained<CGImage>) {
+    SHELF.with(|s| {
+        let mut shelf = s.borrow_mut();
+        for card in shelf.cards.iter_mut().filter(|c| c.item.file() == file) {
+            *card.item.image.borrow_mut() = image.clone();
+            *card.item.png.borrow_mut() = None;
+            card.item.saved.set(true);
+            card.thumbnail = card.item.ns_image();
+            card.size = card_size(card.item.point_size());
+            card.view.setNeedsDisplay(true);
+        }
+    });
+    layout();
 }
 
 /// Card size in points for an image of `image` points: the image scaled
@@ -402,6 +445,11 @@ fn button_rects(bounds: Rect, saved: bool) -> Vec<(Button, Rect, &'static str)> 
             Button::Pin,
             Rect::new(bounds.max_x() - 8.0 - corner, 8.0, corner, corner),
             "pin.fill",
+        ),
+        (
+            Button::Annotate,
+            Rect::new(bounds.max_x() - 14.0 - 2.0 * corner, 8.0, corner, corner),
+            "pencil",
         ),
         (
             Button::Copy,
@@ -526,7 +574,7 @@ define_class!(
                 Some(button) if self.button_at(self.point(event)) == Some(button) => {
                     defer(move |mtm| perform(mtm, id, button));
                 }
-                None if event.clickCount() == 2 => defer(move |_| open_in_default_app(id)),
+                None if event.clickCount() == 2 => defer(move |mtm| annotate(mtm, id)),
                 _ => {}
             }
         }
@@ -633,7 +681,7 @@ impl CardView {
             for (button, rect, label) in button_rects(bounds, item.is_saved()) {
                 let down = pressed == Some(button);
                 match button {
-                    Button::Close | Button::Pin => {
+                    Button::Close | Button::Pin | Button::Annotate => {
                         let alpha = if down { 0.85 } else { 0.6 };
                         draw::fill_rounded(
                             rect,

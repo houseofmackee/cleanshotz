@@ -126,8 +126,9 @@ default. Options live in the `[capture]` section of the settings file:
 ### Quick Access Overlay
 
 Each capture appears as a thumbnail in the bottom-left corner. Hover it to
-Copy, Save (or Show in Finder once saved), Pin or Close it. Drag it into any
-app to drop the image file there, or double-click it to open it. Closed
+Copy, Save (or Show in Finder once saved), Annotate, Pin or Close it. Drag it
+into any app to drop the image file there, or double-click it to annotate
+it. Closed
 thumbnails can be brought back with Restore Recently Closed in the menu.
 Options live in the `[quick_access]` section of the settings file:
 
@@ -146,12 +147,42 @@ returns to actual size; Cmd+C copies; Escape or Cmd+W closes. Right click
 for opacity, Save As and Lock (clicks pass through to the windows below).
 Unlock pins from the menu bar.
 
+### Annotation editor
+
+Open a capture from its thumbnail (Annotate, or double-click), any image or
+project with Open in Editor…, or the clipboard image with Annotate Clipboard
+Image.
+
+| Tool | Key | |
+| --- | --- | --- |
+| Select | V | Click to select, drag to move, drag handles to resize, Delete to remove |
+| Crop | C | Drag a region; Return applies, Escape resets |
+| Arrow | A | Filled, open or double-headed |
+| Line | L | |
+| Rectangle, Ellipse | R, O | Outline or filled |
+| Pen, Highlighter | P, H | Freehand |
+| Text | T | Click to type, Return to finish; plain or on a colored background |
+| Counter | N | Numbered steps, counting up |
+| Pixelate, Blur | X, B | Hide sensitive content |
+| Spotlight | S | Dim everything else |
+| Background | G | Gradient or solid backdrop with padding, rounded corners, shadow and aspect ratio |
+
+Hold Shift for squares, circles and 45-degree lines. Color, width and style
+changes apply to the selected annotation too. Cmd+Z and Shift+Cmd+Z undo and
+redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
+for opened images, saves a new capture). The ••• menu has Save As…, Save
+Project… and Pin to Screen.
+
+Projects (`.cszdoc`) keep the original image and every annotation editable.
+They are plain JSON, documented in `src/editor/project.rs`.
+
 ### URL scheme
 
 Other apps and scripts can trigger captures with `open cleanshotz://<command>`:
 `capture-area`, `capture-previous-area`, `capture-fullscreen`,
-`capture-window`, `self-timer` and `restore-recently-closed`. The names match
-CleanShot X's URL scheme.
+`capture-window`, `self-timer`, `restore-recently-closed` and
+`open-from-clipboard`. `open-annotate?filepath=/path/to/image.png` opens an
+image or project in the editor. The names match CleanShot X's URL scheme.
 
 ## License
 

@@ -2,7 +2,9 @@
 //! points with a top-left origin (y grows downward), the same space
 //! ScreenCaptureKit uses for `sourceRect`.
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+use serde::{Deserialize, Serialize};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
@@ -14,7 +16,7 @@ impl Point {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
 pub struct Rect {
     pub x: f64,
     pub y: f64,

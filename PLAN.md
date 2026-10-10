@@ -166,13 +166,19 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   temporary file so they can still be dragged out; temporary files are
   cleared on the next launch.
 
-### M4: Annotation editor
+### M4: Annotation editor (done)
 - Document model (layers of shapes with z-order), undo/redo, serialization to `.cszdoc`.
 - Tools: select/move, crop, arrow (styles), line, rectangle, ellipse, pen,
   highlighter, text (styles), counter, pixelate, blur, spotlight, image paste.
 - Background tool: padding, solid/gradient/image backgrounds, corner radius,
   shadow, aspect ratio presets, saved presets.
 - Combine multiple captures; export and copy.
+- Notes: blur and pixelate resample the original image (no CoreImage
+  dependency). `.cszdoc` is JSON with the image embedded as base64 PNG
+  rather than a zip, so it needs no zip library and stays easy to inspect.
+  Not done yet: image paste, combining captures, image backgrounds, saved
+  background presets and an app icon. Quitting asks before discarding
+  unsaved annotations.
 
 ### M5: OCR and redaction
 - Capture Text: region OCR to clipboard, language selection, line break handling.

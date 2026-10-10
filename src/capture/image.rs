@@ -4,6 +4,7 @@
 use std::ffi::c_void;
 use std::ptr::{self, NonNull};
 
+use objc2_core_foundation::{CFData, CFURL};
 use objc2_core_foundation::{
     CFDictionary, CFMutableData, CFNumber, CFRetained, CFString, CGPoint, CGRect, CGSize,
 };
@@ -11,7 +12,9 @@ use objc2_core_graphics::{
     CGBitmapContextCreateImage, CGBitmapContextGetBytesPerRow, CGBitmapContextGetData,
     CGColorSpace, CGContext, CGImage, CGInterpolationQuality, kCGColorSpaceSRGB,
 };
-use objc2_image_io::{CGImageDestination, kCGImageDestinationLossyCompressionQuality};
+use objc2_image_io::{
+    CGImageDestination, CGImageSource, kCGImageDestinationLossyCompressionQuality,
+};
 
 use super::geometry::Rect;
 use crate::config::ImageFormat;
@@ -87,25 +90,42 @@ pub fn trim_transparent(image: &CGImage) -> Option<CFRetained<CGImage>> {
     )
 }
 
-/// Draws `image` scaled to `width` x `height` into a new 8-bit
-/// premultiplied BGRA bitmap context.
-fn draw_into_bitmap(image: &CGImage, width: usize, height: usize) -> Option<CFRetained<CGContext>> {
-    let space = CGImage::color_space(Some(image))
-        .or_else(|| CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })))?;
+/// A new, transparent 8-bit premultiplied BGRA bitmap context in
+/// `space` (sRGB if `None`).
+pub fn bitmap_context(
+    width: usize,
+    height: usize,
+    space: Option<&CGColorSpace>,
+) -> Option<CFRetained<CGContext>> {
+    let srgb;
+    let space = match space {
+        Some(space) => space,
+        None => {
+            srgb = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
+            &srgb
+        }
+    };
     // SAFETY: a null data pointer makes CoreGraphics allocate the buffer;
     // 8-bit premultiplied BGRA is a supported bitmap context format.
-    let context = unsafe {
+    unsafe {
         let raw = CGBitmapContextCreate(
             ptr::null_mut(),
             width,
             height,
             8,
             0,
-            Some(&space),
+            Some(space),
             K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST | K_CG_BITMAP_BYTE_ORDER_32_LITTLE,
         )?;
-        CFRetained::from_raw(raw)
-    };
+        Some(CFRetained::from_raw(raw))
+    }
+}
+
+/// Draws `image` scaled to `width` x `height` into a new 8-bit
+/// premultiplied BGRA bitmap context.
+fn draw_into_bitmap(image: &CGImage, width: usize, height: usize) -> Option<CFRetained<CGContext>> {
+    let space = CGImage::color_space(Some(image));
+    let context = bitmap_context(width, height, space.as_deref())?;
     CGContext::set_interpolation_quality(Some(&context), CGInterpolationQuality::High);
     CGContext::draw_image(
         Some(&context),
@@ -150,4 +170,34 @@ pub fn encode(image: &CGImage, format: ImageFormat, quality: f64) -> Option<Vec<
         }
     }
     Some(data.to_vec())
+}
+
+/// Decodes the first image in `bytes` (PNG, JPEG, HEIC, TIFF, ...).
+pub fn decode(bytes: &[u8]) -> Option<CFRetained<CGImage>> {
+    let data = CFData::from_bytes(bytes);
+    // SAFETY: valid data object; no options.
+    unsafe {
+        let source = CGImageSource::with_data(&data, None)?;
+        source.image_at_index(0, None)
+    }
+}
+
+/// Loads the first image in a file.
+pub fn load(path: &std::path::Path) -> Option<CFRetained<CGImage>> {
+    let url = CFURL::from_file_path(path)?;
+    // SAFETY: valid URL; no options.
+    unsafe {
+        let source = CGImageSource::with_url(&url, None)?;
+        source.image_at_index(0, None)
+    }
+}
+
+/// Pixels per point for an image file: 2 for `name@2x.ext` (the macOS and
+/// CleanShot convention for Retina screenshots), otherwise 1.
+pub fn scale_for_path(path: &std::path::Path) -> f64 {
+    let retina = path
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .is_some_and(|s| s.ends_with("@2x"));
+    if retina { 2.0 } else { 1.0 }
 }

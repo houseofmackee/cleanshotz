@@ -118,7 +118,7 @@ pub fn pin(mtm: MainThreadMarker, item: &Item) {
     let pin = Rc::new(Pin {
         id,
         panel: panel.clone(),
-        image: item.image.clone(),
+        image: item.image(),
         ns_image: item.ns_image(),
         file: item.file(),
         saved: item.is_saved(),

@@ -2,6 +2,7 @@ mod action;
 mod app;
 mod capture;
 mod config;
+mod editor;
 mod logging;
 mod pin;
 mod platform;
@@ -38,6 +39,16 @@ fn main() -> ExitCode {
         Some("--help" | "-h") => {
             println!("{USAGE}");
             ExitCode::SUCCESS
+        }
+        #[cfg(debug_assertions)]
+        Some("--dev-render-sample") if args.len() == 3 => {
+            match editor::render_sample(args[1].as_ref(), args[2].as_ref()) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
         }
         Some(other) => {
             eprintln!("cleanshotz: unknown argument {other:?}\n\n{USAGE}");
