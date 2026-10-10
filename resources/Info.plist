@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleDisplayName</key>
+	<string>CleanShotZ</string>
+	<key>CFBundleExecutable</key>
+	<string>cleanshotz</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.cleanshotz.app</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>CleanShotZ</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleShortVersionString</key>
+	<string>{{VERSION}}</string>
+	<key>CFBundleVersion</key>
+	<string>{{VERSION}}</string>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.cleanshotz.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>cleanshotz</string>
+			</array>
+		</dict>
+	</array>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.productivity</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>14.0</string>
+	<key>LSUIElement</key>
+	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>CleanShotZ shows your camera as an overlay while recording the screen.</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSHumanReadableCopyright</key>
+	<string>CleanShotZ</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>CleanShotZ records your microphone together with screen recordings.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>CleanShotZ captures your screen to take screenshots and recordings.</string>
+</dict>
+</plist>

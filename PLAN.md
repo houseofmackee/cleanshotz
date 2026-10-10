@@ -70,7 +70,7 @@ preference keys).
 - **IPC:** Unix domain socket in the app support dir for the CLI; URL scheme via
   `NSAppleEventManager` `kAEGetURL` handler.
 - **Logging/errors:** `tracing`, `thiserror`, `anyhow` at the edges.
-- **Bundling:** `cargo-bundle` (or a small `xtask`) to produce `CleanShotZ.app`,
+- **Bundling:** a small `xtask` (`cargo xtask bundle`) produces `CleanShotZ.app`,
   then `codesign` with a stable identity so the Screen Recording (TCC)
   permission survives rebuilds. Notarize for release.
 
@@ -108,19 +108,23 @@ detectors, config) is kept free of AppKit so it is unit-testable with `cargo tes
 
 Each milestone ends with a usable build and tests for its pure-Rust parts.
 
-### M0: Scaffolding
+### M0: Scaffolding (done)
 - Cargo workspace setup, lints (`clippy -D warnings`), `rustfmt`, CI (GitHub Actions on `macos-14`).
 - `xtask bundle` producing a signed `.app` with `Info.plist` (`LSUIElement`,
   `NSScreenCaptureUsageDescription`, `NSMicrophoneUsageDescription`,
   `NSCameraUsageDescription`, URL scheme `cleanshotz`).
 - `tracing` logging to `~/Library/Logs/CleanShotZ`.
 
-### M1: Menu bar shell, settings, hotkeys, permissions
+### M1: Menu bar shell, settings, hotkeys, permissions (done)
 - NSStatusItem menu mirroring CleanShot's (Capture Area, Previous Area,
   Fullscreen, Window, Scrolling, Text, Record, History, Settings, Quit).
-- Onboarding that checks and requests Screen Recording / Accessibility / Mic / Camera.
-- Global hotkeys with a recorder control in settings; `config.toml` load/save.
+- First-launch onboarding for Screen Recording; a Permissions submenu shows
+  and requests Screen Recording / Accessibility / Mic / Camera.
+- Global hotkeys (Carbon) configured in `config.toml`, with Open Settings File
+  and Reload Settings menu items; conflicts and typos are reported in an alert.
 - Launch at login (`SMAppService`).
+- Moved to M9: a native Settings window with a shortcut recorder control
+  (`config.toml` stays the source of truth).
 
 ### M2: Still capture core
 - Fullscreen and per-display capture via `SCScreenshotManager`.
@@ -165,6 +169,7 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 
 ### M9: History, uploads, automation
 - History window with thumbnails, search, re-open, re-copy, delete.
+- Native Settings window, including a shortcut recorder.
 - `UploadBackend` trait and S3, HTTP, Imgur, script backends; credentials in Keychain.
 - URL scheme `cleanshotz://` with parity to CleanShot's commands.
 - Socket server + `cleanshotz` CLI; App Intents / AppleScript dictionary.
@@ -191,6 +196,5 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 
 ## 6. Immediate next steps
 
-1. Add `objc2*` dependencies and an `xtask` crate for bundling and signing.
-2. Implement M1 (status item, hotkeys, permissions onboarding).
-3. Implement fullscreen capture to clipboard as the first end-to-end slice.
+1. Implement fullscreen capture to clipboard as the first end-to-end slice (M2).
+2. Area selection overlay and window capture (M2).
