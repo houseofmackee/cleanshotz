@@ -1095,7 +1095,7 @@ impl EditorController {
 
     fn copy_text(&self) {
         if let Some(image) = self.rendered() {
-            crate::ocr::copy_text(image);
+            crate::ocr::copy_text(image, None);
         }
     }
 

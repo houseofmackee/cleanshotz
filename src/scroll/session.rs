@@ -79,8 +79,23 @@ thread_local! {
     static TARGET: RefCell<Option<Retained<ControlTarget>>> = const { RefCell::new(None) };
 }
 
-pub fn start(mtm: MainThreadMarker, settings: CaptureSettings) -> Result<(), CaptureError> {
+/// Starts a scrolling capture. With `area` (a display id and a
+/// display-local rect) it starts there without asking; `autoscroll` turns
+/// on Auto-scroll right away.
+pub fn start(
+    mtm: MainThreadMarker,
+    settings: CaptureSettings,
+    area: Option<(u32, Rect)>,
+    autoscroll: bool,
+) -> Result<(), CaptureError> {
     if STATE.with(|s| !matches!(*s.borrow(), State::Idle)) {
+        return Ok(());
+    }
+    if let Some((display_id, rect)) = area {
+        begin(mtm, display_id, rect, settings);
+        if autoscroll {
+            toggle_auto(mtm);
+        }
         return Ok(());
     }
     let content = Content::fetch()?;
@@ -97,7 +112,12 @@ pub fn start(mtm: MainThreadMarker, settings: CaptureSettings) -> Result<(), Cap
     overlay::begin(mtm, displays, options, move |selection| match selection {
         Some(Selection::Area {
             display_id, rect, ..
-        }) => begin(mtm, display_id, rect, settings),
+        }) => {
+            begin(mtm, display_id, rect, settings);
+            if autoscroll {
+                toggle_auto(mtm);
+            }
+        }
         _ => STATE.with(|s| *s.borrow_mut() = State::Idle),
     });
     Ok(())

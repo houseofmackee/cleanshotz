@@ -91,16 +91,24 @@ pub fn is_recording() -> bool {
 }
 
 /// Starts a recording, or stops the one in progress.
+/// Starts or stops a recording. With `area` (a display id and a
+/// display-local rect) recording starts there without asking.
 pub fn toggle(
     mtm: MainThreadMarker,
     capture: CaptureSettings,
     recording: RecordingSettings,
+    area: Option<(u32, Rect)>,
 ) -> Result<(), CaptureError> {
     if is_recording() {
         stop(mtm, false);
         return Ok(());
     }
     if is_busy() {
+        return Ok(());
+    }
+    if let Some((display_id, rect)) = area {
+        STATE.with(|s| *s.borrow_mut() = State::Preparing);
+        start_target(mtm, Target::Area { display_id, rect }, capture, recording);
         return Ok(());
     }
     let content = Content::fetch()?;
@@ -128,22 +136,30 @@ pub fn toggle(
                 return;
             }
         };
-        let seconds = recording.countdown_seconds.min(10);
-        let begin_now = move || {
-            if let Err(e) = begin(mtm, target, &capture, &recording) {
-                STATE.with(|s| *s.borrow_mut() = State::Idle);
-                tracing::error!(error = %e, "could not start recording");
-                crate::app::alert::show(mtm, "Could not start recording", &e, &["OK"]);
-            }
-        };
-        match (seconds, countdown_place(mtm, target)) {
-            (0, _) | (_, None) => begin_now(),
-            (seconds, Some((screen, rect))) => {
-                countdown::start(mtm, &screen, rect, seconds, begin_now)
-            }
-        }
+        start_target(mtm, target, capture, recording);
     });
     Ok(())
+}
+
+/// Counts down if set to, then starts recording `target`.
+fn start_target(
+    mtm: MainThreadMarker,
+    target: Target,
+    capture: CaptureSettings,
+    recording: RecordingSettings,
+) {
+    let seconds = recording.countdown_seconds.min(10);
+    let begin_now = move || {
+        if let Err(e) = begin(mtm, target, &capture, &recording) {
+            STATE.with(|s| *s.borrow_mut() = State::Idle);
+            tracing::error!(error = %e, "could not start recording");
+            crate::app::alert::show(mtm, "Could not start recording", &e, &["OK"]);
+        }
+    };
+    match (seconds, countdown_place(mtm, target)) {
+        (0, _) | (_, None) => begin_now(),
+        (seconds, Some((screen, rect))) => countdown::start(mtm, &screen, rect, seconds, begin_now),
+    }
 }
 
 /// The screen and display-local rect to center the countdown on.

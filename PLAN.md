@@ -253,6 +253,12 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - URL scheme `cleanshotz://`: extend the capture commands from M2 to full
   parity with CleanShot's commands, including parameters.
 - Socket server + `cleanshotz` CLI; App Intents / AppleScript dictionary.
+  Done: every CleanShot command and parameter (areas, displays, `action`,
+  `linebreaks`, `autoscroll`, desktop icons, Quick Access from a file),
+  checked strictly so typos are errors. The CLI talks to the app over a
+  Unix socket, reports errors and starts the app when needed. Not done
+  yet: `open-settings` tabs (it opens the settings file until the Settings
+  window exists), App Intents and an AppleScript dictionary.
 - Post-capture action pipeline (improvement #8).
 
 ### M10: Polish

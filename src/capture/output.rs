@@ -15,6 +15,7 @@ use objc2_foundation::{NSData, NSString};
 
 use super::geometry::Rect;
 use super::{image, naming};
+use crate::command::After;
 use crate::config::{CaptureSettings, ImageFormat};
 
 /// The macOS screenshot sound. CleanShot's own sounds are not used.
@@ -45,11 +46,19 @@ pub struct Delivered {
 /// Plays the shutter sound, then encodes, saves and copies the capture on a
 /// background thread so large captures do not block the UI. Finally shows
 /// it in the Quick Access Overlay.
+///
+/// A requested `after` action replaces the copy and save settings: `copy`
+/// only copies, `save` only saves, and the others keep the capture in the
+/// unsaved folder and then annotate, upload or pin it.
 pub fn deliver(mtm: MainThreadMarker, captured: Captured, settings: &CaptureSettings) {
     if settings.play_sound {
         play_shutter(mtm);
     }
-    let settings = settings.clone();
+    let mut settings = settings.clone();
+    if let Some(after) = settings.after {
+        settings.copy_to_clipboard = after == After::Copy;
+        settings.save_to_file = after == After::Save;
+    }
     std::thread::spawn(move || {
         let Some(delivered) = process(captured, &settings) else {
             return;
@@ -57,10 +66,24 @@ pub fn deliver(mtm: MainThreadMarker, captured: Captured, settings: &CaptureSett
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
             crate::history::record_image(delivered.image.clone(), delivered.file.clone());
-            if crate::upload::auto_upload() {
+            let upload = settings.after == Some(After::Upload) || crate::upload::auto_upload();
+            if upload {
                 crate::upload::start(mtm, delivered.file.clone());
             }
-            crate::quick_access::add(mtm, delivered);
+            let item = || {
+                crate::quick_access::Item::new(
+                    delivered.image.clone(),
+                    delivered.scale,
+                    delivered.source,
+                    delivered.file.clone(),
+                    delivered.saved,
+                )
+            };
+            match settings.after {
+                Some(After::Annotate) => crate::editor::open_capture(mtm, &item()),
+                Some(After::Pin) => crate::pin::pin(mtm, &item()),
+                _ => crate::quick_access::add(mtm, delivered),
+            }
         });
     });
 }

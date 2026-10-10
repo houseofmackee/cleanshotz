@@ -1,5 +1,5 @@
-//! User-facing commands. Menu items, global hotkeys and (later) the URL
-//! scheme and CLI all resolve to an [`Action`].
+//! User-facing commands from menu items and global hotkeys. URLs and the
+//! command line use [`crate::command`].
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Action {
@@ -97,31 +97,6 @@ impl Action {
             Action::Quit => "Quit CleanShotZ",
         }
     }
-
-    /// Command name in `cleanshotz://<command>` URLs. Names follow
-    /// CleanShot X's URL scheme where an equivalent exists.
-    pub fn url_command(self) -> Option<&'static str> {
-        Some(match self {
-            Action::CaptureArea => "capture-area",
-            Action::CapturePreviousArea => "capture-previous-area",
-            Action::CaptureFullscreen => "capture-fullscreen",
-            Action::CaptureWindow => "capture-window",
-            Action::SelfTimer => "self-timer",
-            Action::CaptureScrolling => "scrolling-capture",
-            Action::CaptureText => "capture-text",
-            Action::RecordScreen => "record-screen",
-            Action::OpenHistory => "open-history",
-            Action::AnnotateClipboard => "open-from-clipboard",
-            Action::RestoreRecentlyClosed => "restore-recently-closed",
-            _ => return None,
-        })
-    }
-
-    pub fn from_url_command(command: &str) -> Option<Self> {
-        Self::ALL
-            .into_iter()
-            .find(|a| a.url_command() == Some(command))
-    }
 }
 
 #[cfg(test)]
@@ -135,15 +110,5 @@ mod tests {
         }
         assert_eq!(Action::from_tag(0), None);
         assert_eq!(Action::from_tag(Action::ALL.len() as isize + 1), None);
-    }
-
-    #[test]
-    fn url_commands_round_trip() {
-        for action in Action::ALL {
-            if let Some(command) = action.url_command() {
-                assert_eq!(Action::from_url_command(command), Some(action));
-            }
-        }
-        assert_eq!(Action::from_url_command("quit"), None);
     }
 }

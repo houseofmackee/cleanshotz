@@ -2,6 +2,7 @@
 //! global hotkeys and first-launch onboarding.
 
 pub(crate) mod alert;
+pub mod server;
 
 use std::cell::{OnceCell, RefCell};
 use std::path::PathBuf;
@@ -19,6 +20,7 @@ use objc2_foundation::{NSArray, NSNotification, NSObjectProtocol, NSString, NSUR
 
 use crate::action::Action;
 use crate::capture::{self, flow};
+use crate::command::{Desktop, Region, Request};
 use crate::config::Config;
 use crate::platform::hotkeys::Hotkeys;
 use crate::platform::login_item;
@@ -64,7 +66,14 @@ define_class!(
             self.install_status_item();
             self.install_hotkeys();
             self.run_onboarding_if_needed();
+            let delegate = self.retain();
+            server::start(self.mtm(), move |url| delegate.handle_url(url));
             tracing::info!("CleanShotZ started");
+        }
+
+        #[unsafe(method(applicationWillTerminate:))]
+        fn will_terminate(&self, _notification: &NSNotification) {
+            server::stop();
         }
 
         #[unsafe(method(applicationShouldTerminate:))]
@@ -101,20 +110,9 @@ define_class!(
                     crate::record::overlays::simulate_key(code, flags);
                     continue;
                 }
-                // cleanshotz://open-annotate?filepath=/path/to/image.png
-                if command == "open-annotate" {
-                    match query_value(&url, "filepath") {
-                        Some(path) => crate::editor::open_file(self.mtm(), std::path::Path::new(&path)),
-                        None => tracing::warn!("open-annotate needs a filepath parameter"),
-                    }
-                    continue;
-                }
-                match Action::from_url_command(&command) {
-                    Some(action) => {
-                        tracing::info!(?action, "URL command");
-                        self.perform(action);
-                    }
-                    None => tracing::warn!(url = %url.absoluteString().unwrap_or_default(), "unknown URL command"),
+                let text = url.absoluteString().map(|s| s.to_string()).unwrap_or_default();
+                if let Err(e) = self.handle_url(&text) {
+                    alert::show(self.mtm(), "CleanShotZ could not run the URL", &format!("{text}\n\n{e}"), &["OK"]);
                 }
             }
         }
@@ -294,7 +292,30 @@ impl AppDelegate {
             | Action::CaptureText
             | Action::CaptureScrolling
             | Action::RecordScreen
-            | Action::SelfTimer => self.capture(action),
+            | Action::SelfTimer => {
+                let request = match action {
+                    Action::CaptureArea => Request::CaptureArea {
+                        region: None,
+                        after: None,
+                    },
+                    Action::CapturePreviousArea => Request::CapturePreviousArea { after: None },
+                    Action::CaptureFullscreen => Request::CaptureFullscreen { after: None },
+                    Action::CaptureWindow => Request::CaptureWindow { after: None },
+                    Action::SelfTimer => Request::SelfTimer { after: None },
+                    Action::CaptureText => Request::CaptureText {
+                        file: None,
+                        region: None,
+                        line_breaks: None,
+                    },
+                    Action::CaptureScrolling => Request::ScrollingCapture {
+                        region: None,
+                        autoscroll: false,
+                    },
+                    _ => Request::RecordScreen { region: None },
+                };
+                // Errors were already shown.
+                let _ = self.handle(request);
+            }
             Action::OpenSettingsFile => {
                 // `open -t` uses the default text editor regardless of how
                 // .toml files are associated.
@@ -340,66 +361,172 @@ impl AppDelegate {
         crate::upload::configure(config.upload.clone());
     }
 
-    fn capture(&self, action: Action) {
+    /// Runs a `cleanshotz://` URL from Launch Services or the command line.
+    fn handle_url(&self, url: &str) -> Result<(), String> {
+        let request = crate::command::parse_url(url)?;
+        tracing::info!(?request, "command");
+        self.handle(request)
+    }
+
+    /// Runs a request. Errors in the request itself are returned; errors
+    /// in an interactive capture that it starts are shown later.
+    fn handle(&self, request: Request) -> Result<(), String> {
         let mtm = self.mtm();
-        if Permission::ScreenRecording.status() != Status::Granted {
-            let choice = alert::show(
-                mtm,
-                "Screen Recording permission is needed",
-                "Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
-                 Recording, then try again. macOS may ask you to reopen the app.",
-                &["Open System Settings", "Cancel"],
-            );
-            if choice == 0 {
-                Permission::ScreenRecording.request();
-            }
-            return;
-        }
-        let settings = self.ivars().config.borrow().capture.clone();
+        let mut settings = self.ivars().config.borrow().capture.clone();
         let state_path = crate::state::state_path();
-        let result = match action {
-            Action::CaptureFullscreen => capture::capture_fullscreen(mtm, &settings),
-            Action::CapturePreviousArea => {
-                flow::capture_previous_area(mtm, settings, state_path, show_capture_error)
-            }
-            Action::CaptureArea => flow::start(
-                mtm,
-                flow::Kind::Area,
-                settings,
-                state_path,
-                show_capture_error,
-            ),
-            Action::CaptureWindow => flow::start(
-                mtm,
-                flow::Kind::Window,
-                settings,
-                state_path,
-                show_capture_error,
-            ),
-            Action::SelfTimer => flow::start(
-                mtm,
-                flow::Kind::SelfTimer,
-                settings,
-                state_path,
-                show_capture_error,
-            ),
-            Action::CaptureText => flow::start(
-                mtm,
-                flow::Kind::Text,
-                settings,
-                state_path,
-                show_capture_error,
-            ),
-            Action::CaptureScrolling => crate::scroll::start(mtm, settings),
-            Action::RecordScreen => {
-                let recording = self.ivars().config.borrow().recording.clone();
-                crate::record::toggle(mtm, settings, recording)
-            }
-            _ => unreachable!("{action:?} is not a capture action"),
-        };
-        if let Err(e) = result {
+        let error = |e: capture::sck::CaptureError| {
+            let message = e.to_string();
             show_capture_error(mtm, e);
+            message
+        };
+        let interactive = |kind, settings| {
+            flow::start(mtm, kind, settings, state_path.clone(), show_capture_error).map_err(error)
+        };
+        match request {
+            Request::CaptureArea { region, after } => {
+                self.require_screen_recording()?;
+                settings.after = after;
+                match region {
+                    Some(region) => {
+                        let (display_id, rect) = resolve_region(mtm, region)?;
+                        capture::capture_rect(mtm, display_id, rect, &settings).map_err(error)
+                    }
+                    None => interactive(flow::Kind::Area, settings),
+                }
+            }
+            Request::CapturePreviousArea { after } => {
+                self.require_screen_recording()?;
+                settings.after = after;
+                flow::capture_previous_area(mtm, settings, state_path.clone(), show_capture_error)
+                    .map_err(error)
+            }
+            Request::CaptureFullscreen { after } => {
+                self.require_screen_recording()?;
+                settings.after = after;
+                capture::capture_fullscreen(mtm, &settings).map_err(error)
+            }
+            Request::CaptureWindow { after } => {
+                self.require_screen_recording()?;
+                settings.after = after;
+                interactive(flow::Kind::Window, settings)
+            }
+            Request::SelfTimer { after } => {
+                self.require_screen_recording()?;
+                settings.after = after;
+                interactive(flow::Kind::SelfTimer, settings)
+            }
+            Request::CaptureText {
+                file: Some(file),
+                line_breaks,
+                ..
+            } => {
+                let image = capture::image::load(&file)
+                    .ok_or_else(|| format!("{} is not an image", file.display()))?;
+                crate::ocr::copy_text(image, line_breaks);
+                Ok(())
+            }
+            Request::CaptureText {
+                file: None,
+                region,
+                line_breaks,
+            } => {
+                self.require_screen_recording()?;
+                settings.line_breaks = line_breaks;
+                match region {
+                    Some(region) => {
+                        let (display_id, rect) = resolve_region(mtm, region)?;
+                        // Full resolution, as for a selected area.
+                        settings.downscale_retina = false;
+                        settings.show_cursor = false;
+                        let captured =
+                            capture::grab_rect(display_id, rect, &settings).map_err(error)?;
+                        crate::ocr::copy_text(captured.image, line_breaks);
+                        Ok(())
+                    }
+                    None => interactive(flow::Kind::Text, settings),
+                }
+            }
+            Request::ScrollingCapture { region, autoscroll } => {
+                self.require_screen_recording()?;
+                let area = region.map(|r| resolve_region(mtm, r)).transpose()?;
+                crate::scroll::start(mtm, settings, area, autoscroll).map_err(error)
+            }
+            Request::RecordScreen { region } => {
+                self.require_screen_recording()?;
+                let area = region.map(|r| resolve_region(mtm, r)).transpose()?;
+                let recording = self.ivars().config.borrow().recording.clone();
+                crate::record::toggle(mtm, settings, recording, area).map_err(error)
+            }
+            Request::Pin { file } => {
+                let Some(file) = file.or_else(|| choose_image(mtm)) else {
+                    return Ok(());
+                };
+                let image = capture::image::load(&file)
+                    .ok_or_else(|| format!("{} is not an image", file.display()))?;
+                let scale = capture::image::scale_for_path(&file);
+                let item = crate::quick_access::Item::new(image, scale, None, file, true);
+                crate::pin::pin(mtm, &item);
+                Ok(())
+            }
+            Request::OpenAnnotate { file: Some(file) } => {
+                crate::editor::open_file(mtm, &file);
+                Ok(())
+            }
+            Request::OpenAnnotate { file: None } => {
+                crate::editor::open_with_panel(mtm);
+                Ok(())
+            }
+            Request::OpenFromClipboard => {
+                crate::editor::open_clipboard(mtm);
+                Ok(())
+            }
+            Request::AddQuickAccessOverlay { file } => add_to_quick_access(mtm, file),
+            Request::DesktopIcons(change) => {
+                match change {
+                    Desktop::Toggle => crate::desktop_icons::toggle(mtm),
+                    Desktop::Hide => crate::desktop_icons::set_hidden(mtm, true),
+                    Desktop::Show => crate::desktop_icons::set_hidden(mtm, false),
+                }
+                Ok(())
+            }
+            Request::OpenHistory => {
+                crate::history::open_window(mtm);
+                Ok(())
+            }
+            Request::RestoreRecentlyClosed => {
+                crate::quick_access::restore_recently_closed(mtm);
+                Ok(())
+            }
+            Request::OpenSettings { tab: _ } => {
+                self.perform(Action::OpenSettingsFile);
+                Ok(())
+            }
+            Request::Quit => {
+                // After replying, so the command line hears back.
+                dispatch2::DispatchQueue::main().exec_async(move || {
+                    let mtm = MainThreadMarker::new().expect("runs on the main thread");
+                    NSApplication::sharedApplication(mtm).terminate(None);
+                });
+                Ok(())
+            }
         }
+    }
+
+    fn require_screen_recording(&self) -> Result<(), String> {
+        if Permission::ScreenRecording.status() == Status::Granted {
+            return Ok(());
+        }
+        let choice = alert::show(
+            self.mtm(),
+            "Screen Recording permission is needed",
+            "Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
+             Recording, then try again. macOS may ask you to reopen the app.",
+            &["Open System Settings", "Cancel"],
+        );
+        if choice == 0 {
+            Permission::ScreenRecording.request();
+        }
+        Err("CleanShotZ does not have Screen Recording permission".into())
     }
 
     fn populate_menu(&self, menu: &NSMenu) {
@@ -507,6 +634,66 @@ impl AppDelegate {
 fn show_capture_error(mtm: MainThreadMarker, error: capture::sck::CaptureError) {
     tracing::error!(error = %error, "capture failed");
     alert::show(mtm, "Capture failed", &error.to_string(), &["OK"]);
+}
+
+/// The display id and display-local rect (top-left origin) for a region
+/// from a request.
+fn resolve_region(
+    mtm: MainThreadMarker,
+    region: Region,
+) -> Result<(u32, capture::geometry::Rect), String> {
+    let screen = match region.display {
+        Some(n) => objc2_app_kit::NSScreen::screens(mtm)
+            .iter()
+            .nth(n - 1)
+            .ok_or_else(|| format!("there is no display {n}"))?,
+        None => capture::screen_under_mouse(mtm).ok_or("no display is available")?,
+    };
+    let id = capture::screen_display_id(&screen).ok_or("no display is available")?;
+    let size = screen.frame().size;
+    let rect = region
+        .on_display((size.width, size.height))
+        .ok_or("the area is not on the display")?;
+    Ok((id, rect))
+}
+
+/// Asks for an image file.
+fn choose_image(mtm: MainThreadMarker) -> Option<PathBuf> {
+    let panel = objc2_app_kit::NSOpenPanel::openPanel(mtm);
+    panel.setCanChooseDirectories(false);
+    NSApplication::sharedApplication(mtm).activate();
+    if panel.runModal() != objc2_app_kit::NSModalResponseOK {
+        return None;
+    }
+    panel.URL()?.path().map(|p| PathBuf::from(p.to_string()))
+}
+
+/// Shows an image or video file in Quick Access.
+fn add_to_quick_access(mtm: MainThreadMarker, file: PathBuf) -> Result<(), String> {
+    if crate::video_editor::is_video(&file) {
+        let thumbnail = crate::record::media::thumbnail(&file)
+            .ok_or_else(|| format!("{} is not a video CleanShotZ can read", file.display()))?;
+        let duration = crate::record::media::duration(&file);
+        let scale =
+            objc2_app_kit::NSScreen::mainScreen(mtm).map_or(2.0, |s| s.backingScaleFactor());
+        crate::quick_access::add_video(mtm, file, thumbnail, scale, duration, true);
+    } else {
+        let image = capture::image::load(&file)
+            .ok_or_else(|| format!("{} is not an image", file.display()))?;
+        let scale = capture::image::scale_for_path(&file);
+        crate::quick_access::add(
+            mtm,
+            capture::output::Delivered {
+                image,
+                scale,
+                source: None,
+                file,
+                saved: true,
+                png: None,
+            },
+        );
+    }
+    Ok(())
 }
 
 /// The value of query parameter `name` in `url`, percent-decoded.

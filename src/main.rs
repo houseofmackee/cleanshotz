@@ -1,7 +1,10 @@
 mod action;
 mod app;
 mod capture;
+mod cli;
+mod command;
 mod config;
+mod desktop_icons;
 mod editor;
 mod history;
 mod logging;
@@ -32,8 +35,9 @@ Usage:
   cleanshotz secret delete NAME
   cleanshotz upload FILE  Upload a file with the configured destination and
                           print its link
-
-Command-line capture commands are planned for milestone M9 (see PLAN.md).";
+  cleanshotz COMMAND [--parameter value]...
+                          Run a command in the app (see below)
+";
 
 fn main() -> ExitCode {
     // Launch Services may pass a `-psn_*` process serial number argument.
@@ -49,7 +53,7 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some("--help" | "-h") => {
-            println!("{USAGE}");
+            println!("{USAGE}\n{}", cli::COMMANDS_HELP);
             ExitCode::SUCCESS
         }
         #[cfg(debug_assertions)]
@@ -131,6 +135,7 @@ fn main() -> ExitCode {
         }
         Some("secret") => secret_command(&args[1..]),
         Some("upload") if args.len() == 2 => upload_command(args[1].as_ref()),
+        Some(command) if cli::is_command(command) => cli::run(&args),
         Some(other) => {
             eprintln!("cleanshotz: unknown argument {other:?}\n\n{USAGE}");
             ExitCode::from(2)

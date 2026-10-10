@@ -112,7 +112,7 @@ fn on_selection(
             } => super::grab_rect(display_id, rect, &settings)?,
             Selection::Window { window_id } => super::grab_window(window_id, &settings)?,
         };
-        crate::ocr::copy_text(captured.image);
+        crate::ocr::copy_text(captured.image, settings.line_breaks);
         return Ok(());
     }
 

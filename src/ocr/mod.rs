@@ -36,12 +36,14 @@ pub fn settings() -> TextSettings {
 }
 
 /// Recognizes the text in `image` on a background thread, copies it to the
-/// clipboard and confirms with a toast.
-pub fn copy_text(image: CFRetained<CGImage>) {
+/// clipboard and confirms with a toast. `line_breaks` overrides the
+/// setting.
+pub fn copy_text(image: CFRetained<CGImage>, line_breaks: Option<bool>) {
     let settings = settings();
+    let keep_line_breaks = line_breaks.unwrap_or(settings.keep_line_breaks);
     std::thread::spawn(move || {
         let result = recognize(&image, &settings, |_| Vec::new())
-            .map(|lines| assemble(&lines, settings.keep_line_breaks));
+            .map(|lines| assemble(&lines, keep_line_breaks));
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
             match result {

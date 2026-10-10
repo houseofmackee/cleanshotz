@@ -224,6 +224,35 @@ pub fn display_filter(
     }
 }
 
+/// A filter for just the wallpaper of `display` (the windows at or below
+/// the desktop window level), or `None` if there are none.
+pub fn wallpaper_filter(
+    content: &Content,
+    display: &SCDisplay,
+) -> Option<Retained<SCContentFilter>> {
+    let wallpaper_level = CGWindowLevelForKey(CGWindowLevelKey::DesktopWindowLevelKey) as isize;
+    // SAFETY: plain property reads.
+    let windows: Vec<Retained<SCWindow>> = unsafe {
+        content
+            .inner
+            .windows()
+            .iter()
+            .filter(|w| w.windowLayer() <= wallpaper_level)
+            .collect()
+    };
+    if windows.is_empty() {
+        return None;
+    }
+    // SAFETY: valid display and window array.
+    Some(unsafe {
+        SCContentFilter::initWithDisplay_includingWindows(
+            SCContentFilter::alloc(),
+            display,
+            &NSArray::from_retained_slice(&windows),
+        )
+    })
+}
+
 /// A filter for recording a whole display, with audio from every app
 /// except this one. Leaves out our transient UI (control bar, overlay)
 /// but keeps our editor windows and pins.

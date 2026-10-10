@@ -327,13 +327,55 @@ sometimes be reconstructed. Text recognition runs entirely on your Mac.
 Projects (`.cszdoc`) keep the original image and every annotation editable.
 They are plain JSON, documented in `src/editor/project.rs`.
 
-### URL scheme
+### URL scheme and command line
 
-Other apps and scripts can trigger captures with `open cleanshotz://<command>`:
-`capture-area`, `capture-previous-area`, `capture-fullscreen`,
-`capture-window`, `self-timer`, `record-screen`, `restore-recently-closed` and
-`open-from-clipboard`. `open-annotate?filepath=/path/to/image.png` opens an
-image or project in the editor. The names match CleanShot X's URL scheme.
+Every command can be run as a URL, `open "cleanshotz://<command>?<parameters>"`,
+or from the command line as `cleanshotz <command> --<parameter> <value>`.
+Commands and parameters match
+[CleanShot X's URL scheme](https://cleanshot.com/docs-api), so existing
+scripts only need the scheme name changed. The command line reports errors
+(and exits with status 1), starts the app if it is not running, and makes
+relative file paths absolute. Link `CleanShotZ.app/Contents/MacOS/cleanshotz`
+into your `PATH` to use it.
+
+| Command | Parameters |
+| --- | --- |
+| `capture-area` | `x`, `y`, `width`, `height`, `display`, `action` |
+| `capture-previous-area` | `action` |
+| `capture-fullscreen` | `action` |
+| `capture-window` | `action` |
+| `self-timer` | `action` |
+| `scrolling-capture` | `x`, `y`, `width`, `height`, `display`, `autoscroll`, `start` |
+| `all-in-one` | `x`, `y`, `width`, `height`, `display` (same as `capture-area`) |
+| `capture-text` | `filepath`, `x`, `y`, `width`, `height`, `display`, `linebreaks` |
+| `record-screen` | `x`, `y`, `width`, `height`, `display` |
+| `pin` | `filepath` (asks for a file without it) |
+| `open-annotate` | `filepath` (asks for a file without it) |
+| `open-from-clipboard` | none |
+| `add-quick-access-overlay` | `filepath` (an image or video) |
+| `hide-desktop-icons`, `show-desktop-icons`, `toggle-desktop-icons` | none |
+| `open-history` | none |
+| `restore-recently-closed` | none |
+| `open-settings` | `tab` |
+| `quit` | none (command line only) |
+
+- `x`, `y`, `width` and `height` are points from the bottom-left corner of
+  the display. With them, the area is captured, recorded or scrolled at once
+  instead of being selected. `display` is 1 for the main display, 2 for the
+  next and so on; without it, the display under the pointer.
+- `action` is `copy`, `save`, `annotate`, `upload` or `pin`: what to do with
+  the screenshot instead of the usual copy and save settings.
+- `linebreaks=false` joins recognized lines with spaces.
+- `autoscroll=true` starts Auto-scroll. `start` is accepted for
+  compatibility; scrolling capture always starts once the area is chosen.
+- Hiding desktop icons covers them (and widgets) with the wallpaper. Finder
+  is not restarted, and quitting CleanShotZ shows them again.
+
+```sh
+cleanshotz capture-area --x 0 --y 0 --width 800 --height 600 --action pin
+cleanshotz capture-text --filepath ~/Desktop/receipt.png --linebreaks false
+open "cleanshotz://record-screen?x=100&y=100&width=1280&height=720"
+```
 
 ## License
 

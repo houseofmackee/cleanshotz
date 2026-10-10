@@ -71,6 +71,13 @@ pub struct CaptureSettings {
     pub show_magnifier: bool,
     pub self_timer_seconds: u32,
     pub play_sound: bool,
+    /// From a URL or command-line request: what to do with the capture
+    /// instead of copying and saving it. Never saved.
+    #[serde(skip)]
+    pub after: Option<crate::command::After>,
+    /// From a `capture-text` request: overrides `keep_line_breaks`.
+    #[serde(skip)]
+    pub line_breaks: Option<bool>,
 }
 
 impl Default for CaptureSettings {
@@ -90,6 +97,8 @@ impl Default for CaptureSettings {
             show_magnifier: true,
             self_timer_seconds: 5,
             play_sound: true,
+            after: None,
+            line_breaks: None,
         }
     }
 }
