@@ -14,6 +14,7 @@ pub struct Config {
     pub capture: CaptureSettings,
     pub quick_access: QuickAccessSettings,
     pub text: TextSettings,
+    pub recording: RecordingSettings,
     pub hotkeys: Hotkeys,
 }
 
@@ -153,6 +154,112 @@ impl Default for TextSettings {
             keep_line_breaks: true,
             languages: Vec::new(),
             language_correction: false,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoFormat {
+    #[default]
+    Mp4,
+    Gif,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Codec {
+    /// H.264 when the size allows it (most compatible), otherwise HEVC.
+    #[default]
+    Auto,
+    H264,
+    Hevc,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Quality {
+    Low,
+    Medium,
+    #[default]
+    High,
+}
+
+impl Quality {
+    /// Target bits per pixel per frame; screen content compresses well.
+    pub fn bits_per_pixel(self) -> f64 {
+        match self {
+            Quality::Low => 0.04,
+            Quality::Medium => 0.07,
+            Quality::High => 0.12,
+        }
+    }
+}
+
+/// Screen recording.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct RecordingSettings {
+    pub format: VideoFormat,
+    pub codec: Codec,
+    pub fps: u32,
+    pub quality: Quality,
+    /// Record at 1x instead of the display's Retina resolution.
+    pub downscale_retina: bool,
+    pub show_cursor: bool,
+    /// Highlight mouse clicks (macOS 15 and later).
+    pub show_clicks: bool,
+    pub system_audio: bool,
+    /// Record the microphone (macOS 15 and later).
+    pub microphone: bool,
+    /// Seconds of countdown before recording starts; 0 starts at once.
+    pub countdown_seconds: u32,
+    pub gif_fps: u32,
+    /// Maximum GIF width in pixels; larger recordings are scaled down.
+    pub gif_max_width: u32,
+}
+
+impl Default for RecordingSettings {
+    fn default() -> Self {
+        Self {
+            format: VideoFormat::Mp4,
+            codec: Codec::Auto,
+            fps: 30,
+            quality: Quality::High,
+            downscale_retina: false,
+            show_cursor: true,
+            show_clicks: true,
+            system_audio: false,
+            microphone: false,
+            countdown_seconds: 3,
+            gif_fps: 15,
+            gif_max_width: 1280,
+        }
+    }
+}
+
+impl RecordingSettings {
+    pub fn fps(&self) -> u32 {
+        self.fps.clamp(1, 120)
+    }
+
+    pub fn gif_fps(&self) -> u32 {
+        self.gif_fps.clamp(1, 50)
+    }
+
+    /// Video bitrate in bits per second for a `width` x `height` recording.
+    pub fn bitrate(&self, width: usize, height: usize) -> u64 {
+        let bits = width as f64 * height as f64 * self.fps() as f64 * self.quality.bits_per_pixel();
+        (bits as u64).clamp(1_000_000, 100_000_000)
+    }
+
+    /// The codec to use for a recording of this size. H.264 tops out at
+    /// 4096 x 2304.
+    pub fn codec_for(&self, width: usize, height: usize) -> Codec {
+        match self.codec {
+            Codec::Auto if width <= 4096 && height <= 2304 => Codec::H264,
+            Codec::Auto => Codec::Hevc,
+            other => other,
         }
     }
 }
@@ -330,6 +437,7 @@ mod tests {
         assert_eq!(config.capture, CaptureSettings::default());
         assert_eq!(config.quick_access, QuickAccessSettings::default());
         assert_eq!(config.text, TextSettings::default());
+        assert_eq!(config.recording, RecordingSettings::default());
     }
 
     #[test]
@@ -339,6 +447,20 @@ mod tests {
         assert_eq!(config.capture.format, ImageFormat::Jpeg);
         assert_eq!(config.capture.jpeg_quality(), 1.0);
         assert!(config.capture.copy_to_clipboard);
+    }
+
+    #[test]
+    fn recording_picks_codec_and_bitrate() {
+        let r = RecordingSettings::default();
+        assert_eq!(r.codec_for(3456, 2234), Codec::H264);
+        assert_eq!(r.codec_for(5120, 2880), Codec::Hevc);
+        let hevc = RecordingSettings {
+            codec: Codec::Hevc,
+            ..Default::default()
+        };
+        assert_eq!(hevc.codec_for(100, 100), Codec::Hevc);
+        assert_eq!(r.bitrate(10, 10), 1_000_000);
+        assert_eq!(r.bitrate(1920, 1080), 7_464_960);
     }
 
     #[test]

@@ -17,8 +17,8 @@ use objc2_core_graphics::{
 };
 use objc2_foundation::{NSArray, NSError};
 use objc2_screen_capture_kit::{
-    SCContentFilter, SCDisplay, SCScreenshotManager, SCShareableContent, SCStreamConfiguration,
-    SCWindow,
+    SCContentFilter, SCDisplay, SCRunningApplication, SCScreenshotManager, SCShareableContent,
+    SCStreamConfiguration, SCWindow,
 };
 
 use super::geometry::Rect;
@@ -209,6 +209,42 @@ pub fn display_filter(
             SCContentFilter::alloc(),
             display,
             excluded,
+        )
+    }
+}
+
+/// A filter for recording a whole display, with audio from every app
+/// except this one. Leaves out our transient UI (control bar, overlay)
+/// but keeps our editor windows and pins.
+pub fn recording_filter(content: &Content, display: &SCDisplay) -> Retained<SCContentFilter> {
+    let own_pid = std::process::id() as i32;
+    // SAFETY: plain property reads.
+    let (own_apps, keep): (Vec<Retained<SCRunningApplication>>, Vec<Retained<SCWindow>>) = unsafe {
+        let apps = content
+            .inner
+            .applications()
+            .iter()
+            .filter(|a| a.processID() == own_pid)
+            .collect();
+        let keep = content
+            .inner
+            .windows()
+            .iter()
+            .filter(|w| {
+                w.owningApplication()
+                    .is_some_and(|a| a.processID() == own_pid)
+                    && w.windowLayer() < OWN_UI_LEVEL
+            })
+            .collect();
+        (apps, keep)
+    };
+    // SAFETY: valid display, application and window arrays.
+    unsafe {
+        SCContentFilter::initWithDisplay_excludingApplications_exceptingWindows(
+            SCContentFilter::alloc(),
+            display,
+            &NSArray::from_retained_slice(&own_apps),
+            &NSArray::from_retained_slice(&keep),
         )
     }
 }

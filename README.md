@@ -141,6 +141,34 @@ Options live in the `[text]` section of the settings file:
 | `languages` | `[]` | Languages to recognize, for example `["en-US", "de-DE"]`; empty uses your system's preferred languages |
 | `language_correction` | `false` | Dictionary-based correction; helps with photos of text, hurts code and identifiers |
 
+### Screen recording
+
+Record Screen (`alt+shift+5`) shows the selection overlay: drag to record an
+area, click to record the whole screen, or press Space and click a window.
+After a short countdown a control bar appears below the area with the
+elapsed time and Pause, Stop and Discard; a red border marks the recorded
+area. Neither shows up in the recording. Press the shortcut again (or
+choose Stop Recording in the menu) to stop. The recording appears in Quick
+Access: drag it out, Copy (puts the file on the clipboard), Save, or
+double-click to play it.
+
+Options live in the `[recording]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `format` | `"mp4"` | `"mp4"` or `"gif"` |
+| `codec` | `"auto"` | `"auto"` (H.264, or HEVC when larger than 4096 x 2304), `"h264"` or `"hevc"` |
+| `fps` | `30` | Frames per second |
+| `quality` | `"high"` | `"low"`, `"medium"` or `"high"` |
+| `downscale_retina` | `false` | Record at 1x instead of Retina resolution |
+| `show_cursor` | `true` | Include the pointer |
+| `show_clicks` | `true` | Highlight clicks (macOS 15 and later) |
+| `system_audio` | `false` | Record sound from apps |
+| `microphone` | `false` | Record the microphone (macOS 15 and later), as a separate track |
+| `countdown_seconds` | `3` | Countdown before recording; `0` starts at once |
+| `gif_fps` | `15` | GIF frame rate |
+| `gif_max_width` | `1280` | Larger GIFs are scaled down to this width in pixels |
+
 ### Quick Access Overlay
 
 Each capture appears as a thumbnail in the bottom-left corner. Hover it to
@@ -205,7 +233,7 @@ They are plain JSON, documented in `src/editor/project.rs`.
 
 Other apps and scripts can trigger captures with `open cleanshotz://<command>`:
 `capture-area`, `capture-previous-area`, `capture-fullscreen`,
-`capture-window`, `self-timer`, `restore-recently-closed` and
+`capture-window`, `self-timer`, `record-screen`, `restore-recently-closed` and
 `open-from-clipboard`. `open-annotate?filepath=/path/to/image.png` opens an
 image or project in the editor. The names match CleanShot X's URL scheme.
 

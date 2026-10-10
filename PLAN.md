@@ -198,6 +198,18 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Webcam overlay (draggable bubble), click visualization, keystroke HUD,
   cursor highlight, countdown, pause/resume, DND toggle.
 - GIF output via ImageIO with a permissive quantizer (see Encoding above).
+- Status: core done. Area, window and whole-display recording to MP4
+  (H.264, HEVC above 4096 x 2304) or GIF; fps, quality and Retina
+  settings; cursor and click highlights (macOS 15); system audio and
+  microphone (macOS 15) as separate AAC tracks; countdown, pause/resume
+  and discard from an on-screen control bar; red border around the area;
+  recordings appear in Quick Access. GIFs use ImageIO's own palette
+  reduction, so no extra quantizer is needed.
+- Still to do: webcam overlay, keystroke display, cursor highlight beyond
+  clicks, Do Not Disturb, mixing system audio and microphone into one
+  track, and a microphone fallback for macOS 14.
+- Platform limits: ScreenCaptureKit records audio from applications only,
+  not command-line tools such as `afplay`.
 
 ### M7: Video editor
 - Trim with filmstrip, mute, resolution/quality export, convert to GIF.

@@ -52,6 +52,8 @@ pub struct Item {
     file: RefCell<PathBuf>,
     saved: Cell<bool>,
     png: RefCell<Option<Vec<u8>>>,
+    /// For recordings: the duration in seconds. `image` is the thumbnail.
+    video: Option<f64>,
 }
 
 impl Item {
@@ -69,7 +71,12 @@ impl Item {
             file: RefCell::new(file),
             saved: Cell::new(saved),
             png: RefCell::new(None),
+            video: None,
         }
+    }
+
+    pub fn is_video(&self) -> bool {
+        self.video.is_some()
     }
 
     pub fn image(&self) -> CFRetained<CGImage> {
@@ -159,11 +166,58 @@ pub fn add(mtm: MainThreadMarker, delivered: Delivered) {
         file: RefCell::new(delivered.file),
         saved: Cell::new(delivered.saved),
         png: RefCell::new(delivered.png),
+        video: None,
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
     }
     show(mtm, item);
+}
+
+/// Shows a finished recording. `thumbnail` is a frame of it.
+pub fn add_video(
+    mtm: MainThreadMarker,
+    file: PathBuf,
+    thumbnail: CFRetained<CGImage>,
+    scale: f64,
+    duration: f64,
+    saved: bool,
+) {
+    let item = Rc::new(Item {
+        image: RefCell::new(thumbnail),
+        scale,
+        source: None,
+        file: RefCell::new(file),
+        saved: Cell::new(saved),
+        png: RefCell::new(None),
+        video: Some(duration),
+    });
+    if !SHELF.with(|s| s.borrow().settings.enabled) {
+        return;
+    }
+    show(mtm, item);
+}
+
+/// Puts a file on the clipboard (pasting it in Finder, Mail or chat apps
+/// attaches the file).
+pub fn copy_file(path: &std::path::Path) {
+    let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+    let pasteboard = objc2_app_kit::NSPasteboard::generalPasteboard();
+    pasteboard.clearContents();
+    let object: Retained<ProtocolObject<dyn objc2_app_kit::NSPasteboardWriting>> =
+        ProtocolObject::from_retained(url);
+    pasteboard.writeObjects(&NSArray::from_retained_slice(&[object]));
+}
+
+/// `m:ss`, or `h:mm:ss` from an hour on.
+pub fn format_duration(seconds: f64) -> String {
+    let total = seconds.round().max(0.0) as u64;
+    let (h, m, s) = (total / 3600, total / 60 % 60, total % 60);
+    if h > 0 {
+        format!("{h}:{m:02}:{s:02}")
+    } else {
+        format!("{m}:{s:02}")
+    }
 }
 
 pub fn has_recently_closed() -> bool {
@@ -346,6 +400,10 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
     };
     match button {
         Button::Close => close(id, true),
+        Button::Copy if item.is_video() => {
+            copy_file(&item.file());
+            close(id, true);
+        }
         Button::Copy => {
             match item.png() {
                 Some(png) => output::copy_png(&png),
@@ -357,6 +415,18 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
             let url = NSURL::fileURLWithPath(&NSString::from_str(&item.file().to_string_lossy()));
             NSWorkspace::sharedWorkspace()
                 .activateFileViewerSelectingURLs(&NSArray::from_retained_slice(&[url]));
+        }
+        Button::Save if item.is_video() => {
+            let settings = SHELF.with(|s| s.borrow().capture.clone());
+            match save_video_copy(&item.file(), &settings) {
+                Ok(path) => {
+                    tracing::info!(path = %path.display(), "recording saved from Quick Access");
+                    *item.file.borrow_mut() = path;
+                    item.saved.set(true);
+                    close(id, true);
+                }
+                Err(e) => tracing::error!(error = %e, "could not save recording"),
+            }
         }
         Button::Save => {
             let settings = SHELF.with(|s| s.borrow().capture.clone());
@@ -381,10 +451,32 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
     }
 }
 
+/// Double-click: annotate an image, play a recording.
 fn annotate(mtm: MainThreadMarker, id: u64) {
-    if let Some(item) = item_for(id) {
+    let Some(item) = item_for(id) else {
+        return;
+    };
+    if item.is_video() {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&item.file().to_string_lossy()));
+        NSWorkspace::sharedWorkspace().openURL(&url);
+    } else {
         crate::editor::open_capture(mtm, &item);
     }
+}
+
+/// Copies a temporary recording into the save folder, keeping its name.
+fn save_video_copy(file: &std::path::Path, settings: &CaptureSettings) -> Result<PathBuf, String> {
+    let dir = crate::capture::naming::expand_home(&settings.save_directory);
+    std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let stem = file
+        .file_stem()
+        .map_or_else(|| "Recording".into(), |s| s.to_string_lossy().into_owned());
+    let ext = file
+        .extension()
+        .map_or_else(|| "mp4".into(), |e| e.to_string_lossy().into_owned());
+    let path = crate::capture::naming::unique_path(&dir, &stem, &ext);
+    std::fs::copy(file, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
 }
 
 /// The capture settings Quick Access was configured with.
@@ -433,13 +525,13 @@ fn fit(image: NSSize, bounds: Rect) -> Rect {
     )
 }
 
-fn button_rects(bounds: Rect, saved: bool) -> Vec<(Button, Rect, &'static str)> {
+fn button_rects(bounds: Rect, saved: bool, video: bool) -> Vec<(Button, Rect, &'static str)> {
     let corner = 24.0;
     let pill_w = (bounds.width - 32.0).min(120.0);
     let pill_h = 28.0;
     let cx = bounds.x + (bounds.width - pill_w) / 2.0;
     let cy = bounds.y + bounds.height / 2.0;
-    vec![
+    let buttons = vec![
         (Button::Close, Rect::new(8.0, 8.0, corner, corner), "xmark"),
         (
             Button::Pin,
@@ -461,7 +553,12 @@ fn button_rects(bounds: Rect, saved: bool) -> Vec<(Button, Rect, &'static str)> 
             Rect::new(cx, cy + 3.0, pill_w, pill_h),
             if saved { "Show in Finder" } else { "Save" },
         ),
-    ]
+    ];
+    // Recordings cannot be annotated or pinned.
+    buttons
+        .into_iter()
+        .filter(|(b, _, _)| !video || !matches!(b, Button::Annotate | Button::Pin))
+        .collect()
 }
 
 pub struct CardIvars {
@@ -605,8 +702,10 @@ impl CardView {
     }
 
     fn button_at(&self, p: Point) -> Option<Button> {
-        let saved = item_for(self.ivars().id).is_some_and(|i| i.is_saved());
-        button_rects(self.bounds_rect(), saved)
+        let item = item_for(self.ivars().id);
+        let saved = item.as_ref().is_some_and(|i| i.is_saved());
+        let video = item.as_ref().is_some_and(|i| i.is_video());
+        button_rects(self.bounds_rect(), saved, video)
             .into_iter()
             .find(|(_, r, _)| r.contains(p))
             .map(|(b, _, _)| b)
@@ -675,10 +774,29 @@ impl CardView {
             );
         }
 
+        if let Some(duration) = item.video {
+            let label = format!("▶ {}", format_duration(duration));
+            let size = draw::text_size(&label, 11.0, Weight::Semibold);
+            let badge = Rect::new(
+                bounds.max_x() - size.width - 20.0,
+                bounds.max_y() - size.height - 14.0,
+                size.width + 12.0,
+                size.height + 6.0,
+            );
+            draw::fill_rounded(badge, 5.0, &NSColor::colorWithWhite_alpha(0.0, 0.7));
+            draw::draw_text(
+                &label,
+                Point::new(badge.x + 6.0, badge.y + 3.0),
+                11.0,
+                Weight::Semibold,
+                &NSColor::whiteColor(),
+            );
+        }
+
         if ivars.hover.get() {
             draw::fill_rect(bounds, &NSColor::colorWithWhite_alpha(0.0, 0.45));
             let pressed = ivars.pressed.get();
-            for (button, rect, label) in button_rects(bounds, item.is_saved()) {
+            for (button, rect, label) in button_rects(bounds, item.is_saved(), item.is_video()) {
                 let down = pressed == Some(button);
                 match button {
                     Button::Close | Button::Pin | Button::Annotate => {
@@ -726,6 +844,13 @@ mod tests {
         assert_eq!((tall.width, tall.height), (150.0, 160.0));
         let small = card_size(NSSize::new(50.0, 20.0));
         assert_eq!((small.width, small.height), (150.0, 96.0));
+    }
+
+    #[test]
+    fn formats_durations() {
+        assert_eq!(format_duration(4.4), "0:04");
+        assert_eq!(format_duration(75.0), "1:15");
+        assert_eq!(format_duration(3725.0), "1:02:05");
     }
 
     #[test]

@@ -57,6 +57,10 @@ pub struct Options {
     pub freeze: bool,
     /// Pickable windows, front to back.
     pub windows: Vec<WindowInfo>,
+    /// A click without a drag selects the whole display it is on.
+    pub click_selects_display: bool,
+    /// Instructions shown at the top of the screen.
+    pub hint: Option<String>,
 }
 
 pub enum Selection {
@@ -95,6 +99,8 @@ struct Session {
     magnifier: bool,
     freeze: bool,
     windows: Vec<WindowInfo>,
+    click_selects_display: bool,
+    hint: Option<String>,
     cursor: Option<(usize, Point)>,
     drag: Option<Drag>,
     /// Last pointer position while Space is held during a drag.
@@ -146,6 +152,8 @@ pub fn begin(
         magnifier: options.magnifier,
         freeze: options.freeze,
         windows: options.windows,
+        click_selects_display: options.click_selects_display,
+        hint: options.hint,
         cursor: None,
         drag: None,
         space_anchor: None,
@@ -372,7 +380,15 @@ impl Session {
                     frozen,
                 }))
             }
-            // A click without a drag: keep selecting.
+            // A click without a drag selects the display, or keeps selecting.
+            _ if self.click_selects_display => {
+                let display = &self.surfaces[surface].display;
+                Outcome::Done(Some(Selection::Area {
+                    display_id: display.id,
+                    rect: self.surfaces[surface].bounds,
+                    frozen: None,
+                }))
+            }
             _ => Outcome::Continue,
         }
     }
@@ -476,6 +492,15 @@ impl Session {
                     }
                 }
             }
+        }
+
+        if let Some(hint) = &self.hint
+            && self.cursor.map_or(index == 0, |(s, _)| s == index)
+            && self.drag.is_none()
+        {
+            let size = crate::ui::draw::text_size(hint, 13.0, crate::ui::draw::Weight::Medium);
+            let x = ((bounds.width - size.width) / 2.0 - 6.0).round();
+            draw_label(hint, Point::new(x, 48.0), 13.0);
         }
 
         if let Some((s, p)) = self.cursor

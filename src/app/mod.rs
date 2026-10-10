@@ -291,6 +291,7 @@ impl AppDelegate {
             | Action::CaptureFullscreen
             | Action::CaptureWindow
             | Action::CaptureText
+            | Action::RecordScreen
             | Action::SelfTimer => self.capture(action),
             Action::OpenSettingsFile => {
                 // `open -t` uses the default text editor regardless of how
@@ -383,6 +384,10 @@ impl AppDelegate {
                 state_path,
                 show_capture_error,
             ),
+            Action::RecordScreen => {
+                let recording = self.ivars().config.borrow().recording.clone();
+                crate::record::toggle(mtm, settings, recording)
+            }
             _ => unreachable!("{action:?} is not a capture action"),
         };
         if let Err(e) = result {
@@ -406,7 +411,11 @@ impl AppDelegate {
             menu.addItem(&self.menu_item(action));
         }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
-        menu.addItem(&self.menu_item(Action::RecordScreen));
+        let record = self.menu_item(Action::RecordScreen);
+        if crate::record::is_recording() {
+            record.setTitle(ns_string!("Stop Recording"));
+        }
+        menu.addItem(&record);
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         menu.addItem(&self.menu_item(Action::OpenHistory));
         menu.addItem(&self.menu_item(Action::OpenInEditor));

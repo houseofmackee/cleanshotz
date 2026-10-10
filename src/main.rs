@@ -8,6 +8,7 @@ mod ocr;
 mod pin;
 mod platform;
 mod quick_access;
+mod record;
 mod shortcut;
 mod state;
 mod ui;
@@ -59,6 +60,28 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        #[cfg(debug_assertions)]
+        Some("--dev-gif") if args.len() == 3 => {
+            match record::media::to_gif(args[1].as_ref(), args[2].as_ref(), 15, 1280) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        #[cfg(debug_assertions)]
+        Some("--dev-record-sample") if args.len() >= 3 => {
+            let seconds: f64 = args[2].parse().unwrap_or(3.0);
+            let audio = args.get(3).is_some_and(|a| a == "audio");
+            match record::record_sample(args[1].as_ref(), seconds, audio) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         Some(other) => {
             eprintln!("cleanshotz: unknown argument {other:?}\n\n{USAGE}");
             ExitCode::from(2)

@@ -124,7 +124,6 @@ impl Action {
     /// available yet.
     pub fn pending_milestone(self) -> Option<&'static str> {
         match self {
-            Action::RecordScreen => Some("M6"),
             Action::CaptureScrolling => Some("M8"),
             Action::OpenHistory => Some("M9"),
             _ => None,

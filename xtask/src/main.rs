@@ -82,8 +82,14 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
                 "<string>io.github.houseofmackee.cleanshotz</string>",
                 "<string>io.github.houseofmackee.cleanshotz.test</string>",
             )
-            .replace("<string>cleanshotz</string>\n\t\t\t</array>", "<string>cleanshotz-test</string>\n\t\t\t</array>")
-            .replace("<string>CleanShotZ</string>", &format!("<string>{name}</string>"));
+            .replace(
+                "<string>cleanshotz</string>\n\t\t\t</array>",
+                "<string>cleanshotz-test</string>\n\t\t\t</array>",
+            )
+            .replace(
+                "<string>CleanShotZ</string>",
+                &format!("<string>{name}</string>"),
+            );
         if !plist.contains("cleanshotz-test") || !plist.contains(".cleanshotz.test") {
             bail!("Info.plist changed shape; update the test variant replacements in xtask");
         }

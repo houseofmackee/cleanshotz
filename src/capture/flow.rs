@@ -48,6 +48,8 @@ pub fn start(
         magnifier: settings.show_magnifier,
         freeze,
         windows: content.pickable_windows(),
+        click_selects_display: false,
+        hint: None,
     };
     overlay::begin(mtm, displays, options, move |selection| {
         if let Err(e) = on_selection(mtm, selection, kind, &settings, &state_path, on_error) {
@@ -157,14 +159,14 @@ fn capture_selection(
     }
 }
 
-fn screen_for(mtm: MainThreadMarker, display_id: u32) -> Option<objc2::rc::Retained<NSScreen>> {
+pub fn screen_for(mtm: MainThreadMarker, display_id: u32) -> Option<objc2::rc::Retained<NSScreen>> {
     NSScreen::screens(mtm)
         .iter()
         .find(|s| screen_display_id(s) == Some(display_id))
 }
 
 /// One overlay display per screen, with a snapshot when `snapshot` is set.
-fn overlay_displays(
+pub fn overlay_displays(
     mtm: MainThreadMarker,
     content: &Content,
     settings: &CaptureSettings,
