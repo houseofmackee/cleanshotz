@@ -107,7 +107,11 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
         contents.join("MacOS").join(BINARY),
     )
     .context("copying the app binary")?;
-    app_intents_metadata(&profile_dir, &contents.join("Resources"));
+    // Only the real app offers Shortcuts actions; otherwise the Test build
+    // (registered with macOS too) would list every action a second time.
+    if !test {
+        app_intents_metadata(&profile_dir, &contents.join("Resources"));
+    }
 
     sign(
         &app,
