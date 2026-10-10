@@ -143,13 +143,18 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Moved to M9: a native Settings window with a shortcut recorder control
   (`config.toml` stays the source of truth).
 
-### M2: Still capture core
+### M2: Still capture core (done)
 - Fullscreen and per-display capture via `SCScreenshotManager`.
 - Area selection overlay on every display: crosshair, magnifier with pixel grid,
   dimensions label, arrow-key nudging, Shift/Option modifiers, Space to move.
 - Window capture with hover highlight, optional shadow and transparent background.
 - Previous area, self-timer, freeze screen, hide desktop icons during capture.
 - Output: clipboard, file (naming template, format, retina downscale), sound.
+- Done ahead of M9: the `cleanshotz://` URL scheme for the capture commands.
+- Notes: window captures with shadows are taken unscaled on a larger canvas
+  and trimmed, because ScreenCaptureKit's content size excludes the shadow.
+  WebP output moves to M9 with the other export formats (ImageIO cannot
+  write WebP). All-in-One mode is not planned yet.
 
 ### M3: Quick Access Overlay and pinning
 - Stacked thumbnails in a screen corner; drag out as file; hover actions
@@ -188,7 +193,8 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - History window with thumbnails, search, re-open, re-copy, delete.
 - Native Settings window, including a shortcut recorder.
 - `UploadBackend` trait and S3, HTTP, Imgur, script backends; credentials in Keychain.
-- URL scheme `cleanshotz://` with parity to CleanShot's commands.
+- URL scheme `cleanshotz://`: extend the capture commands from M2 to full
+  parity with CleanShot's commands, including parameters.
 - Socket server + `cleanshotz` CLI; App Intents / AppleScript dictionary.
 - Post-capture action pipeline (improvement #8).
 
@@ -236,9 +242,11 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - **TCC permission resets:** unsigned or ad-hoc rebuilds lose Screen Recording
   permission. Mitigation: dev builds are signed with a self-signed
   "CleanShotZ Dev" certificate (`cargo xtask create-dev-cert`).
-- **Desktop icon hiding:** CleanShot covers icons with a wallpaper window
-  rather than toggling Finder; we do the same (desktop-level NSWindow showing
-  the wallpaper) to avoid restarting Finder.
+- **Desktop icon hiding:** CleanShot covers icons with a wallpaper window.
+  CleanShotZ instead leaves Finder's desktop icon windows and Notification
+  Center's widget windows out of the ScreenCaptureKit filter, so nothing on
+  screen changes. Revisit for screen recording if users expect the icons to
+  disappear on screen too.
 - **Scrolling stitch quality** on animated or sticky content needs tuning and a
   test corpus of fixture images.
 - **Naming/trademark (accepted risk):** "CleanShot" is a trademark of

@@ -1,7 +1,7 @@
 //! The menu bar application: `NSApplication` setup, the status item menu,
 //! global hotkeys and first-launch onboarding.
 
-mod alert;
+pub(crate) mod alert;
 
 use std::cell::{OnceCell, RefCell};
 use std::path::PathBuf;
@@ -15,9 +15,10 @@ use objc2_app_kit::{
     NSControlStateValueOn, NSEventModifierFlags, NSImage, NSMenu, NSMenuDelegate, NSMenuItem,
     NSStatusBar, NSStatusItem, NSVariableStatusItemLength,
 };
-use objc2_foundation::{NSNotification, NSObjectProtocol, NSString, ns_string};
+use objc2_foundation::{NSArray, NSNotification, NSObjectProtocol, NSString, NSURL, ns_string};
 
 use crate::action::Action;
+use crate::capture::{self, flow};
 use crate::config::Config;
 use crate::platform::hotkeys::Hotkeys;
 use crate::platform::login_item;
@@ -60,6 +61,22 @@ define_class!(
             self.install_hotkeys();
             self.run_onboarding_if_needed();
             tracing::info!("CleanShotZ started");
+        }
+
+        /// `cleanshotz://<command>` URLs, for example
+        /// `open cleanshotz://capture-area`.
+        #[unsafe(method(application:openURLs:))]
+        fn open_urls(&self, _application: &NSApplication, urls: &NSArray<NSURL>) {
+            for url in urls.iter() {
+                let command = url.host().map(|h| h.to_string()).unwrap_or_default();
+                match Action::from_url_command(&command) {
+                    Some(action) => {
+                        tracing::info!(?action, "URL command");
+                        self.perform(action);
+                    }
+                    None => tracing::warn!(url = %url.absoluteString().unwrap_or_default(), "unknown URL command"),
+                }
+            }
         }
     }
 
@@ -239,6 +256,11 @@ impl AppDelegate {
         }
         let mtm = self.mtm();
         match action {
+            Action::CaptureArea
+            | Action::CapturePreviousArea
+            | Action::CaptureFullscreen
+            | Action::CaptureWindow
+            | Action::SelfTimer => self.capture(action),
             Action::OpenSettingsFile => {
                 // `open -t` uses the default text editor regardless of how
                 // .toml files are associated.
@@ -269,6 +291,56 @@ impl AppDelegate {
         }
     }
 
+    fn capture(&self, action: Action) {
+        let mtm = self.mtm();
+        if Permission::ScreenRecording.status() != Status::Granted {
+            let choice = alert::show(
+                mtm,
+                "Screen Recording permission is needed",
+                "Allow CleanShotZ in System Settings > Privacy & Security > Screen & System Audio \
+                 Recording, then try again. macOS may ask you to reopen the app.",
+                &["Open System Settings", "Cancel"],
+            );
+            if choice == 0 {
+                Permission::ScreenRecording.request();
+            }
+            return;
+        }
+        let settings = self.ivars().config.borrow().capture.clone();
+        let state_path = crate::state::state_path();
+        let result = match action {
+            Action::CaptureFullscreen => capture::capture_fullscreen(mtm, &settings),
+            Action::CapturePreviousArea => {
+                flow::capture_previous_area(mtm, settings, state_path, show_capture_error)
+            }
+            Action::CaptureArea => flow::start(
+                mtm,
+                flow::Kind::Area,
+                settings,
+                state_path,
+                show_capture_error,
+            ),
+            Action::CaptureWindow => flow::start(
+                mtm,
+                flow::Kind::Window,
+                settings,
+                state_path,
+                show_capture_error,
+            ),
+            Action::SelfTimer => flow::start(
+                mtm,
+                flow::Kind::SelfTimer,
+                settings,
+                state_path,
+                show_capture_error,
+            ),
+            _ => unreachable!("{action:?} is not a capture action"),
+        };
+        if let Err(e) = result {
+            show_capture_error(mtm, e);
+        }
+    }
+
     fn populate_menu(&self, menu: &NSMenu) {
         let mtm = self.mtm();
         menu.removeAllItems();
@@ -278,6 +350,7 @@ impl AppDelegate {
             Action::CapturePreviousArea,
             Action::CaptureFullscreen,
             Action::CaptureWindow,
+            Action::SelfTimer,
             Action::CaptureScrolling,
             Action::CaptureText,
         ] {
@@ -349,6 +422,11 @@ impl AppDelegate {
         }
         item
     }
+}
+
+fn show_capture_error(mtm: MainThreadMarker, error: capture::sck::CaptureError) {
+    tracing::error!(error = %error, "capture failed");
+    alert::show(mtm, "Capture failed", &error.to_string(), &["OK"]);
 }
 
 fn titled_item(mtm: MainThreadMarker, title: &str) -> Retained<NSMenuItem> {

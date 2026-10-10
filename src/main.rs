@@ -1,9 +1,11 @@
 mod action;
 mod app;
+mod capture;
 mod config;
 mod logging;
 mod platform;
 mod shortcut;
+mod state;
 
 use std::process::ExitCode;
 

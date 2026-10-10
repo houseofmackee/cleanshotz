@@ -7,6 +7,7 @@ pub enum Action {
     CapturePreviousArea,
     CaptureFullscreen,
     CaptureWindow,
+    SelfTimer,
     CaptureScrolling,
     CaptureText,
     RecordScreen,
@@ -23,11 +24,12 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 17] = [
+    pub const ALL: [Action; 18] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
         Action::CaptureWindow,
+        Action::SelfTimer,
         Action::CaptureScrolling,
         Action::CaptureText,
         Action::RecordScreen,
@@ -61,6 +63,7 @@ impl Action {
             Action::CapturePreviousArea => "Capture Previous Area",
             Action::CaptureFullscreen => "Capture Fullscreen",
             Action::CaptureWindow => "Capture Window",
+            Action::SelfTimer => "Self-Timer",
             Action::CaptureScrolling => "Scrolling Capture",
             Action::CaptureText => "Capture Text",
             Action::RecordScreen => "Record Screen",
@@ -77,14 +80,33 @@ impl Action {
         }
     }
 
+    /// Command name in `cleanshotz://<command>` URLs. Names follow
+    /// CleanShot X's URL scheme where an equivalent exists.
+    pub fn url_command(self) -> Option<&'static str> {
+        Some(match self {
+            Action::CaptureArea => "capture-area",
+            Action::CapturePreviousArea => "capture-previous-area",
+            Action::CaptureFullscreen => "capture-fullscreen",
+            Action::CaptureWindow => "capture-window",
+            Action::SelfTimer => "self-timer",
+            Action::CaptureScrolling => "scrolling-capture",
+            Action::CaptureText => "capture-text",
+            Action::RecordScreen => "record-screen",
+            Action::OpenHistory => "open-history",
+            _ => return None,
+        })
+    }
+
+    pub fn from_url_command(command: &str) -> Option<Self> {
+        Self::ALL
+            .into_iter()
+            .find(|a| a.url_command() == Some(command))
+    }
+
     /// The milestone that implements this action, for actions that are not
     /// available yet.
     pub fn pending_milestone(self) -> Option<&'static str> {
         match self {
-            Action::CaptureArea
-            | Action::CapturePreviousArea
-            | Action::CaptureFullscreen
-            | Action::CaptureWindow => Some("M2"),
             Action::CaptureText => Some("M5"),
             Action::RecordScreen => Some("M6"),
             Action::CaptureScrolling => Some("M8"),
@@ -105,5 +127,15 @@ mod tests {
         }
         assert_eq!(Action::from_tag(0), None);
         assert_eq!(Action::from_tag(Action::ALL.len() as isize + 1), None);
+    }
+
+    #[test]
+    fn url_commands_round_trip() {
+        for action in Action::ALL {
+            if let Some(command) = action.url_command() {
+                assert_eq!(Action::from_url_command(command), Some(action));
+            }
+        }
+        assert_eq!(Action::from_url_command("quit"), None);
     }
 }

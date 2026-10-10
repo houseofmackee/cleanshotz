@@ -85,9 +85,49 @@ a shortcut.
 | Capture Previous Area | `alt+shift+2` |
 | Capture Fullscreen | `alt+shift+3` |
 | Capture Window | `alt+shift+w` |
+| Self-Timer | none |
 | Scrolling Capture | `alt+shift+s` |
 | Capture Text | `alt+shift+o` |
 | Record Screen | `alt+shift+5` |
+
+## Capturing
+
+- **Capture Area:** drag to select, release to capture. Hold Shift for a
+  square, Option to grow from the center, Space while dragging to move the
+  selection. Arrow keys move the pointer by 1 point (10 with Shift). Press
+  Space before dragging to switch to window mode. Escape or right click
+  cancels.
+- **Capture Window:** hover a window and click. Saved on a transparent
+  background, with the window shadow by default.
+- **Capture Fullscreen:** the display under the pointer.
+- **Capture Previous Area:** the last selected area again, without the overlay.
+- **Self-Timer:** select an area or window, then capture after a countdown.
+
+Captures are copied to the clipboard (as PNG) and saved to the Desktop by
+default. Options live in the `[capture]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `copy_to_clipboard` | `true` | Copy each capture to the clipboard |
+| `save_to_file` | `true` | Save each capture to `save_directory` |
+| `save_directory` | `"~/Desktop"` | Where captures are saved |
+| `file_name` | `"CleanShotZ {date} at {time}"` | File name; Retina captures get an `@2x` suffix |
+| `format` | `"png"` | `"png"` or `"jpeg"` |
+| `jpeg_quality` | `0.9` | 0.0 to 1.0 |
+| `downscale_retina` | `false` | Save Retina captures at 1x |
+| `show_cursor` | `false` | Include the pointer in area and fullscreen captures |
+| `freeze_screen` | `false` | Freeze the screen while selecting |
+| `hide_desktop_icons` | `false` | Leave desktop icons and widgets out of captures |
+| `window_shadow` | `true` | Keep the shadow in window captures |
+| `show_magnifier` | `true` | Show the pixel magnifier while selecting |
+| `self_timer_seconds` | `5` | Countdown length, 1 to 60 |
+| `play_sound` | `true` | Play the macOS screenshot sound |
+
+### URL scheme
+
+Other apps and scripts can trigger captures with `open cleanshotz://<command>`:
+`capture-area`, `capture-previous-area`, `capture-fullscreen`,
+`capture-window` and `self-timer`. The names match CleanShot X's URL scheme.
 
 ## License
 
