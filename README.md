@@ -357,10 +357,12 @@ Options live in the `[quick_access]` section of the settings file:
 ### Pinned screenshots
 
 Pin a thumbnail to keep the capture floating above all windows, at the
-place it was captured. Drag to move it. Pinch, Cmd+= and Cmd+- zoom; Cmd+0
-returns to actual size; Cmd+C copies; Escape or Cmd+W closes. Right click
-for opacity, Save As and Lock (clicks pass through to the windows below).
-Unlock pins from the menu bar.
+place it was captured. Drag to move it, or drag a corner to resize it (it
+keeps its shape). Pinch, Cmd+= and Cmd+- zoom; Cmd+0 returns to actual
+size; Cmd+C copies; Escape or Cmd+W closes. Right click for opacity, Save
+As, Lock (clicks pass through to the windows below) and Arrange All Pins,
+which tiles every pin on the screen, scaling them down together if they do
+not fit. Arrange and unlock pins from the menu bar too.
 
 ### Annotation editor
 

@@ -161,8 +161,9 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   (copy, save, annotate, pin, upload, close); auto-close timer; restore recently closed.
 - Pinned screenshots: always on top, resize, opacity, lock/click-through, arrange.
 - Notes: the Annotate and Upload card buttons arrive with M4 and M9. Pins
-  zoom by pinch and keyboard rather than edge dragging. "Arrange" (tiling
-  several pins) is not done yet. Captures that are not saved get a
+  zoom by pinch and keyboard, and resize by dragging a corner (keeping
+  their shape). Arrange tiles all pins in rows on the screen under the
+  pointer, scaling them down together when they do not fit. Captures that are not saved get a
   temporary file so they can still be dragged out; temporary files are
   cleared on the next launch.
 

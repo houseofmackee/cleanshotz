@@ -16,6 +16,7 @@ pub enum Action {
     AnnotateClipboard,
     RestoreRecentlyClosed,
     UnlockPins,
+    ArrangePins,
     CloseAllPins,
     OpenSettings,
     OpenSettingsFile,
@@ -31,7 +32,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 25] = [
+    pub const ALL: [Action; 26] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -45,6 +46,7 @@ impl Action {
         Action::AnnotateClipboard,
         Action::RestoreRecentlyClosed,
         Action::UnlockPins,
+        Action::ArrangePins,
         Action::CloseAllPins,
         Action::OpenSettings,
         Action::OpenSettingsFile,
@@ -86,6 +88,7 @@ impl Action {
             Action::AnnotateClipboard => "Annotate Clipboard Image",
             Action::RestoreRecentlyClosed => "Restore Recently Closed",
             Action::UnlockPins => "Unlock Pinned Screenshots",
+            Action::ArrangePins => "Arrange Pinned Screenshots",
             Action::CloseAllPins => "Close All Pinned Screenshots",
             Action::OpenSettings => "Settings…",
             Action::OpenSettingsFile => "Open Settings File…",

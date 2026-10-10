@@ -1,10 +1,10 @@
 //! Pinned screenshots: captures floating above all windows.
 //!
-//! A pin opens where the capture was taken. Drag it to move it; pinch,
-//! Cmd+= and Cmd+- zoom; Cmd+0 returns to actual size; Cmd+C copies;
-//! Escape or Cmd+W closes. Right click for opacity, lock (clicks pass
-//! through to the windows below), Save As and more. Locked pins are
-//! unlocked from the menu bar.
+//! A pin opens where the capture was taken. Drag it to move it, or drag a
+//! corner to resize it; pinch, Cmd+= and Cmd+- zoom; Cmd+0 returns to
+//! actual size; Cmd+C copies; Escape or Cmd+W closes. Right click for
+//! opacity, lock (clicks pass through to the windows below), Arrange,
+//! Save As and more. Locked pins are unlocked from the menu bar.
 
 use std::cell::{Cell, RefCell};
 use std::path::{Path, PathBuf};
@@ -182,6 +182,96 @@ fn initial_frame(mtm: MainThreadMarker, size: NSSize, source: Option<Rect>) -> N
     )
 }
 
+/// Space around and between arranged pins, in points.
+const ARRANGE_MARGIN: f64 = 16.0;
+const ARRANGE_GAP: f64 = 12.0;
+
+/// Lays out `sizes` in rows, left to right and top to bottom, inside
+/// `area` (top-left origin). If they do not fit at their sizes, all are
+/// scaled by the same factor, as large as fits. Returns one rect per size,
+/// in order, and the factor.
+pub fn arrange_layout(sizes: &[(f64, f64)], area: Rect, gap: f64) -> (Vec<Rect>, f64) {
+    let place = |factor: f64| -> Option<Vec<Rect>> {
+        let (mut x, mut y, mut row_height) = (area.x, area.y, 0.0f64);
+        let mut rects = Vec::with_capacity(sizes.len());
+        for &(w, h) in sizes {
+            let (w, h) = (w * factor, h * factor);
+            if w > area.width || h > area.height {
+                return None;
+            }
+            if x > area.x && x + w > area.max_x() {
+                // Next row.
+                x = area.x;
+                y += row_height + gap;
+                row_height = 0.0;
+            }
+            if y + h > area.max_y() {
+                return None;
+            }
+            rects.push(Rect::new(x, y, w, h));
+            x += w + gap;
+            row_height = row_height.max(h);
+        }
+        Some(rects)
+    };
+    if let Some(rects) = place(1.0) {
+        return (rects, 1.0);
+    }
+    // The largest factor that fits, to within half a percent.
+    let (mut low, mut high) = (0.0, 1.0);
+    let mut best = None;
+    while high - low > 0.005 {
+        let mid = (low + high) / 2.0;
+        match place(mid) {
+            Some(rects) => {
+                best = Some((rects, mid));
+                low = mid;
+            }
+            None => high = mid,
+        }
+    }
+    best.unwrap_or_else(|| (place(0.01).unwrap_or_default(), 0.01))
+}
+
+/// Tiles all pins on the screen under the pointer, in the order they were
+/// pinned, scaling them down together if they do not fit.
+pub fn arrange(mtm: MainThreadMarker) {
+    let pins: Vec<Rc<Pin>> = PINS.with(|p| p.borrow().pins.clone());
+    if pins.is_empty() {
+        return;
+    }
+    let Some(screen) = screen_under_mouse(mtm) else {
+        return;
+    };
+    let v = screen.visibleFrame();
+    // Lay out with a top-left origin, then flip into Cocoa coordinates.
+    let area = Rect::new(
+        0.0,
+        0.0,
+        v.size.width - 2.0 * ARRANGE_MARGIN,
+        v.size.height - 2.0 * ARRANGE_MARGIN,
+    );
+    let sizes: Vec<(f64, f64)> = pins
+        .iter()
+        .map(|pin| {
+            let f = pin.panel.frame();
+            (f.size.width, f.size.height)
+        })
+        .collect();
+    let (rects, _) = arrange_layout(&sizes, area, ARRANGE_GAP);
+    for (pin, r) in pins.iter().zip(rects) {
+        let frame = NSRect::new(
+            NSPoint::new(
+                (v.origin.x + ARRANGE_MARGIN + r.x).round(),
+                (v.origin.y + v.size.height - ARRANGE_MARGIN - r.y - r.height).round(),
+            ),
+            NSSize::new(r.width.round(), r.height.round()),
+        );
+        pin.zoom.set(frame.size.width / pin.base.width);
+        pin.panel.setFrame_display_animate(frame, true, true);
+    }
+}
+
 fn find(id: u64) -> Option<Rc<Pin>> {
     PINS.with(|p| p.borrow().pins.iter().find(|pin| pin.id == id).cloned())
 }
@@ -277,6 +367,7 @@ mod tag {
     pub const ACTUAL_SIZE: isize = 4;
     pub const LOCK: isize = 5;
     pub const CLOSE: isize = 6;
+    pub const ARRANGE: isize = 7;
     /// Opacity items use the percentage plus this offset.
     pub const OPACITY: isize = 100;
 }
@@ -289,6 +380,53 @@ fn defer(f: impl FnOnce(MainThreadMarker) + Send + 'static) {
 
 fn close_rect() -> Rect {
     Rect::new(6.0, 6.0, 22.0, 22.0)
+}
+
+/// How close to a corner (in points) a press starts resizing.
+const CORNER_GRAB: f64 = 14.0;
+
+/// The corner of `bounds` (flipped view coordinates) within reach of `p`,
+/// as its opposite corner in screen coordinates: the point that stays put
+/// while resizing.
+fn grabbed_corner(view: &NSView, bounds: Rect, p: Point) -> Option<NSPoint> {
+    let near = |a: f64, b: f64| (a - b).abs() <= CORNER_GRAB;
+    let left = near(p.x, bounds.x);
+    let right = near(p.x, bounds.max_x());
+    let top = near(p.y, bounds.y);
+    let bottom = near(p.y, bounds.max_y());
+    if !(left || right) || !(top || bottom) {
+        return None;
+    }
+    // The opposite corner, in the view's flipped coordinates.
+    let fixed = NSPoint::new(
+        if left { bounds.max_x() } else { bounds.x },
+        if top { bounds.max_y() } else { bounds.y },
+    );
+    let window = view.window()?;
+    let in_window = view.convertPoint_toView(fixed, None);
+    Some(window.convertPointToScreen(in_window))
+}
+
+/// The frame for resizing from `fixed` (screen points) toward `mouse`,
+/// keeping `aspect` (width / height), at least `min` wide.
+fn resized_frame(fixed: NSPoint, mouse: NSPoint, aspect: f64, min: f64) -> NSRect {
+    let width = (mouse.x - fixed.x)
+        .abs()
+        .max((mouse.y - fixed.y).abs() * aspect)
+        .max(min)
+        .round();
+    let height = (width / aspect).round();
+    let x = if mouse.x < fixed.x {
+        fixed.x - width
+    } else {
+        fixed.x
+    };
+    let y = if mouse.y < fixed.y {
+        fixed.y - height
+    } else {
+        fixed.y
+    };
+    NSRect::new(NSPoint::new(x, y), NSSize::new(width, height))
 }
 
 define_class!(
@@ -310,6 +448,8 @@ define_class!(
 pub struct PinIvars {
     id: u64,
     hover: Cell<bool>,
+    /// While resizing: the corner that stays put, in screen points.
+    resizing: Cell<Option<NSPoint>>,
 }
 
 define_class!(
@@ -360,10 +500,37 @@ define_class!(
                 defer(move |_| close(id));
                 return;
             }
+            let b = self.bounds();
+            let bounds = Rect::new(0.0, 0.0, b.size.width, b.size.height);
+            if let Some(fixed) = grabbed_corner(self, bounds, Point::new(p.x, p.y)) {
+                self.ivars().resizing.set(Some(fixed));
+                if let Some(window) = self.window() {
+                    window.makeKeyWindow();
+                }
+                return;
+            }
             if let Some(window) = self.window() {
                 window.makeKeyWindow();
                 window.performWindowDragWithEvent(event);
             }
+        }
+
+        #[unsafe(method(mouseDragged:))]
+        fn mouse_dragged(&self, _event: &NSEvent) {
+            let (Some(fixed), Some(pin)) = (self.ivars().resizing.get(), find(self.ivars().id))
+            else {
+                return;
+            };
+            let aspect = pin.base.width / pin.base.height;
+            let min = (pin.base.width * MIN_ZOOM).max(24.0);
+            let frame = resized_frame(fixed, NSEvent::mouseLocation(), aspect, min);
+            pin.zoom.set(frame.size.width / pin.base.width);
+            pin.panel.setFrame_display(frame, true);
+        }
+
+        #[unsafe(method(mouseUp:))]
+        fn mouse_up(&self, _event: &NSEvent) {
+            self.ivars().resizing.set(None);
         }
 
         #[unsafe(method(rightMouseDown:))]
@@ -421,6 +588,7 @@ define_class!(
                 tag::ACTUAL_SIZE => set_zoom(&pin, 1.0),
                 tag::LOCK => set_locked(&pin, true),
                 tag::CLOSE => defer(move |_| close(id)),
+                tag::ARRANGE => defer(arrange),
                 t if t > tag::OPACITY => {
                     pin.panel.setAlphaValue((t - tag::OPACITY) as f64 / 100.0);
                 }
@@ -435,6 +603,7 @@ impl PinView {
         let this = Self::alloc(mtm).set_ivars(PinIvars {
             id,
             hover: Cell::new(false),
+            resizing: Cell::new(None),
         });
         // SAFETY: NSView's designated initializer.
         unsafe { msg_send![super(this), initWithFrame: frame] }
@@ -483,6 +652,9 @@ impl PinView {
         opacity_item.setSubmenu(Some(&opacity));
         menu.addItem(&opacity_item);
         add(&menu, "Lock (Click Through)", tag::LOCK);
+        if count() > 1 {
+            add(&menu, "Arrange All Pins", tag::ARRANGE);
+        }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         add(&menu, "Close", tag::CLOSE);
         menu
@@ -519,6 +691,101 @@ impl PinView {
                 &NSColor::colorWithWhite_alpha(0.0, 0.6),
             );
             draw::draw_symbol("xmark", close, 10.0, &NSColor::whiteColor());
+            // Corner marks: drag a corner to resize. White on a dark
+            // outline, so they show on light and dark images alike.
+            let outline = NSColor::colorWithWhite_alpha(0.0, 0.55);
+            let mark = NSColor::colorWithWhite_alpha(1.0, 0.95);
+            let (len, inset) = (10.0, 4.0);
+            for (x, y, dx, dy) in [
+                (bounds.max_x() - inset, bounds.y + inset, -1.0, 1.0),
+                (bounds.x + inset, bounds.max_y() - inset, 1.0, -1.0),
+                (bounds.max_x() - inset, bounds.max_y() - inset, -1.0, -1.0),
+            ] {
+                let horizontal = Rect::new(x.min(x + dx * len), y.min(y + dy * 2.0), len, 2.0);
+                let vertical = Rect::new(x.min(x + dx * 2.0), y.min(y + dy * len), 2.0, len);
+                for (color, grow) in [(&outline, 1.0), (&mark, 0.0)] {
+                    draw::fill_rect(draw::inset(horizontal, -grow), color);
+                    draw::fill_rect(draw::inset(vertical, -grow), color);
+                }
+            }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn arranges_in_rows_at_full_size_when_they_fit() {
+        let area = Rect::new(0.0, 0.0, 1000.0, 800.0);
+        let (rects, factor) = arrange_layout(
+            &[(400.0, 300.0), (400.0, 200.0), (300.0, 300.0)],
+            area,
+            10.0,
+        );
+        assert_eq!(factor, 1.0);
+        assert_eq!(rects[0], Rect::new(0.0, 0.0, 400.0, 300.0));
+        assert_eq!(rects[1], Rect::new(410.0, 0.0, 400.0, 200.0));
+        // Does not fit beside the first two: next row, below the tallest.
+        assert_eq!(rects[2], Rect::new(0.0, 310.0, 300.0, 300.0));
+    }
+
+    #[test]
+    fn scales_everything_down_together_to_fit() {
+        let area = Rect::new(0.0, 0.0, 1000.0, 600.0);
+        let sizes = [(900.0, 500.0), (900.0, 500.0), (900.0, 500.0)];
+        let (rects, factor) = arrange_layout(&sizes, area, 10.0);
+        assert!(factor < 1.0 && factor > 0.3, "{factor}");
+        for r in &rects {
+            assert!(
+                r.x >= 0.0 && r.max_x() <= 1000.0 && r.max_y() <= 600.0,
+                "{r:?}"
+            );
+            assert!((r.width / r.height - 1.8).abs() < 1e-9);
+        }
+        // No two overlap.
+        for (i, a) in rects.iter().enumerate() {
+            for b in &rects[i + 1..] {
+                let o = a.intersection(b);
+                assert!(o.width <= 0.0 || o.height <= 0.0, "{a:?} overlaps {b:?}");
+            }
+        }
+        // Nearly as large as possible: a bit larger would not fit.
+        let bigger: Vec<_> = sizes
+            .iter()
+            .map(|(w, h)| (w * (factor + 0.02), h * (factor + 0.02)))
+            .collect();
+        assert!(arrange_layout(&bigger, area, 10.0).1 < 1.0);
+    }
+
+    #[test]
+    fn a_single_huge_pin_is_scaled_to_the_area() {
+        let (rects, factor) = arrange_layout(
+            &[(4000.0, 2000.0)],
+            Rect::new(0.0, 0.0, 1000.0, 1000.0),
+            10.0,
+        );
+        assert!((factor - 0.25).abs() < 0.01, "{factor}");
+        assert!(rects[0].width <= 1000.0);
+    }
+
+    #[test]
+    fn resizing_keeps_the_shape_and_the_opposite_corner() {
+        // Dragging the top-right corner of a 200 x 100 pin whose
+        // bottom-left corner is at (100, 100).
+        let fixed = NSPoint::new(100.0, 100.0);
+        let f = resized_frame(fixed, NSPoint::new(500.0, 150.0), 2.0, 24.0);
+        assert_eq!((f.origin.x, f.origin.y), (100.0, 100.0));
+        assert_eq!((f.size.width, f.size.height), (400.0, 200.0));
+        // Past the fixed corner: flips over, same shape.
+        let f = resized_frame(fixed, NSPoint::new(20.0, 90.0), 2.0, 24.0);
+        assert_eq!(
+            (f.origin.x, f.origin.y, f.size.width, f.size.height),
+            (20.0, 60.0, 80.0, 40.0)
+        );
+        // Never smaller than the minimum.
+        let f = resized_frame(fixed, NSPoint::new(101.0, 101.0), 2.0, 24.0);
+        assert_eq!((f.size.width, f.size.height), (24.0, 12.0));
     }
 }

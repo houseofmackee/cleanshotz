@@ -338,6 +338,7 @@ impl AppDelegate {
             Action::AnnotateClipboard => crate::editor::open_clipboard(mtm),
             Action::RestoreRecentlyClosed => crate::quick_access::restore_recently_closed(mtm),
             Action::UnlockPins => crate::pin::unlock_all(),
+            Action::ArrangePins => crate::pin::arrange(mtm),
             Action::CloseAllPins => crate::pin::close_all(),
             Action::ToggleLaunchAtLogin => {
                 let enable = !login_item::is_enabled();
@@ -602,6 +603,9 @@ impl AppDelegate {
         if crate::pin::count() > 0 {
             if crate::pin::any_locked() {
                 menu.addItem(&self.menu_item(Action::UnlockPins));
+            }
+            if crate::pin::count() > 1 {
+                menu.addItem(&self.menu_item(Action::ArrangePins));
             }
             menu.addItem(&self.menu_item(Action::CloseAllPins));
         }
