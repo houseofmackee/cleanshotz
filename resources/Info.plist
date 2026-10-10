@@ -8,6 +8,8 @@
 	<string>CleanShotZ</string>
 	<key>CFBundleExecutable</key>
 	<string>cleanshotz</string>
+	<key>CFBundleIconFile</key>
+	<string>AppIcon</string>
 	<key>CFBundleIdentifier</key>
 	<string>io.github.houseofmackee.cleanshotz</string>
 	<key>CFBundleInfoDictionaryVersion</key>

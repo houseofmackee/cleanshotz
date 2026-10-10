@@ -96,6 +96,11 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
     }
     fs::write(contents.join("Info.plist"), plist)?;
     fs::write(contents.join("PkgInfo"), "APPL????")?;
+    fs::copy(
+        root.join("resources/AppIcon.icns"),
+        contents.join("Resources/AppIcon.icns"),
+    )
+    .context("copying the app icon")?;
     // The AppleScript dictionary.
     fs::copy(
         root.join("resources/CleanShotZ.sdef"),
