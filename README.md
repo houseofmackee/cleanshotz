@@ -80,13 +80,23 @@ local development, and release distribution needs a Developer ID (M10).
 
 Set `CLEANSHOTZ_SKIP_ONBOARDING=1` to skip the first-launch permission dialog.
 
+## Settings
+
+Choose Settings… from the menu (Cmd+,) to change options in tabs: General,
+Screenshots, Quick Access, Recording, History, Uploads and Shortcuts.
+Changes apply at once. Everything is stored in the settings file (see
+[Files](#files)), which can also be edited by hand; choose Reload Settings
+afterwards. The tables below list each option's name in the file. Upload
+secrets typed into Settings are stored in the Keychain, not the file.
+
 ## Shortcuts
 
-Defaults avoid the system screenshot shortcuts (Cmd+Shift+3/4/5). Edit the
-`[hotkeys]` section of the settings file, then choose Reload Settings from the
-menu. Format: modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key,
-joined with `+`, for example `cmd+shift+4` or `f5`. An empty string disables
-a shortcut.
+Defaults avoid the system screenshot shortcuts (Cmd+Shift+3/4/5). To change
+one, open Settings > Shortcuts, click it and press the new keys (Escape
+cancels, Delete removes it). A shortcut used by another action moves to the
+new one. In the `[hotkeys]` section of the settings file the format is
+modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
+`+`, for example `cmd+shift+4` or `f5`. An empty string disables a shortcut.
 
 | Action | Default |
 | --- | --- |
@@ -98,6 +108,7 @@ a shortcut.
 | Scrolling Capture | `alt+shift+s` |
 | Capture Text | `alt+shift+o` |
 | Record Screen | `alt+shift+5` |
+| Capture History | none |
 
 ## Capturing
 
@@ -356,7 +367,7 @@ into your `PATH` to use it.
 | `hide-desktop-icons`, `show-desktop-icons`, `toggle-desktop-icons` | none |
 | `open-history` | none |
 | `restore-recently-closed` | none |
-| `open-settings` | `tab` |
+| `open-settings` | `tab`: CleanShot's names, plus `history` and `uploads` |
 | `quit` | none (command line only) |
 
 - `x`, `y`, `width` and `height` are points from the bottom-left corner of

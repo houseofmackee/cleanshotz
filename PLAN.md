@@ -244,6 +244,12 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   #4), thumbnails, filters, retention, and unsaved captures kept in the
   history folder instead of a temp folder.
 - Native Settings window, including a shortcut recorder.
+  Done: toolbar tabs (General, Screenshots, Quick Access, Recording,
+  History, Uploads, Shortcuts) that apply changes at once and write the
+  settings file; upload secrets go to the Keychain; the recorder suspends
+  global shortcuts while recording, refuses Shift-only combinations and
+  moves a shortcut that is already taken. `open-settings?tab=` opens the
+  matching tab.
 - `UploadBackend` trait and S3, HTTP, Imgur, script backends; credentials in Keychain.
   Done: HTTP (multipart POST or PUT, link from text, JSON path or header),
   S3-compatible storage with SigV4, and script backends; secrets in the
@@ -257,8 +263,7 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   `linebreaks`, `autoscroll`, desktop icons, Quick Access from a file),
   checked strictly so typos are errors. The CLI talks to the app over a
   Unix socket, reports errors and starts the app when needed. Not done
-  yet: `open-settings` tabs (it opens the settings file until the Settings
-  window exists), App Intents and an AppleScript dictionary.
+  yet: App Intents and an AppleScript dictionary.
 - Post-capture action pipeline (improvement #8).
 
 ### M10: Polish

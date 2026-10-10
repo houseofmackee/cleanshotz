@@ -219,7 +219,7 @@ impl AppDelegate {
             self.mtm(),
             "Some shortcuts could not be registered",
             &format!(
-                "{}\n\nEdit the [hotkeys] section of the settings file, then choose Reload Settings.",
+                "{}\n\nChoose other shortcuts in Settings > Shortcuts.",
                 errors.join("\n")
             ),
             &["OK"],
@@ -268,6 +268,7 @@ impl AppDelegate {
                 if !errors.is_empty() {
                     self.show_hotkey_errors(&errors);
                 }
+                crate::settings::refresh(self.mtm());
                 tracing::info!("settings reloaded");
             }
             Err(e) => {
@@ -324,6 +325,7 @@ impl AppDelegate {
                     tracing::error!(error = %e, "could not open settings file");
                 }
             }
+            Action::OpenSettings => self.open_settings(crate::settings::Tab::General),
             Action::ReloadSettings => self.reload_settings(),
             Action::OpenHistory => crate::history::open_window(mtm),
             Action::OpenInEditor => crate::editor::open_with_panel(mtm),
@@ -497,8 +499,13 @@ impl AppDelegate {
                 crate::quick_access::restore_recently_closed(mtm);
                 Ok(())
             }
-            Request::OpenSettings { tab: _ } => {
-                self.perform(Action::OpenSettingsFile);
+            Request::OpenSettings { tab } => {
+                match tab.as_deref() {
+                    Some("about") => self.perform(Action::About),
+                    tab => {
+                        self.open_settings(crate::settings::Tab::for_url(tab.unwrap_or("general")))
+                    }
+                }
                 Ok(())
             }
             Request::Quit => {
@@ -510,6 +517,30 @@ impl AppDelegate {
                 Ok(())
             }
         }
+    }
+
+    fn open_settings(&self, tab: crate::settings::Tab) {
+        crate::settings::open(self.mtm(), tab, || {
+            let (a, b, c) = (self.retain(), self.retain(), self.retain());
+            crate::settings::Host {
+                config: Box::new(move || a.ivars().config.borrow().clone()),
+                update: Box::new(move |change| {
+                    b.update_config(|config| change(config));
+                    b.configure_quick_access();
+                    b.register_hotkeys()
+                }),
+                suspend_hotkeys: Box::new(move |suspend| {
+                    if suspend {
+                        if let Some(hotkeys) = c.ivars().hotkeys.get() {
+                            hotkeys.borrow_mut().unregister_all();
+                        }
+                        Vec::new()
+                    } else {
+                        c.register_hotkeys()
+                    }
+                }),
+            }
+        });
     }
 
     fn require_screen_recording(&self) -> Result<(), String> {
@@ -597,6 +628,10 @@ impl AppDelegate {
         let login = self.menu_item(Action::ToggleLaunchAtLogin);
         login.setState(state(login_item::is_enabled()));
         menu.addItem(&login);
+        let settings = self.menu_item(Action::OpenSettings);
+        settings.setKeyEquivalent(ns_string!(","));
+        settings.setKeyEquivalentModifierMask(NSEventModifierFlags::Command);
+        menu.addItem(&settings);
         menu.addItem(&self.menu_item(Action::OpenSettingsFile));
         menu.addItem(&self.menu_item(Action::ReloadSettings));
         menu.addItem(&NSMenuItem::separatorItem(mtm));

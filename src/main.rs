@@ -14,6 +14,7 @@ mod platform;
 mod quick_access;
 mod record;
 mod scroll;
+mod settings;
 mod shortcut;
 mod state;
 mod ui;

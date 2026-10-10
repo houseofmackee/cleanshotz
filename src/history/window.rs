@@ -81,6 +81,9 @@ pub fn open(mtm: MainThreadMarker) {
     NSApplication::sharedApplication(mtm).activate();
     if let Some(window) = controller.ivars().window.get() {
         window.makeKeyAndOrderFront(None);
+        // Front even when macOS declines to activate the app (when opened
+        // from the command line, the terminal stays active).
+        window.orderFrontRegardless();
     }
 }
 

@@ -467,6 +467,46 @@ impl Default for Hotkeys {
 }
 
 impl Hotkeys {
+    /// The actions that can have a global shortcut.
+    pub const ACTIONS: [Action; 9] = [
+        Action::CaptureArea,
+        Action::CapturePreviousArea,
+        Action::CaptureFullscreen,
+        Action::CaptureWindow,
+        Action::SelfTimer,
+        Action::CaptureScrolling,
+        Action::CaptureText,
+        Action::RecordScreen,
+        Action::OpenHistory,
+    ];
+
+    fn slot(&mut self, action: Action) -> Option<&mut String> {
+        Some(match action {
+            Action::CaptureArea => &mut self.capture_area,
+            Action::CapturePreviousArea => &mut self.capture_previous_area,
+            Action::CaptureFullscreen => &mut self.capture_fullscreen,
+            Action::CaptureWindow => &mut self.capture_window,
+            Action::SelfTimer => &mut self.self_timer,
+            Action::CaptureScrolling => &mut self.capture_scrolling,
+            Action::CaptureText => &mut self.capture_text,
+            Action::RecordScreen => &mut self.record_screen,
+            Action::OpenHistory => &mut self.open_history,
+            _ => return None,
+        })
+    }
+
+    /// The shortcut string for `action`, empty when it has none.
+    pub fn get(&self, action: Action) -> String {
+        self.clone().slot(action).cloned().unwrap_or_default()
+    }
+
+    /// Sets (or with an empty string, removes) the shortcut for `action`.
+    pub fn set(&mut self, action: Action, shortcut: String) {
+        if let Some(slot) = self.slot(action) {
+            *slot = shortcut;
+        }
+    }
+
     /// Configured (non-empty) shortcut strings and the action each triggers.
     pub fn bindings(&self) -> Vec<(Action, &str)> {
         [
