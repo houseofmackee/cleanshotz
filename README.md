@@ -12,6 +12,14 @@ and milestones.
 
 CleanShotZ is in early development; see [CHANGELOG.md](CHANGELOG.md).
 
+<img src="docs/screenshots/editor.png" width="800" alt="The annotation editor with arrows, text and a gradient background">
+
+| Quick Access Overlay | Capture history |
+| --- | --- |
+| <img src="docs/screenshots/quick-access.png" width="286" alt="A Quick Access card with its actions"> | <img src="docs/screenshots/history.png" width="460" alt="The capture history window"> |
+
+<img src="docs/screenshots/settings.png" width="448" alt="The Screenshots tab of the Settings window">
+
 ## Install
 
 Requires macOS 14 or later on an Apple Silicon Mac. Download
