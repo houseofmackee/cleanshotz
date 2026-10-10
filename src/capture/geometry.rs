@@ -63,6 +63,15 @@ impl Rect {
         Rect::new(x, y, (max_x - x).max(0.0), (max_y - y).max(0.0))
     }
 
+    /// The smallest rect containing both.
+    pub fn union(&self, other: &Rect) -> Rect {
+        let x = self.x.min(other.x);
+        let y = self.y.min(other.y);
+        let max_x = self.max_x().max(other.max_x());
+        let max_y = self.max_y().max(other.max_y());
+        Rect::new(x, y, max_x - x, max_y - y)
+    }
+
     pub fn offset(&self, dx: f64, dy: f64) -> Rect {
         Rect::new(self.x + dx, self.y + dy, self.width, self.height)
     }

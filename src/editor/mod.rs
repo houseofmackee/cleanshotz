@@ -1,6 +1,8 @@
 //! The annotation editor.
 
 pub mod model;
+pub mod picture;
+pub mod presets;
 pub mod project;
 pub mod render;
 pub mod session;
@@ -18,6 +20,7 @@ use objc2_core_foundation::Type;
 use objc2_foundation::NSString;
 
 use self::model::Document;
+use self::picture::{Origin, Picture};
 use self::render::BaseImage;
 use self::session::Session;
 use crate::capture::image;
@@ -181,38 +184,40 @@ pub fn open_clipboard(mtm: MainThreadMarker) {
         );
         return;
     };
-    let Some(cg) = image::decode(&data.to_vec()) else {
+    let Some(picture) = picture_from_data(&data) else {
         show_error(mtm, "Could not read the clipboard image", "");
         return;
     };
-    // Images carry their resolution: a Retina screenshot reports half its
-    // pixel width as its point width.
-    let points = NSImage::initWithData(NSImage::alloc(), &data).map(|i| i.size().width);
-    let pixels = image::pixel_size(&cg).0 as f64;
-    let scale = points
-        .filter(|w| *w > 0.0)
-        .map_or(1.0, |w| (pixels / w).round().clamp(1.0, 3.0));
     open(
         mtm,
-        BaseImage::new(cg, scale),
+        BaseImage::new(picture.cg().retain(), picture.scale()),
         Document::default(),
         Source::Clipboard,
         "Clipboard Image",
     );
 }
 
-/// `image` on the default background, as the Background tool draws it.
-/// Main thread (it draws with AppKit).
+/// `image` on the saved background preset `preset`, or on the default
+/// background, as the Background tool draws it. Main thread (it draws with
+/// AppKit).
 pub fn with_background(
+    mtm: MainThreadMarker,
     image: &objc2_core_graphics::CGImage,
     scale: f64,
-) -> Option<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>> {
+    preset: Option<&str>,
+) -> Result<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>, String> {
+    let background = match preset {
+        None => model::Background::default(),
+        Some(name) => presets::find(name)
+            .ok_or_else(|| format!("there is no saved background called {name:?}"))?
+            .background(mtm)?,
+    };
     let base = BaseImage::new(image.retain(), scale);
     let doc = Document {
-        background: Some(model::Background::default()),
+        background: Some(background),
         ..Document::default()
     };
-    render::export(&doc, &base)
+    render::export(&doc, &base).ok_or_else(|| "could not draw the background".to_string())
 }
 
 /// Where `image` shows sensitive text (emails, keys, card numbers and
@@ -261,6 +266,45 @@ pub fn with_redactions(
         );
     }
     render::export(&doc, &base)
+}
+
+/// Decodes image data from a pasteboard. Images carry their resolution: a
+/// Retina screenshot reports half its pixel width as its point width.
+fn picture_from_data(data: &objc2_foundation::NSData) -> Option<Picture> {
+    let cg = image::decode(&data.to_vec())?;
+    let points = NSImage::initWithData(NSImage::alloc(), data).map(|i| i.size().width);
+    let pixels = image::pixel_size(&cg).0 as f64;
+    let scale = points
+        .filter(|w| *w > 0.0)
+        .map_or(1.0, |w| (pixels / w).round().clamp(1.0, 3.0));
+    Some(Picture::new(cg, scale, Origin::Pixels))
+}
+
+/// The images on a pasteboard: image files (for example a Quick Access
+/// card or a file dragged from Finder), or else image data.
+pub fn pictures_from(pasteboard: &NSPasteboard) -> Vec<Picture> {
+    let file_url = NSString::from_str("public.file-url");
+    let files: Vec<Picture> = pasteboard
+        .pasteboardItems()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.stringForType(&file_url))
+                .filter_map(|url| objc2_foundation::NSURL::URLWithString(&url))
+                .filter_map(|url| url.path())
+                .filter_map(|path| Picture::load(Path::new(&path.to_string())))
+                .collect()
+        })
+        .unwrap_or_default();
+    if !files.is_empty() {
+        return files;
+    }
+    ["public.png", "public.tiff", "public.jpeg"]
+        .iter()
+        .find_map(|t| pasteboard.dataForType(&NSString::from_str(t)))
+        .and_then(|data| picture_from_data(&data))
+        .into_iter()
+        .collect()
 }
 
 fn show_error(mtm: MainThreadMarker, title: &str, message: &str) {

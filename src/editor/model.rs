@@ -5,6 +5,7 @@
 
 use serde::{Deserialize, Serialize};
 
+use super::picture::Picture;
 use crate::capture::geometry::{Point, Rect};
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -92,6 +93,12 @@ pub enum Shape {
     Spotlight {
         rect: Rect,
     },
+    /// A pasted or dropped image, or a combined capture. May extend past
+    /// the captured image; the canvas grows to include it.
+    Image {
+        rect: Rect,
+        picture: Picture,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -103,7 +110,7 @@ pub struct Annotation {
     pub width: f64,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Fill {
     Solid {
@@ -113,6 +120,10 @@ pub enum Fill {
     Gradient {
         from: Color,
         to: Color,
+    },
+    /// Scaled to cover the canvas.
+    Image {
+        picture: Picture,
     },
 }
 
@@ -140,7 +151,7 @@ impl Aspect {
 }
 
 /// A backdrop around the image (CleanShot's background tool).
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Background {
     pub fill: Fill,
     pub padding: f64,
@@ -205,14 +216,29 @@ impl CanvasLayout {
 }
 
 impl Document {
+    /// Everything there is to show, in image points: the captured image
+    /// plus any image layers placed beyond it.
+    pub fn extent(&self, image_width: f64, image_height: f64) -> Rect {
+        self.annotations
+            .iter()
+            .filter_map(|a| match &a.shape {
+                Shape::Image { rect, .. } => Some(*rect),
+                _ => None,
+            })
+            .fold(
+                Rect::new(0.0, 0.0, image_width, image_height),
+                |extent, rect| extent.union(&rect),
+            )
+    }
+
     pub fn layout(&self, image_width: f64, image_height: f64) -> CanvasLayout {
-        let full = Rect::new(0.0, 0.0, image_width, image_height);
+        let full = self.extent(image_width, image_height);
         let source = self
             .crop
             .map(|c| c.intersection(&full))
             .filter(|c| c.width >= 1.0 && c.height >= 1.0)
             .unwrap_or(full);
-        let Some(bg) = self.background else {
+        let Some(bg) = &self.background else {
             return CanvasLayout {
                 width: source.width,
                 height: source.height,
@@ -328,7 +354,8 @@ impl Annotation {
             | Shape::Ellipse { rect, .. }
             | Shape::Pixelate { rect }
             | Shape::Blur { rect }
-            | Shape::Spotlight { rect } => *rect,
+            | Shape::Spotlight { rect }
+            | Shape::Image { rect, .. } => *rect,
             Shape::Pen { points } | Shape::Highlighter { points } => points_bounds(points),
             Shape::Text { bounds, .. } => *bounds,
             Shape::Counter { center, .. } => {
@@ -374,9 +401,10 @@ impl Annotation {
                 (p.x - center.x).hypot(p.y - center.y) <= self.counter_radius() + tolerance
             }
             Shape::Text { bounds, .. } => expand(*bounds, tolerance).contains(p),
-            Shape::Pixelate { rect } | Shape::Blur { rect } | Shape::Spotlight { rect } => {
-                expand(*rect, tolerance).contains(p)
-            }
+            Shape::Pixelate { rect }
+            | Shape::Blur { rect }
+            | Shape::Spotlight { rect }
+            | Shape::Image { rect, .. } => expand(*rect, tolerance).contains(p),
         }
     }
 
@@ -394,7 +422,8 @@ impl Annotation {
             | Shape::Ellipse { rect, .. }
             | Shape::Pixelate { rect }
             | Shape::Blur { rect }
-            | Shape::Spotlight { rect } => *rect = rect.offset(dx, dy),
+            | Shape::Spotlight { rect }
+            | Shape::Image { rect, .. } => *rect = rect.offset(dx, dy),
             Shape::Pen { points } | Shape::Highlighter { points } => points.iter_mut().for_each(mv),
             Shape::Text { origin, bounds, .. } => {
                 mv(origin);
@@ -415,7 +444,8 @@ impl Annotation {
             | Shape::Ellipse { rect, .. }
             | Shape::Pixelate { rect }
             | Shape::Blur { rect }
-            | Shape::Spotlight { rect } => vec![
+            | Shape::Spotlight { rect }
+            | Shape::Image { rect, .. } => vec![
                 (Handle::TopLeft, Point::new(rect.x, rect.y)),
                 (Handle::TopRight, Point::new(rect.max_x(), rect.y)),
                 (Handle::BottomLeft, Point::new(rect.x, rect.max_y())),
@@ -427,6 +457,11 @@ impl Annotation {
 
     /// Moves `handle` to `p`.
     pub fn drag_handle(&mut self, handle: Handle, p: Point) {
+        if let Shape::Image { rect, picture } = &mut self.shape {
+            let (w, h) = picture.size();
+            *rect = resize_keeping_ratio(*rect, handle, p, w / h);
+            return;
+        }
         match (&mut self.shape, handle) {
             (Shape::Arrow { start, .. } | Shape::Line { start, .. }, Handle::Start) => *start = p,
             (Shape::Arrow { end, .. } | Shape::Line { end, .. }, Handle::End) => *end = p,
@@ -450,6 +485,35 @@ impl Annotation {
             _ => {}
         }
     }
+}
+
+/// Moves `corner` of `rect` toward `p`, keeping the opposite corner and
+/// the width-to-height `ratio`.
+fn resize_keeping_ratio(rect: Rect, corner: Handle, p: Point, ratio: f64) -> Rect {
+    let fixed = match corner {
+        Handle::TopLeft => Point::new(rect.max_x(), rect.max_y()),
+        Handle::TopRight => Point::new(rect.x, rect.max_y()),
+        Handle::BottomLeft => Point::new(rect.max_x(), rect.y),
+        _ => Point::new(rect.x, rect.y),
+    };
+    // The larger of the two proposed sizes wins, so the corner follows
+    // the pointer on whichever axis it moved most. Never smaller than 8.
+    let width = (p.x - fixed.x)
+        .abs()
+        .max((p.y - fixed.y).abs() * ratio)
+        .max(8.0);
+    let height = width / ratio;
+    let x = if p.x < fixed.x {
+        fixed.x - width
+    } else {
+        fixed.x
+    };
+    let y = if p.y < fixed.y {
+        fixed.y - height
+    } else {
+        fixed.y
+    };
+    Rect::new(x, y, width, height)
 }
 
 fn expand(r: Rect, by: f64) -> Rect {

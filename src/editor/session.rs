@@ -4,6 +4,7 @@
 use super::model::{
     Annotation, ArrowStyle, Background, Color, Document, Handle, History, Shape, TextStyle,
 };
+use super::picture::Picture;
 use super::tools::Tool;
 use crate::capture::geometry::{Point, Rect};
 
@@ -43,7 +44,8 @@ pub struct Session {
     pub crop_draft: Option<Rect>,
     /// Changed since the last save or copy.
     pub dirty: bool,
-    image: Rect,
+    /// The captured image's size in points.
+    image_size: (f64, f64),
     drag: Option<Drag>,
 }
 
@@ -62,9 +64,54 @@ impl Session {
             selection: None,
             crop_draft: None,
             dirty: false,
-            image: Rect::new(0.0, 0.0, image_width, image_height),
+            image_size: (image_width, image_height),
             drag: None,
         }
+    }
+
+    /// Everything that can be shown: the captured image plus image layers
+    /// placed beyond it.
+    pub fn extent(&self) -> Rect {
+        self.doc.extent(self.image_size.0, self.image_size.1)
+    }
+
+    /// Adds `picture` as an image layer centered on `center` (or on the
+    /// captured image), shrunk to fit if it is larger than the capture,
+    /// and selects it.
+    pub fn insert_picture(&mut self, picture: Picture, center: Option<Point>) -> u64 {
+        let (w, h) = picture.size();
+        let (iw, ih) = self.image_size;
+        let fit = (iw * 0.8 / w).min(ih * 0.8 / h).min(1.0);
+        let (w, h) = (w * fit, h * fit);
+        let c = center.unwrap_or(Point::new(iw / 2.0, ih / 2.0));
+        let rect = Rect::new((c.x - w / 2.0).round(), (c.y - h / 2.0).round(), w, h);
+        self.add_picture(picture, rect)
+    }
+
+    /// Adds `picture` at full size next to everything shown so far, to
+    /// the right or below, aligned to the top or left edge: combining
+    /// captures into one image.
+    pub fn append_picture(&mut self, picture: Picture, below: bool) -> u64 {
+        let (w, h) = picture.size();
+        let extent = self.extent();
+        let rect = if below {
+            Rect::new(extent.x, extent.max_y(), w, h)
+        } else {
+            Rect::new(extent.max_x(), extent.y, w, h)
+        };
+        self.add_picture(picture, rect)
+    }
+
+    fn add_picture(&mut self, picture: Picture, rect: Rect) -> u64 {
+        if self.tool == Tool::Crop {
+            self.set_tool(Tool::Select);
+        }
+        self.change();
+        let id = self
+            .doc
+            .add(Shape::Image { rect, picture }, self.color, self.width);
+        self.selection = Some(id);
+        id
     }
 
     fn change(&mut self) {
@@ -77,7 +124,7 @@ impl Session {
             self.apply_crop();
         }
         if tool == Tool::Crop {
-            self.crop_draft = Some(self.doc.crop.unwrap_or(self.image));
+            self.crop_draft = Some(self.doc.crop.unwrap_or(self.extent()));
             self.selection = None;
         }
         self.tool = tool;
@@ -88,7 +135,7 @@ impl Session {
         let Some(draft) = self.crop_draft.take() else {
             return;
         };
-        let crop = (draft != self.image).then_some(draft);
+        let crop = (draft != self.extent()).then_some(draft);
         if crop != self.doc.crop {
             self.change();
             self.doc.crop = crop;
@@ -97,7 +144,7 @@ impl Session {
 
     pub fn reset_crop(&mut self) {
         if self.tool == Tool::Crop {
-            self.crop_draft = Some(self.image);
+            self.crop_draft = Some(self.extent());
         }
     }
 
@@ -160,7 +207,7 @@ impl Session {
     /// step. Opaque rather than pixelated: pixelated text can sometimes be
     /// reconstructed. Returns how many were added.
     pub fn add_redactions(&mut self, rects: &[Rect]) -> usize {
-        let rects = redaction_boxes(rects, self.image);
+        let rects = redaction_boxes(rects, self.extent());
         if rects.is_empty() {
             return 0;
         }
@@ -207,7 +254,7 @@ impl Session {
                 self.selection = None;
             }
             if self.tool == Tool::Crop {
-                self.crop_draft = Some(self.doc.crop.unwrap_or(self.image));
+                self.crop_draft = Some(self.doc.crop.unwrap_or(self.extent()));
             }
         }
         done
@@ -434,7 +481,7 @@ impl Session {
                     p
                 };
                 self.crop_draft =
-                    Some(Rect::from_corners(anchor, corner).intersection(&self.image));
+                    Some(Rect::from_corners(anchor, corner).intersection(&self.extent()));
             }
             Drag::CropMove { last } => {
                 if let Some(draft) = self.crop_draft {
@@ -442,7 +489,7 @@ impl Session {
                         draft,
                         p.x - last.x,
                         p.y - last.y,
-                        self.image,
+                        self.extent(),
                     ));
                 }
                 self.drag = Some(Drag::CropMove { last: p });
@@ -459,7 +506,7 @@ impl Session {
                         width: 0.0,
                     };
                     a.drag_handle(handle, p);
-                    self.crop_draft = Some(a.bounds().intersection(&self.image));
+                    self.crop_draft = Some(a.bounds().intersection(&self.extent()));
                 }
             }
         }
@@ -493,14 +540,14 @@ impl Session {
                     .crop_draft
                     .is_none_or(|d| d.width < 4.0 || d.height < 4.0) =>
             {
-                self.crop_draft = Some(self.doc.crop.unwrap_or(self.image));
+                self.crop_draft = Some(self.doc.crop.unwrap_or(self.extent()));
             }
             _ => {}
         }
     }
 
     fn crop_down(&mut self, p: Point, tolerance: f64) -> Effect {
-        let draft = self.crop_draft.unwrap_or(self.image);
+        let draft = self.crop_draft.unwrap_or(self.extent());
         let corners = [
             (Handle::TopLeft, Point::new(draft.x, draft.y)),
             (Handle::TopRight, Point::new(draft.max_x(), draft.y)),
@@ -516,7 +563,7 @@ impl Session {
                 .find(|(_, c)| (c.x - p.x).hypot(c.y - p.y) <= tolerance * 2.0)
             {
                 Some((handle, _)) => Drag::CropHandle { handle: *handle },
-                None if draft.contains(p) && draft != self.image => Drag::CropMove { last: p },
+                None if draft.contains(p) && draft != self.extent() => Drag::CropMove { last: p },
                 None => Drag::CropNew { anchor: p },
             },
         );
@@ -746,5 +793,64 @@ mod tests {
         assert_eq!(s.doc.crop, Some(Rect::new(100.0, 100.0, 200.0, 150.0)));
         assert!(s.undo());
         assert_eq!(s.doc.crop, None);
+    }
+
+    fn picture(w: usize, h: usize, scale: f64) -> Picture {
+        let pixels = vec![0xff33_6699u32; w * h];
+        let cg = crate::capture::image::from_pixels(w, h, &pixels).unwrap();
+        Picture::new(cg, scale, crate::editor::picture::Origin::Pixels)
+    }
+
+    #[test]
+    fn pasted_images_are_centered_shrunk_and_undoable() {
+        let mut s = session();
+        // 2000 x 1000 pixels at 2x is 1000 x 500 points: shrunk to 80% of
+        // the 800-point-wide image.
+        let id = s.insert_picture(picture(2000, 1000, 2.0), None);
+        let rect = s.doc.get(id).unwrap().bounds();
+        assert_eq!(rect, Rect::new(80.0, 140.0, 640.0, 320.0));
+        assert_eq!(s.selection, Some(id));
+        assert_eq!(s.extent(), Rect::new(0.0, 0.0, 800.0, 600.0));
+        assert!(s.undo());
+        assert!(s.doc.annotations.is_empty());
+    }
+
+    #[test]
+    fn combining_grows_the_canvas() {
+        let mut s = session();
+        s.append_picture(picture(400, 300, 1.0), false);
+        assert_eq!(s.extent(), Rect::new(0.0, 0.0, 1200.0, 600.0));
+        s.append_picture(picture(100, 100, 1.0), true);
+        assert_eq!(s.extent(), Rect::new(0.0, 0.0, 1200.0, 700.0));
+        let layout = s.doc.layout(800.0, 600.0);
+        assert_eq!((layout.width, layout.height), (1200.0, 700.0));
+    }
+
+    #[test]
+    fn image_layers_resize_keeping_their_shape() {
+        let mut s = session();
+        let id = s.insert_picture(picture(200, 100, 1.0), Some(Point::new(100.0, 50.0)));
+        let a = s.doc.get_mut(id).unwrap();
+        assert_eq!(a.bounds(), Rect::new(0.0, 0.0, 200.0, 100.0));
+        // Dragging the bottom-right corner mostly sideways doubles both.
+        a.drag_handle(Handle::BottomRight, Point::new(400.0, 120.0));
+        assert_eq!(a.bounds(), Rect::new(0.0, 0.0, 400.0, 200.0));
+        // Past the fixed corner: flips to the other side, same shape.
+        a.drag_handle(Handle::BottomRight, Point::new(-100.0, 10.0));
+        assert_eq!(a.bounds(), Rect::new(-100.0, 0.0, 100.0, 50.0));
+    }
+
+    #[test]
+    fn pictures_survive_saving() {
+        let mut s = session();
+        s.insert_picture(picture(20, 10, 2.0), None);
+        let json = serde_json::to_string(&s.doc).unwrap();
+        let back: Document = serde_json::from_str(&json).unwrap();
+        let Some(Shape::Image { rect, picture }) = back.annotations.first().map(|a| &a.shape)
+        else {
+            panic!("no image layer");
+        };
+        assert_eq!(picture.size(), (10.0, 5.0));
+        assert_eq!(*rect, s.doc.annotations[0].bounds());
     }
 }

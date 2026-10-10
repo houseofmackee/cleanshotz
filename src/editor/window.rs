@@ -10,17 +10,19 @@ use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_clas
 use objc2_app_kit::{
     NSAlert, NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSBezelStyle, NSButton,
     NSColor, NSColorSpace, NSColorWell, NSColorWellStyle, NSControlStateValueOff,
-    NSControlStateValueOn, NSControlTextEditingDelegate, NSCursor, NSEvent, NSEventModifierFlags,
-    NSFocusRingType, NSGraphicsContext, NSImage, NSModalResponseOK, NSPopUpButton, NSResponder,
-    NSSavePanel, NSSegmentedControl, NSSlider, NSTextField, NSTextFieldDelegate, NSView, NSWindow,
-    NSWindowDelegate, NSWindowStyleMask,
+    NSControlStateValueOn, NSControlTextEditingDelegate, NSCursor, NSDraggingInfo, NSEvent,
+    NSEventModifierFlags, NSFocusRingType, NSGraphicsContext, NSImage, NSModalResponseOK,
+    NSPopUpButton, NSResponder, NSSavePanel, NSSegmentedControl, NSSlider, NSTextField,
+    NSTextFieldDelegate, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_foundation::{
-    NSAffineTransform, NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString,
-    ns_string,
+    NSAffineTransform, NSArray, NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize,
+    NSString, ns_string,
 };
 
 use super::model::{Annotation, ArrowStyle, Aspect, Background, Color, Fill, Shape, TextStyle};
+use super::picture::{Origin, Picture};
+use super::presets::{self, Preset};
 use super::render::{self, BaseImage};
 use super::session::{Effect, Session};
 use super::tools::Tool;
@@ -34,64 +36,6 @@ const TOOLBAR_HEIGHT: f64 = 48.0;
 const OPTIONS_HEIGHT: f64 = 40.0;
 const CANVAS_MARGIN: f64 = 24.0;
 
-/// Background presets offered in the options bar.
-const BACKGROUNDS: &[(&str, Option<Fill>)] = &[
-    ("No Background", None),
-    (
-        "Sunset",
-        Some(Fill::Gradient {
-            from: Color::rgb(0.98, 0.45, 0.42),
-            to: Color::rgb(0.55, 0.36, 0.96),
-        }),
-    ),
-    (
-        "Ocean",
-        Some(Fill::Gradient {
-            from: Color::rgb(0.15, 0.55, 0.95),
-            to: Color::rgb(0.2, 0.85, 0.75),
-        }),
-    ),
-    (
-        "Forest",
-        Some(Fill::Gradient {
-            from: Color::rgb(0.18, 0.55, 0.33),
-            to: Color::rgb(0.75, 0.85, 0.3),
-        }),
-    ),
-    (
-        "Peach",
-        Some(Fill::Gradient {
-            from: Color::rgb(1.0, 0.78, 0.55),
-            to: Color::rgb(0.98, 0.45, 0.55),
-        }),
-    ),
-    (
-        "Midnight",
-        Some(Fill::Gradient {
-            from: Color::rgb(0.1, 0.1, 0.25),
-            to: Color::rgb(0.32, 0.16, 0.46),
-        }),
-    ),
-    (
-        "White",
-        Some(Fill::Solid {
-            color: Color::WHITE,
-        }),
-    ),
-    (
-        "Light Gray",
-        Some(Fill::Solid {
-            color: Color::rgb(0.92, 0.92, 0.93),
-        }),
-    ),
-    (
-        "Black",
-        Some(Fill::Solid {
-            color: Color::BLACK,
-        }),
-    ),
-];
-
 const ASPECTS: &[(&str, Aspect)] = &[
     ("Auto", Aspect::Auto),
     ("1:1", Aspect::Square),
@@ -104,6 +48,24 @@ const MORE_SAVE_PROJECT: isize = 2;
 const MORE_PIN: isize = 3;
 const MORE_COPY_TEXT: isize = 4;
 const MORE_REDACT: isize = 5;
+const MORE_ADD_RIGHT: isize = 6;
+const MORE_ADD_BELOW: isize = 7;
+
+// Tags of the background menu's items.
+const BG_NONE: isize = 1;
+/// Plus the index of a built-in fill.
+const BG_BUILTIN: isize = 100;
+/// Plus the index of a saved preset.
+const BG_SAVED: isize = 200;
+const BG_WALLPAPER: isize = 300;
+const BG_CHOOSE: isize = 301;
+/// The current image background, when it is not a preset.
+const BG_IMAGE: isize = 302;
+const BG_SAVE: isize = 400;
+const BG_DELETE: isize = 401;
+
+/// Background images are kept at most this many pixels on a side.
+const MAX_BACKGROUND: usize = 3840;
 
 struct Ui {
     tools: Retained<NSSegmentedControl>,
@@ -136,6 +98,8 @@ pub struct EditorIvars {
     canvas: OnceCell<Retained<CanvasView>>,
     ui: OnceCell<Ui>,
     text: RefCell<Option<TextEdit>>,
+    /// Saved background presets, read when the window opens.
+    presets: RefCell<Vec<Preset>>,
 }
 
 define_class!(
@@ -240,24 +204,8 @@ define_class!(
         }
 
         #[unsafe(method(backgroundChanged:))]
-        fn background_changed(&self, _sender: &AnyObject) {
-            let Some(ui) = self.ivars().ui.get() else {
-                return;
-            };
-            let preset = ui.background.indexOfSelectedItem().max(0) as usize;
-            let background = BACKGROUNDS.get(preset).and_then(|(_, fill)| *fill).map(|fill| {
-                Background {
-                    fill,
-                    padding: ui.padding.doubleValue().round(),
-                    corner_radius: ui.radius.doubleValue().round(),
-                    shadow: ui.shadow.state() == NSControlStateValueOn,
-                    aspect: ASPECTS
-                        .get(ui.aspect.indexOfSelectedItem().max(0) as usize)
-                        .map_or(Aspect::Auto, |(_, a)| *a),
-                }
-            });
-            self.ivars().session.borrow_mut().set_background(background);
-            self.refresh();
+        fn background_changed(&self, sender: &AnyObject) {
+            self.change_background(sender);
         }
 
         #[unsafe(method(undoEdit:))]
@@ -288,6 +236,8 @@ define_class!(
                 MORE_PIN => self.pin(),
                 MORE_COPY_TEXT => self.copy_text(),
                 MORE_REDACT => self.redact(),
+                MORE_ADD_RIGHT => self.add_images(false),
+                MORE_ADD_BELOW => self.add_images(true),
                 _ => {}
             }
         }
@@ -320,6 +270,7 @@ impl EditorController {
             canvas: OnceCell::new(),
             ui: OnceCell::new(),
             text: RefCell::new(None),
+            presets: RefCell::new(presets::saved()),
         });
         // SAFETY: NSObject's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -526,6 +477,8 @@ impl EditorController {
             "Pin to Screen",
             "Copy Text",
             "Redact Sensitive Info",
+            "Add Image to the Right…",
+            "Add Image Below…",
         ] {
             more.addItemWithTitle(&NSString::from_str(title));
         }
@@ -632,11 +585,8 @@ impl EditorController {
             );
             p
         };
-        let background = popup(
-            &BACKGROUNDS.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
-            12.0,
-            150.0,
-        );
+        // Filled in by `sync_background_menu`.
+        let background = popup(&[], 12.0, 150.0);
         let label = |text: &str, x: f64| {
             let l = NSTextField::labelWithString(&NSString::from_str(text), mtm);
             add(
@@ -793,15 +743,7 @@ impl EditorController {
         ui.style.selectItemAtIndex(index);
         ui.style.setHidden(items.is_empty() || background_tool);
 
-        let bg = session.doc.background;
-        let preset = bg.map_or(0, |b| {
-            BACKGROUNDS
-                .iter()
-                .position(|(_, f)| *f == Some(b.fill))
-                .unwrap_or(1)
-        });
-        ui.background.selectItemAtIndex(preset as isize);
-        let defaults = bg.unwrap_or_default();
+        let defaults = session.doc.background.clone().unwrap_or_default();
         ui.padding.setDoubleValue(defaults.padding);
         ui.radius.setDoubleValue(defaults.corner_radius);
         ui.shadow.setState(if defaults.shadow {
@@ -815,9 +757,209 @@ impl EditorController {
                 .position(|(_, a)| *a == defaults.aspect)
                 .unwrap_or(0) as isize,
         );
+        if background_tool {
+            self.sync_background_menu(ui, session.doc.background.as_ref());
+        }
 
         ui.undo.setEnabled(session.history.can_undo());
         ui.redo.setEnabled(session.history.can_redo());
+    }
+
+    /// Rebuilds the background menu: no background, the built-in fills,
+    /// saved presets, image choices and preset commands, with the current
+    /// background selected.
+    fn sync_background_menu(&self, ui: &Ui, background: Option<&Background>) {
+        let presets = self.ivars().presets.borrow();
+        let builtin = presets::builtin();
+        let saved_index = background.and_then(|b| presets.iter().position(|p| p.matches(b)));
+        let selected = match background {
+            None => BG_NONE,
+            Some(b) => saved_index
+                .map(|i| BG_SAVED + i as isize)
+                .or_else(|| {
+                    builtin
+                        .iter()
+                        .position(|(_, f)| *f == b.fill)
+                        .map(|i| BG_BUILTIN + i as isize)
+                })
+                .unwrap_or(match &b.fill {
+                    Fill::Image { picture } if *picture.origin() == Origin::Wallpaper => {
+                        BG_WALLPAPER
+                    }
+                    Fill::Image { .. } => BG_IMAGE,
+                    _ => BG_BUILTIN,
+                }),
+        };
+        let popup = &ui.background;
+        popup.removeAllItems();
+        let Some(menu) = popup.menu() else {
+            return;
+        };
+        let mtm = self.mtm();
+        let item = |title: &str, tag: isize| {
+            popup.addItemWithTitle(&NSString::from_str(title));
+            if let Some(item) = popup.lastItem() {
+                item.setTag(tag);
+            }
+        };
+        let separator = || menu.addItem(&objc2_app_kit::NSMenuItem::separatorItem(mtm));
+        item("No Background", BG_NONE);
+        for (i, (name, _)) in builtin.iter().enumerate() {
+            item(name, BG_BUILTIN + i as isize);
+        }
+        if !presets.is_empty() {
+            separator();
+            for (i, preset) in presets.iter().enumerate() {
+                item(&preset.name, BG_SAVED + i as isize);
+            }
+        }
+        separator();
+        item("Desktop Wallpaper", BG_WALLPAPER);
+        if selected == BG_IMAGE {
+            item("Image", BG_IMAGE);
+        }
+        item("Choose Image…", BG_CHOOSE);
+        if background.is_some() {
+            separator();
+            item("Save as Preset…", BG_SAVE);
+            if let Some(i) = saved_index {
+                item(&format!("Delete “{}”", presets[i].name), BG_DELETE);
+            }
+        }
+        popup.selectItemWithTag(selected);
+    }
+
+    /// Applies the background menu or a background option.
+    fn change_background(&self, sender: &AnyObject) {
+        let Some(ui) = self.ivars().ui.get() else {
+            return;
+        };
+        let mtm = self.mtm();
+        let current = self.ivars().session.borrow().doc.background.clone();
+        let with_options = |fill: Fill| Background {
+            fill,
+            padding: ui.padding.doubleValue().round(),
+            corner_radius: ui.radius.doubleValue().round(),
+            shadow: ui.shadow.state() == NSControlStateValueOn,
+            aspect: ASPECTS
+                .get(ui.aspect.indexOfSelectedItem().max(0) as usize)
+                .map_or(Aspect::Auto, |(_, a)| *a),
+        };
+        let menu: &AnyObject = ui.background.as_ref();
+        let background = if !std::ptr::eq(sender, menu) {
+            // A slider, Shadow or the aspect ratio: keep the fill.
+            current.map(|b| with_options(b.fill))
+        } else {
+            let tag = ui.background.selectedItem().map_or(BG_NONE, |i| i.tag());
+            match tag {
+                BG_NONE => None,
+                t if (BG_BUILTIN..BG_SAVED).contains(&t) => presets::builtin()
+                    .into_iter()
+                    .nth((t - BG_BUILTIN) as usize)
+                    .map(|(_, fill)| with_options(fill)),
+                t if (BG_SAVED..BG_WALLPAPER).contains(&t) => {
+                    let preset = self
+                        .ivars()
+                        .presets
+                        .borrow()
+                        .get((t - BG_SAVED) as usize)
+                        .cloned();
+                    match preset.map(|p| p.background(mtm)) {
+                        Some(Ok(background)) => Some(background),
+                        Some(Err(e)) => {
+                            self.show_error("Could not use the preset", &e);
+                            current
+                        }
+                        None => current,
+                    }
+                }
+                BG_WALLPAPER => match presets::wallpaper(mtm) {
+                    Some(picture) => Some(with_options(Fill::Image { picture })),
+                    None => {
+                        self.show_error("Could not read the desktop picture", "");
+                        current
+                    }
+                },
+                BG_CHOOSE => match choose_images(mtm, false).into_iter().next() {
+                    Some(picture) => Some(with_options(Fill::Image {
+                        picture: picture.limited(MAX_BACKGROUND),
+                    })),
+                    None => current,
+                },
+                BG_SAVE => {
+                    if let Some(background) = &current
+                        && let Some(name) = ask_name(mtm, "Save Background as Preset")
+                    {
+                        match presets::add(&name, background) {
+                            Ok(()) => *self.ivars().presets.borrow_mut() = presets::saved(),
+                            Err(e) => self.show_error("Could not save the preset", &e),
+                        }
+                    }
+                    current
+                }
+                BG_DELETE => {
+                    let name = current.as_ref().and_then(|b| {
+                        self.ivars()
+                            .presets
+                            .borrow()
+                            .iter()
+                            .find(|p| p.matches(b))
+                            .map(|p| p.name.clone())
+                    });
+                    if let Some(name) = name {
+                        match presets::remove(&name) {
+                            Ok(()) => *self.ivars().presets.borrow_mut() = presets::saved(),
+                            Err(e) => self.show_error("Could not delete the preset", &e),
+                        }
+                    }
+                    current
+                }
+                _ => current,
+            }
+        };
+        self.ivars().session.borrow_mut().set_background(background);
+        self.refresh();
+    }
+
+    /// Adds image layers centered on `at` (image points), or on the image.
+    pub fn insert_pictures(&self, pictures: Vec<Picture>, at: Option<Point>) {
+        if pictures.is_empty() {
+            objc2_app_kit::NSBeep();
+            return;
+        }
+        self.commit_text();
+        {
+            let mut session = self.ivars().session.borrow_mut();
+            for (i, picture) in pictures.into_iter().enumerate() {
+                // Several at once fan out a little so all stay visible.
+                let offset = 24.0 * i as f64;
+                let at = at.map(|p| Point::new(p.x + offset, p.y + offset));
+                session.insert_picture(picture, at);
+            }
+        }
+        self.refresh();
+    }
+
+    /// Pastes images from the clipboard as layers.
+    pub fn paste_images(&self) {
+        let pictures = super::pictures_from(&objc2_app_kit::NSPasteboard::generalPasteboard());
+        self.insert_pictures(pictures, None);
+    }
+
+    /// Combines captures: adds chosen images next to everything so far.
+    fn add_images(&self, below: bool) {
+        let pictures = choose_images(self.mtm(), true);
+        if pictures.is_empty() {
+            return;
+        }
+        self.commit_text();
+        {
+            let mut session = self.ivars().session.borrow_mut();
+            for picture in pictures {
+                session.append_picture(picture, below);
+            }
+        }
+        self.refresh();
     }
 
     /// Redraws the canvas and updates the controls.
@@ -1168,6 +1310,42 @@ impl EditorController {
     }
 }
 
+/// Asks for image files; ones that are not images are skipped.
+fn choose_images(mtm: MainThreadMarker, several: bool) -> Vec<Picture> {
+    let panel = objc2_app_kit::NSOpenPanel::openPanel(mtm);
+    panel.setCanChooseDirectories(false);
+    panel.setAllowsMultipleSelection(several);
+    if panel.runModal() != NSModalResponseOK {
+        return Vec::new();
+    }
+    panel
+        .URLs()
+        .iter()
+        .filter_map(|url| url.path())
+        .filter_map(|path| Picture::load(std::path::Path::new(&path.to_string())))
+        .collect()
+}
+
+/// Asks for a name; `None` when cancelled or left empty.
+fn ask_name(mtm: MainThreadMarker, title: &str) -> Option<String> {
+    let alert = NSAlert::new(mtm);
+    alert.setMessageText(&NSString::from_str(title));
+    alert.addButtonWithTitle(ns_string!("Save"));
+    alert.addButtonWithTitle(ns_string!("Cancel"));
+    let field = NSTextField::initWithFrame(
+        NSTextField::alloc(mtm),
+        NSRect::new(NSPoint::ZERO, NSSize::new(240.0, 24.0)),
+    );
+    field.setPlaceholderString(Some(ns_string!("Name")));
+    alert.setAccessoryView(Some(&field));
+    alert.window().setInitialFirstResponder(Some(&field));
+    if alert.runModal() != objc2_app_kit::NSAlertFirstButtonReturn {
+        return None;
+    }
+    let name = field.stringValue().to_string().trim().to_string();
+    (!name.is_empty()).then_some(name)
+}
+
 fn format_for(path: &std::path::Path) -> ImageFormat {
     path.extension()
         .and_then(|e| e.to_str())
@@ -1237,11 +1415,21 @@ fn restyle(session: &mut Session, id: u64, f: impl FnOnce(&mut f64, &mut TextSty
     }
 }
 
+type ViewTransform = (f64, Point, super::model::CanvasLayout);
+
+pub struct CanvasIvars {
+    editor: u64,
+    /// The view transform while the mouse is down. Moving an image layer
+    /// past the edge grows the canvas, which would otherwise rescale the
+    /// view under the pointer and make the layer run away from it.
+    frozen: std::cell::Cell<Option<ViewTransform>>,
+}
+
 define_class!(
     // SAFETY: NSView can be subclassed; no Drop implementation.
     #[unsafe(super(NSView, NSResponder, NSObject))]
     #[thread_kind = MainThreadOnly]
-    #[ivars = u64]
+    #[ivars = CanvasIvars]
     pub struct CanvasView;
 
     impl CanvasView {
@@ -1285,6 +1473,7 @@ define_class!(
             }
             let p = self.event_point(event);
             let tolerance = 6.0 / self.zoom();
+            self.ivars().frozen.set(Some(self.transform(&editor)));
             let effect = editor.ivars().session.borrow_mut().mouse_down(p, tolerance);
             if let Effect::EditText { at, existing } = effect {
                 editor.begin_text(at, existing);
@@ -1305,6 +1494,7 @@ define_class!(
 
         #[unsafe(method(mouseUp:))]
         fn mouse_up(&self, _event: &NSEvent) {
+            self.ivars().frozen.set(None);
             if let Some(editor) = self.editor() {
                 editor.ivars().session.borrow_mut().mouse_up();
                 editor.refresh();
@@ -1342,6 +1532,38 @@ define_class!(
             }
         }
 
+        #[unsafe(method(paste:))]
+        fn paste(&self, _sender: Option<&AnyObject>) {
+            if let Some(editor) = self.editor() {
+                editor.paste_images();
+            }
+        }
+
+        #[unsafe(method(draggingEntered:))]
+        fn dragging_entered(
+            &self,
+            sender: &ProtocolObject<dyn NSDraggingInfo>,
+        ) -> objc2_app_kit::NSDragOperation {
+            let pasteboard = sender.draggingPasteboard();
+            let types = NSArray::from_retained_slice(&[
+                NSString::from_str("public.file-url"),
+                NSString::from_str("public.image"),
+            ]);
+            if pasteboard.availableTypeFromArray(&types).is_some() {
+                objc2_app_kit::NSDragOperation::Copy
+            } else {
+                objc2_app_kit::NSDragOperation::None
+            }
+        }
+
+        #[unsafe(method(performDragOperation:))]
+        fn perform_drag_operation(
+            &self,
+            sender: &ProtocolObject<dyn NSDraggingInfo>,
+        ) -> bool {
+            self.drop_pictures(sender)
+        }
+
         #[unsafe(method(delete:))]
         fn delete(&self, _sender: Option<&AnyObject>) {
             if let Some(editor) = self.editor() {
@@ -1354,13 +1576,40 @@ define_class!(
 
 impl CanvasView {
     fn new(mtm: MainThreadMarker, editor_id: u64, frame: NSRect) -> Retained<Self> {
-        let this = Self::alloc(mtm).set_ivars(editor_id);
+        let this = Self::alloc(mtm).set_ivars(CanvasIvars {
+            editor: editor_id,
+            frozen: std::cell::Cell::new(None),
+        });
         // SAFETY: NSView's designated initializer.
-        unsafe { msg_send![super(this), initWithFrame: frame] }
+        let this: Retained<Self> = unsafe { msg_send![super(this), initWithFrame: frame] };
+        // Images and image files can be dropped onto the canvas, Quick
+        // Access cards included: that combines captures.
+        let types = NSArray::from_retained_slice(&[
+            NSString::from_str("public.file-url"),
+            NSString::from_str("public.png"),
+            NSString::from_str("public.tiff"),
+        ]);
+        this.registerForDraggedTypes(&types);
+        this
     }
 
     fn editor(&self) -> Option<Retained<EditorController>> {
-        registry::get(*self.ivars())
+        registry::get(self.ivars().editor)
+    }
+
+    /// Adds dropped images where they were dropped.
+    fn drop_pictures(&self, info: &ProtocolObject<dyn NSDraggingInfo>) -> bool {
+        let Some(editor) = self.editor() else {
+            return false;
+        };
+        let pictures = super::pictures_from(&info.draggingPasteboard());
+        if pictures.is_empty() {
+            return false;
+        }
+        let p = self.convertPoint_fromView(info.draggingLocation(), None);
+        let at = self.to_image(Point::new(p.x, p.y));
+        editor.insert_pictures(pictures, Some(at));
+        true
     }
 
     /// The document as displayed: while cropping, the whole image without
@@ -1376,7 +1625,10 @@ impl CanvasView {
     }
 
     /// Canvas-to-view scale and offset that fit the canvas in the view.
-    fn transform(&self, editor: &EditorController) -> (f64, Point, super::model::CanvasLayout) {
+    fn transform(&self, editor: &EditorController) -> ViewTransform {
+        if let Some(frozen) = self.ivars().frozen.get() {
+            return frozen;
+        }
         let layout = editor.ivars().base.layout(&Self::display_doc(editor));
         let b = self.bounds();
         let zoom = ((b.size.width - 2.0 * CANVAS_MARGIN) / layout.width)
@@ -1493,6 +1745,13 @@ impl CanvasView {
         let transform = NSAffineTransform::transform();
         transform.translateXBy_yBy(offset.x, offset.y);
         transform.scaleBy(zoom);
+        // While frozen the document may have grown: keep its image points
+        // where the frozen layout put them.
+        let now = editor.ivars().base.layout(&doc);
+        transform.translateXBy_yBy(
+            (layout.content.x - layout.source.x) - (now.content.x - now.source.x),
+            (layout.content.y - layout.source.y) - (now.content.y - now.source.y),
+        );
         objc2_app_kit::NSAffineTransformNSAppKitAdditions::concat(&*transform);
         render::render(&doc, &editor.ivars().base, editor.editing_text_id());
         context.restoreGraphicsState();

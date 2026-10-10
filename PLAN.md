@@ -176,9 +176,12 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Notes: blur and pixelate resample the original image (no CoreImage
   dependency). `.cszdoc` is JSON with the image embedded as base64 PNG
   rather than a zip, so it needs no zip library and stays easy to inspect.
-  Not done yet: image paste, combining captures, image backgrounds, saved
-  background presets and an app icon. Quitting asks before discarding
-  unsaved annotations.
+  Image paste and drop, combining captures (image layers may extend the
+  canvas; Add Image to the Right / Below), image backgrounds (Desktop
+  Wallpaper, Choose Image) and saved background presets
+  (`backgrounds.json`, also usable from pipelines) are done. Blur and
+  pixelate sample the original capture only, not image layers. Not done
+  yet: an app icon. Quitting asks before discarding unsaved annotations.
 
 ### M5: OCR and redaction (done)
 - Capture Text: region OCR to clipboard, language selection, line break handling.

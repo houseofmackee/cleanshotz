@@ -174,7 +174,7 @@ slack = ["save", "open Slack"]
 | Step | Does |
 | --- | --- |
 | `resize 50%`, `resize 1280px`, `resize 1x` | Scale by a percentage, to at most a width, or to one pixel per point |
-| `background` | Put the image on the editor's default background |
+| `background [preset]` | Put the image on a saved background preset, or on the editor's default background |
 | `redact` | Cover emails, API keys, tokens, card numbers and similar text |
 | `format png`, `format jpeg 80%`, `format webp [85%]` | The format of files written after this step (WebP without a quality is lossless) |
 | `save [folder]` | Save to the save folder, or to `folder` |
@@ -359,13 +359,28 @@ Image.
 | Counter | N | Numbered steps, counting up |
 | Pixelate, Blur | X, B | Hide sensitive content |
 | Spotlight | S | Dim everything else |
-| Background | G | Gradient or solid backdrop with padding, rounded corners, shadow and aspect ratio |
+| Background | G | Gradient, solid or image backdrop with padding, rounded corners, shadow and aspect ratio |
 
 Hold Shift for squares, circles and 45-degree lines. Color, width and style
 changes apply to the selected annotation too. Cmd+Z and Shift+Cmd+Z undo and
 redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
 for opened images, saves a new capture). The ••• menu has Save As…, Save
-Project…, Pin to Screen, Copy Text and Redact Sensitive Info.
+Project…, Pin to Screen, Copy Text, Redact Sensitive Info, and Add Image to
+the Right… / Below….
+
+**Images and combining captures:** Cmd+V pastes an image (or a copied image
+file) as a layer you can move and resize; corner handles keep its shape.
+Drop images onto the canvas the same way, including Quick Access thumbnails
+of other captures. Layers can sit beyond the original capture: the canvas
+grows to include them, so placing captures side by side (or using Add Image
+to the Right… / Below…) combines them into one image.
+
+**Backgrounds:** besides the built-in gradients and colors, the Background
+menu offers the Desktop Wallpaper and Choose Image…, and Save as Preset…
+keeps the current background (fill, padding, corners, shadow and aspect
+ratio) under a name. Presets are stored in `backgrounds.json` next to the
+settings file; image presets keep their own copy of the image in
+`Backgrounds/`. Pipelines can use them with the `background NAME` step.
 
 **Redact Sensitive Info** finds emails, IP addresses, card numbers (checked
 with the Luhn algorithm), US Social Security numbers, API keys and tokens
@@ -374,7 +389,8 @@ private keys and other random-looking secrets, and covers them with solid
 boxes in one undo step. Solid boxes, not pixelation: pixelated text can
 sometimes be reconstructed. Text recognition runs entirely on your Mac.
 
-Projects (`.cszdoc`) keep the original image and every annotation editable.
+Projects (`.cszdoc`) keep the original image and every annotation (image
+layers and image backgrounds included) editable.
 They are plain JSON, documented in `src/editor/project.rs`.
 
 ### URL scheme and command line

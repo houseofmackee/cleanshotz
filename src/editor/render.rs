@@ -67,20 +67,26 @@ pub fn render(doc: &Document, base: &BaseImage, skip: Option<u64>) {
         return;
     };
     let layout = base.layout(doc);
-    let radius = doc.background.map_or(0.0, |b| b.corner_radius);
+    let radius = doc.background.as_ref().map_or(0.0, |b| b.corner_radius);
 
-    if let Some(bg) = doc.background {
+    if let Some(bg) = &doc.background {
         let canvas = Rect::new(0.0, 0.0, layout.width, layout.height);
-        match bg.fill {
-            Fill::Solid { color } => draw::fill_rect(canvas, &ns_color(color)),
+        match &bg.fill {
+            Fill::Solid { color } => draw::fill_rect(canvas, &ns_color(*color)),
+            Fill::Image { picture } => {
+                context.saveGraphicsState();
+                NSBezierPath::clipRect(draw::ns_rect(canvas));
+                draw_picture(picture, cover(picture.size(), canvas));
+                context.restoreGraphicsState();
+            }
             Fill::Gradient { from, to } => {
                 // The gradient extends past its end points; keep it on the canvas.
                 context.saveGraphicsState();
                 NSBezierPath::clipRect(draw::ns_rect(canvas));
                 if let Some(gradient) = NSGradient::initWithStartingColor_endingColor(
                     NSGradient::alloc(),
-                    &ns_color(from),
-                    &ns_color(to),
+                    &ns_color(*from),
+                    &ns_color(*to),
                 ) {
                     gradient.drawFromPoint_toPoint_options(
                         NSPoint::new(0.0, 0.0),
@@ -100,7 +106,11 @@ pub fn render(doc: &Document, base: &BaseImage, skip: Option<u64>) {
             shadow.setShadowOffset(NSSize::new(0.0, -10.0));
             shadow.setShadowColor(Some(&NSColor::colorWithWhite_alpha(0.0, 0.45)));
             shadow.set();
-            draw::fill_rounded(layout.content, radius, &NSColor::blackColor());
+            // Cast by what is shown, not the whole content rect: combined
+            // images leave parts of it empty.
+            for piece in shown_pieces(doc, base, &layout) {
+                draw::fill_rounded(piece, radius, &NSColor::blackColor());
+            }
             context.restoreGraphicsState();
         }
     }
@@ -112,19 +122,19 @@ pub fn render(doc: &Document, base: &BaseImage, skip: Option<u64>) {
         radius,
     )
     .addClip();
-    // The visible source region in NSImage space (bottom-left origin).
+    // From here on, image coordinates: the captured image sits at the
+    // origin, and the visible region `s` maps onto the content rect.
     let s = layout.source;
-    let from = NSRect::new(
-        NSPoint::new(s.x, base.height - (s.y + s.height)),
-        NSSize::new(s.width, s.height),
-    );
+    let transform = NSAffineTransform::transform();
+    transform.translateXBy_yBy(layout.content.x - s.x, layout.content.y - s.y);
+    transform.concat();
     context.setImageInterpolation(NSImageInterpolation::High);
     // SAFETY: drawing inside a current graphics context.
     unsafe {
         base.ns
             .drawInRect_fromRect_operation_fraction_respectFlipped_hints(
-                draw::ns_rect(layout.content),
-                from,
+                NSRect::new(NSPoint::ZERO, NSSize::new(base.width, base.height)),
+                NSRect::ZERO,
                 NSCompositingOperation::SourceOver,
                 1.0,
                 true,
@@ -132,10 +142,6 @@ pub fn render(doc: &Document, base: &BaseImage, skip: Option<u64>) {
             );
     }
 
-    // Annotations use image coordinates.
-    let transform = NSAffineTransform::transform();
-    transform.translateXBy_yBy(layout.content.x - s.x, layout.content.y - s.y);
-    transform.concat();
     for annotation in &doc.annotations {
         if Some(annotation.id) != skip {
             draw_annotation(annotation, base, &layout, &context);
@@ -217,6 +223,7 @@ pub fn draw_annotation(
         Shape::Blur { rect } => {
             draw_resampled(base, *rect, 14.0, NSImageInterpolation::High, context)
         }
+        Shape::Image { rect, picture } => draw_picture(picture, *rect),
         Shape::Spotlight { rect } => {
             // Dim everything visible except the spotlight.
             let path = NSBezierPath::bezierPathWithRect(draw::ns_rect(layout.source));
@@ -230,6 +237,58 @@ pub fn draw_annotation(
             path.fill();
         }
     }
+}
+
+/// The captured image and the image layers, in canvas points, clipped to
+/// the visible region.
+fn shown_pieces(doc: &Document, base: &BaseImage, layout: &CanvasLayout) -> Vec<Rect> {
+    let to_canvas = |r: Rect| {
+        let r = r.intersection(&layout.source);
+        let o = layout.to_canvas(Point::new(r.x, r.y));
+        Rect::new(o.x, o.y, r.width, r.height)
+    };
+    std::iter::once(Rect::new(0.0, 0.0, base.width, base.height))
+        .chain(doc.annotations.iter().filter_map(|a| match &a.shape {
+            Shape::Image { rect, .. } => Some(*rect),
+            _ => None,
+        }))
+        .map(to_canvas)
+        .filter(|r| r.width > 0.0 && r.height > 0.0)
+        .collect()
+}
+
+/// Draws `picture` scaled into `rect` (canvas points, flipped context).
+fn draw_picture(picture: &super::picture::Picture, rect: Rect) {
+    let (w, h) = picture.size();
+    let ns = NSImage::initWithCGImage_size(NSImage::alloc(), picture.cg(), NSSize::new(w, h));
+    // SAFETY: drawing inside a current graphics context.
+    unsafe {
+        ns.drawInRect_fromRect_operation_fraction_respectFlipped_hints(
+            draw::ns_rect(rect),
+            NSRect::ZERO,
+            NSCompositingOperation::SourceOver,
+            1.0,
+            true,
+            None,
+        );
+    }
+}
+
+/// The rect that covers `area` with an image of `size`, keeping its aspect
+/// ratio and centering it (the overflow is clipped by the caller).
+pub fn cover(size: (f64, f64), area: Rect) -> Rect {
+    let (w, h) = size;
+    if w <= 0.0 || h <= 0.0 {
+        return area;
+    }
+    let factor = (area.width / w).max(area.height / h);
+    let (cw, ch) = (w * factor, h * factor);
+    Rect::new(
+        area.x + (area.width - cw) / 2.0,
+        area.y + (area.height - ch) / 2.0,
+        cw,
+        ch,
+    )
 }
 
 fn stroke(path: &NSBezierPath, width: f64, color: &NSColor) {

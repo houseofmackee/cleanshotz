@@ -28,8 +28,9 @@ pub enum Step {
     /// Scale by a factor (`resize 50%`), to at most a width in pixels
     /// (`resize 1280px`), or to one pixel per point (`resize 1x`).
     Resize(Resize),
-    /// Put the image on the editor's default background.
-    Background,
+    /// Put the image on a saved background preset, or on the editor's
+    /// default background.
+    Background(Option<String>),
     /// Cover emails, keys, tokens and similar text that was recognized.
     Redact,
     /// The format for files written after this step, with a quality for
@@ -58,7 +59,7 @@ pub enum Resize {
 }
 
 /// Every step's syntax, for error messages.
-const SYNTAX: &str = "resize 50% | resize 1280px | resize 1x, background, redact, \
+const SYNTAX: &str = "resize 50% | resize 1280px | resize 1x, background [preset], redact, \
 format png | format jpeg 80% | format webp [85%], save [folder], copy, upload, copy-link, \
 open [app], run <command>, annotate, pin, quick-access";
 
@@ -100,7 +101,7 @@ pub fn parse_step(text: &str) -> Result<Step, String> {
             };
             Ok(Step::Resize(resize))
         }
-        "background" => no_arg(Step::Background),
+        "background" => Ok(Step::Background(arg.map(str::to_string))),
         "redact" => no_arg(Step::Redact),
         "format" => {
             let arg = arg.ok_or("format needs png, jpeg or webp")?;
@@ -260,7 +261,7 @@ pub fn run_on_file(
 fn describe(step: &Step) -> String {
     match step {
         Step::Resize(_) => "resize",
-        Step::Background => "background",
+        Step::Background(_) => "background",
         Step::Redact => "redact",
         Step::Format(..) => "format",
         Step::Save(_) => "save",
@@ -290,12 +291,19 @@ impl Job {
     fn step(&mut self, step: &Step) -> Result<(), String> {
         match step {
             Step::Resize(resize) => self.resize(*resize),
-            Step::Background => {
+            Step::Background(preset) => {
                 let (image, scale) = (AssertSend(self.image.clone()), self.scale);
-                let image = on_main(move |_| {
-                    crate::editor::with_background(&image.into_inner(), scale).map(AssertSend)
-                });
-                self.set_image(image.ok_or("could not draw the background")?.into_inner());
+                let preset = preset.clone();
+                let image = on_main(move |mtm| {
+                    crate::editor::with_background(
+                        mtm,
+                        &image.into_inner(),
+                        scale,
+                        preset.as_deref(),
+                    )
+                    .map(AssertSend)
+                })?;
+                self.set_image(image.into_inner());
                 Ok(())
             }
             Step::Redact => {
@@ -520,6 +528,11 @@ mod tests {
             Ok(Step::Run("~/bin/post.sh --fast".into()))
         );
         assert_eq!(parse_step(" copy-link "), Ok(Step::CopyLink));
+        assert_eq!(parse_step("background"), Ok(Step::Background(None)));
+        assert_eq!(
+            parse_step("background Sunset Card"),
+            Ok(Step::Background(Some("Sunset Card".into())))
+        );
     }
 
     #[test]
