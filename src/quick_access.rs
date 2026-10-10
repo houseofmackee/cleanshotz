@@ -116,6 +116,7 @@ enum Button {
     Close,
     Annotate,
     Pin,
+    Upload,
     Copy,
     Save,
 }
@@ -463,6 +464,7 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
             pin::pin(mtm, &item);
             close(id, true);
         }
+        Button::Upload => crate::upload::start(mtm, item.file()),
         Button::Annotate if item.is_video() => crate::video_editor::open(mtm, &item.file()),
         Button::Annotate => crate::editor::open_capture(mtm, &item),
     }
@@ -548,7 +550,7 @@ fn button_rects(bounds: Rect, saved: bool, video: bool) -> Vec<(Button, Rect, &'
     let pill_h = 28.0;
     let cx = bounds.x + (bounds.width - pill_w) / 2.0;
     let cy = bounds.y + bounds.height / 2.0;
-    let buttons = vec![
+    let mut buttons = vec![
         (Button::Close, Rect::new(8.0, 8.0, corner, corner), "xmark"),
         (
             Button::Pin,
@@ -571,6 +573,13 @@ fn button_rects(bounds: Rect, saved: bool, video: bool) -> Vec<(Button, Rect, &'
             if saved { "Show in Finder" } else { "Save" },
         ),
     ];
+    if crate::upload::enabled() {
+        buttons.push((
+            Button::Upload,
+            Rect::new(8.0, bounds.max_y() - 8.0 - corner, corner, corner),
+            "icloud.and.arrow.up",
+        ));
+    }
     // Recordings cannot be pinned, and "annotate" means trimming them.
     buttons
         .into_iter()
@@ -820,7 +829,7 @@ impl CardView {
             for (button, rect, label) in button_rects(bounds, item.is_saved(), item.is_video()) {
                 let down = pressed == Some(button);
                 match button {
-                    Button::Close | Button::Pin | Button::Annotate => {
+                    Button::Close | Button::Pin | Button::Annotate | Button::Upload => {
                         let alpha = if down { 0.85 } else { 0.6 };
                         draw::fill_rounded(
                             rect,

@@ -337,6 +337,7 @@ impl AppDelegate {
         crate::ocr::configure(config.text.clone());
         crate::video_editor::configure(config.recording.clone());
         crate::history::configure(config.history);
+        crate::upload::configure(config.upload.clone());
     }
 
     fn capture(&self, action: Action) {

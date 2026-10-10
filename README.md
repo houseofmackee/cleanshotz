@@ -218,10 +218,59 @@ the `[history]` section of the settings file:
 | `retention_days` | `30` | Remove entries older than this; `0` keeps them |
 | `recognize_text` | `true` | Recognize text in screenshots for search |
 
+### Uploads
+
+Upload a capture from the cloud button on its thumbnail, from the History
+window's context menu, or from the command line with
+`cleanshotz upload FILE`. The link is copied to the clipboard and saved with
+the capture in history. Nothing is uploaded until you choose a destination in
+the `[upload]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `destination` | `"none"` | `"http"`, `"s3"`, `"script"` or `"none"` |
+| `auto_upload` | `false` | Upload every capture and recording right away |
+
+Any value can say `"keychain:NAME"` to read a secret from the Keychain
+instead of the settings file. Store one with
+`cleanshotz secret set NAME` (it reads the secret from standard input) and
+remove it with `cleanshotz secret delete NAME`.
+
+**HTTP** (`[upload.http]`) sends a multipart form POST, or the raw file with
+`method = "PUT"`:
+
+```toml
+[upload.http]
+url = "https://example.com/upload"
+method = "POST"           # or "PUT"
+field = "file"            # form field for the file
+link = "json:data.link"   # "text", "json:a.b" or "header:Location"
+headers = { Authorization = "keychain:my-token" }
+form = { expires = "7d" } # extra form fields
+```
+
+**S3** (`[upload.s3]`) works with AWS S3, Cloudflare R2, MinIO and other
+S3-compatible storage. Requests are signed with Signature Version 4:
+
+```toml
+[upload.s3]
+bucket = "screenshots"
+region = "us-east-1"
+endpoint = ""            # empty for AWS; otherwise e.g. "https://<account>.r2.cloudflarestorage.com"
+access_key_id = "AKIA..."
+secret_access_key = "keychain:s3-secret"
+prefix = "shots/"
+public_url = "https://cdn.example.com"  # base of the copied link; empty uses the bucket URL
+acl = ""                 # e.g. "public-read"
+```
+
+**Script** (`[upload.script]`) runs `command` in a shell with the file path
+as its argument; the first line it prints is the link.
+
 ### Quick Access Overlay
 
 Each capture appears as a thumbnail in the bottom-left corner. Hover it to
-Copy, Save (or Show in Finder once saved), Annotate, Pin or Close it. Drag it
+Copy, Save (or Show in Finder once saved), Annotate, Pin, Upload or Close it. Drag it
 into any app to drop the image file there, or double-click it to annotate
 it. Closed
 thumbnails can be brought back with Restore Recently Closed in the menu.

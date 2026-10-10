@@ -57,6 +57,9 @@ pub fn deliver(mtm: MainThreadMarker, captured: Captured, settings: &CaptureSett
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
             crate::history::record_image(delivered.image.clone(), delivered.file.clone());
+            if crate::upload::auto_upload() {
+                crate::upload::start(mtm, delivered.file.clone());
+            }
             crate::quick_access::add(mtm, delivered);
         });
     });

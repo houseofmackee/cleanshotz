@@ -47,6 +47,8 @@ pub struct Entry {
     pub duration: Option<f64>,
     /// A small PNG.
     pub thumbnail: Vec<u8>,
+    /// Where the capture was uploaded, if it was.
+    pub link: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -71,7 +73,7 @@ pub struct Store {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i32 = 1;
+const SCHEMA_VERSION: i32 = 2;
 
 impl Store {
     pub fn open(path: &Path) -> rusqlite::Result<Store> {
@@ -105,6 +107,12 @@ impl Store {
                  CREATE INDEX IF NOT EXISTS captures_created ON captures(created);
                  CREATE VIRTUAL TABLE IF NOT EXISTS capture_text USING fts5(text);
                  PRAGMA user_version = 1;",
+            )?;
+        }
+        if version < 2 {
+            conn.execute_batch(
+                "ALTER TABLE captures ADD COLUMN link TEXT;
+                 PRAGMA user_version = 2;",
             )?;
         }
         Ok(Store { conn })
@@ -157,6 +165,17 @@ impl Store {
         Ok(id)
     }
 
+    /// Remembers the upload link of the newest entry for `path`.
+    pub fn set_link(&self, path: &Path, link: &str) -> rusqlite::Result<()> {
+        if let Some(id) = self.id_for_path(path)? {
+            self.conn.execute(
+                "UPDATE captures SET link = ?2 WHERE id = ?1",
+                params![id, link],
+            )?;
+        }
+        Ok(())
+    }
+
     pub fn id_for_path(&self, path: &Path) -> rusqlite::Result<Option<i64>> {
         self.conn
             .query_row(
@@ -191,7 +210,8 @@ impl Store {
             Show::Screenshots => "('image')",
             Show::Recordings => "('video', 'gif')",
         };
-        let columns = "c.id, c.kind, c.path, c.created, c.width, c.height, c.duration, c.thumbnail";
+        let columns =
+            "c.id, c.kind, c.path, c.created, c.width, c.height, c.duration, c.thumbnail, c.link";
         let row = |r: &rusqlite::Row| -> rusqlite::Result<Entry> {
             Ok(Entry {
                 id: r.get(0)?,
@@ -202,6 +222,7 @@ impl Store {
                 height: r.get(5)?,
                 duration: r.get(6)?,
                 thumbnail: r.get(7)?,
+                link: r.get(8)?,
             })
         };
         let query = query.trim();
@@ -337,6 +358,13 @@ mod tests {
         store
             .update_media(Path::new("/saved/x.png"), &[9], 7, 8, None)
             .unwrap();
+        store
+            .set_link(Path::new("/saved/x.png"), "https://x/y")
+            .unwrap();
+        assert_eq!(
+            store.list("", Show::All, 1).unwrap()[0].link.as_deref(),
+            Some("https://x/y")
+        );
         let e = &store.list("", Show::All, 1).unwrap()[0];
         assert_eq!((e.width, e.height, e.thumbnail.clone()), (7, 8, vec![9]));
         assert_eq!(

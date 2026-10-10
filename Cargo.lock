@@ -106,6 +106,7 @@ dependencies = [
  "objc2-image-io",
  "objc2-quartz-core",
  "objc2-screen-capture-kit",
+ "objc2-security",
  "objc2-service-management",
  "objc2-vision",
  "regex",
@@ -679,6 +680,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "709fe137109bd1e8b5a99390f77a7d8b2961dafc1a1c5db8f2e60329ad6d895a"
 dependencies = [
  "bitflags",
+ "block2",
+ "libc",
  "objc2",
  "objc2-core-foundation",
 ]

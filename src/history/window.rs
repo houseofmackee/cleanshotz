@@ -44,6 +44,8 @@ mod tag {
     pub const SHOW_IN_FINDER: isize = 4;
     pub const PIN: isize = 5;
     pub const DELETE: isize = 6;
+    pub const UPLOAD: isize = 7;
+    pub const COPY_LINK: isize = 8;
 }
 
 struct Item {
@@ -495,6 +497,12 @@ impl HistoryWindow {
         if !recording {
             add("Pin to Screen", tag::PIN, exists);
         }
+        if crate::upload::enabled() {
+            add("Upload", tag::UPLOAD, exists);
+        }
+        if item.entry.link.is_some() {
+            add("Copy Link", tag::COPY_LINK, true);
+        }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         add("Delete", tag::DELETE, true);
         menu
@@ -511,7 +519,7 @@ impl HistoryWindow {
         else {
             return;
         };
-        if !exists && tag != tag::DELETE {
+        if !exists && tag != tag::DELETE && tag != tag::COPY_LINK {
             crate::ui::toast::show(mtm, "The file is no longer there");
             return;
         }
@@ -522,6 +530,13 @@ impl HistoryWindow {
             }
             tag::OPEN | tag::EDIT => crate::editor::open_file(mtm, &entry.path),
             tag::COPY => copy(&entry),
+            tag::UPLOAD => crate::upload::start(mtm, entry.path.clone()),
+            tag::COPY_LINK => {
+                if let Some(link) = &entry.link {
+                    crate::ocr::copy_string(link);
+                    crate::ui::toast::show(mtm, "Link copied");
+                }
+            }
             tag::SHOW_IN_FINDER => {
                 NSWorkspace::sharedWorkspace()
                     .activateFileViewerSelectingURLs(&NSArray::from_retained_slice(&[url()]));

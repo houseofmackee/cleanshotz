@@ -245,6 +245,11 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   history folder instead of a temp folder.
 - Native Settings window, including a shortcut recorder.
 - `UploadBackend` trait and S3, HTTP, Imgur, script backends; credentials in Keychain.
+  Done: HTTP (multipart POST or PUT, link from text, JSON path or header),
+  S3-compatible storage with SigV4, and script backends; secrets in the
+  Keychain via `keychain:NAME`; auto upload; links saved in history;
+  `cleanshotz upload` and `cleanshotz secret`. Imgur is left out: its API
+  needs a registered client ID, and the HTTP backend can call it directly.
 - URL scheme `cleanshotz://`: extend the capture commands from M2 to full
   parity with CleanShot's commands, including parameters.
 - Socket server + `cleanshotz` CLI; App Intents / AppleScript dictionary.

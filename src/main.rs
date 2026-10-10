@@ -14,6 +14,7 @@ mod scroll;
 mod shortcut;
 mod state;
 mod ui;
+mod upload;
 mod video_editor;
 
 use std::process::ExitCode;
@@ -25,6 +26,12 @@ Usage:
   cleanshotz              Start the menu bar app
   cleanshotz --version    Print the version
   cleanshotz --help       Print this help
+  cleanshotz secret set NAME
+                          Store a secret (read from standard input) in the
+                          Keychain, for settings written as keychain:NAME
+  cleanshotz secret delete NAME
+  cleanshotz upload FILE  Upload a file with the configured destination and
+                          print its link
 
 Command-line capture commands are planned for milestone M9 (see PLAN.md).";
 
@@ -122,6 +129,8 @@ fn main() -> ExitCode {
                 }
             }
         }
+        Some("secret") => secret_command(&args[1..]),
+        Some("upload") if args.len() == 2 => upload_command(args[1].as_ref()),
         Some(other) => {
             eprintln!("cleanshotz: unknown argument {other:?}\n\n{USAGE}");
             ExitCode::from(2)
@@ -143,4 +152,68 @@ fn run_app() -> ExitCode {
     };
     app::run(config, config_path);
     ExitCode::SUCCESS
+}
+
+fn secret_command(args: &[String]) -> ExitCode {
+    let result = match args {
+        [action, name] if action == "set" => {
+            read_secret(name).and_then(|value| upload::keychain::set(name, &value))
+        }
+        [action, name] if action == "delete" => upload::keychain::delete(name),
+        _ => Err(format!(
+            "usage: cleanshotz secret set|delete NAME\n\n{USAGE}"
+        )),
+    };
+    match result {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(e) => {
+            eprintln!("cleanshotz: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// Reads one line from standard input, without echoing it in a terminal.
+fn read_secret(name: &str) -> Result<String, String> {
+    use std::io::{BufRead, IsTerminal};
+    let terminal = std::io::stdin().is_terminal();
+    if terminal {
+        eprint!("Value for {name}: ");
+        let _ = std::process::Command::new("/bin/stty")
+            .arg("-echo")
+            .status();
+    }
+    let mut line = String::new();
+    let read = std::io::stdin().lock().read_line(&mut line);
+    if terminal {
+        let _ = std::process::Command::new("/bin/stty").arg("echo").status();
+        eprintln!();
+    }
+    read.map_err(|e| e.to_string())?;
+    let value = line.trim_end_matches(['\r', '\n']).to_string();
+    if value.is_empty() {
+        return Err("the secret is empty".into());
+    }
+    Ok(value)
+}
+
+fn upload_command(path: &std::path::Path) -> ExitCode {
+    let config = match config::Config::load_or_create(&config::config_path()) {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("cleanshotz: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    upload::configure(config.upload);
+    match upload::upload_file(path) {
+        Ok(link) => {
+            println!("{link}");
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("cleanshotz: {e}");
+            ExitCode::FAILURE
+        }
+    }
 }

@@ -16,6 +16,7 @@ pub struct Config {
     pub text: TextSettings,
     pub recording: RecordingSettings,
     pub history: HistorySettings,
+    pub upload: UploadSettings,
     pub hotkeys: Hotkeys,
 }
 
@@ -325,6 +326,103 @@ impl Default for HistorySettings {
     }
 }
 
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Destination {
+    /// Uploading is off.
+    #[default]
+    None,
+    Http,
+    S3,
+    Script,
+}
+
+/// Uploading captures and copying a link to them.
+///
+/// Values may be `keychain:NAME` to read a secret from the Keychain (set
+/// it with `cleanshotz secret set NAME`).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct UploadSettings {
+    pub destination: Destination,
+    /// Upload every capture and recording automatically.
+    pub auto_upload: bool,
+    pub http: HttpUpload,
+    pub s3: S3Upload,
+    pub script: ScriptUpload,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct HttpUpload {
+    pub url: String,
+    /// `POST` sends multipart form data; `PUT` sends the file as the body.
+    pub method: String,
+    /// Multipart field name for the file.
+    pub field: String,
+    /// Extra multipart fields.
+    pub form: std::collections::BTreeMap<String, String>,
+    pub headers: std::collections::BTreeMap<String, String>,
+    /// Where the link is in the response: `text` (the whole body),
+    /// `json:path.to.link`, or `header:Name`.
+    pub link: String,
+}
+
+impl Default for HttpUpload {
+    fn default() -> Self {
+        Self {
+            url: String::new(),
+            method: "POST".into(),
+            field: "file".into(),
+            form: Default::default(),
+            headers: Default::default(),
+            link: "text".into(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct S3Upload {
+    pub bucket: String,
+    pub region: String,
+    /// Custom endpoint for S3-compatible storage, for example
+    /// `https://<account>.r2.cloudflarestorage.com`. Empty means AWS.
+    pub endpoint: String,
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    /// Prepended to file names, for example `screenshots/`.
+    pub prefix: String,
+    /// Base of public links, for example `https://cdn.example.com`;
+    /// empty uses the object URL.
+    pub public_url: String,
+    /// Canned ACL such as `public-read`; empty sends none.
+    pub acl: String,
+}
+
+impl Default for S3Upload {
+    fn default() -> Self {
+        Self {
+            bucket: String::new(),
+            region: "us-east-1".into(),
+            endpoint: String::new(),
+            access_key_id: String::new(),
+            secret_access_key: "keychain:s3-secret".into(),
+            prefix: String::new(),
+            public_url: String::new(),
+            acl: String::new(),
+        }
+    }
+}
+
+/// Runs a command with the file path as its argument; the first line it
+/// prints is the link.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct ScriptUpload {
+    pub command: String,
+}
+
 /// Global shortcuts. An empty string disables the shortcut.
 ///
 /// The defaults use Option+Shift so they do not collide with the system
@@ -445,8 +543,13 @@ pub fn log_dir() -> PathBuf {
     home_dir().join("Library/Logs/CleanShotZ")
 }
 
+/// The settings file: `CLEANSHOTZ_CONFIG` if set, otherwise
+/// `config.toml` in the application support directory.
 pub fn config_path() -> PathBuf {
-    app_support_dir().join("config.toml")
+    match std::env::var_os("CLEANSHOTZ_CONFIG") {
+        Some(path) if !path.is_empty() => PathBuf::from(path),
+        _ => app_support_dir().join("config.toml"),
+    }
 }
 
 fn home_dir() -> PathBuf {
@@ -500,6 +603,7 @@ mod tests {
         assert_eq!(config.text, TextSettings::default());
         assert_eq!(config.recording, RecordingSettings::default());
         assert_eq!(config.history, HistorySettings::default());
+        assert_eq!(config.upload, UploadSettings::default());
     }
 
     #[test]
@@ -523,6 +627,20 @@ mod tests {
         assert_eq!(hevc.codec_for(100, 100), Codec::Hevc);
         assert_eq!(r.bitrate(10, 10), 1_000_000);
         assert_eq!(r.bitrate(1920, 1080), 7_464_960);
+    }
+
+    #[test]
+    fn parses_upload_settings() {
+        let config: Config = toml::from_str(
+            "[upload]\ndestination = \"http\"\n[upload.http]\nurl = \"https://x\"\nlink = \"json:data.link\"\n[upload.http.headers]\nAuthorization = \"keychain:imgur\"\n",
+        )
+        .unwrap();
+        assert_eq!(config.upload.destination, Destination::Http);
+        assert_eq!(config.upload.http.method, "POST");
+        assert_eq!(
+            config.upload.http.headers["Authorization"],
+            "keychain:imgur"
+        );
     }
 
     #[test]

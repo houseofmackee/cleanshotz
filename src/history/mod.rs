@@ -198,6 +198,18 @@ pub fn prune() {
     });
 }
 
+/// Remembers where `path` was uploaded.
+pub fn set_link(path: PathBuf, link: String) {
+    std::thread::spawn(move || {
+        if let Some(store) = open_store()
+            && let Err(e) = store.set_link(&path, &link)
+        {
+            tracing::warn!(error = %e, "could not save the upload link");
+        }
+        changed();
+    });
+}
+
 /// Whether deleting the entry should also delete its file.
 pub fn owns_file(path: &Path) -> bool {
     path.starts_with(files_dir())

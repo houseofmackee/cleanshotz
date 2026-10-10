@@ -475,6 +475,9 @@ fn deliver(finish: Finish) {
                 (Ok(file), Some(thumbnail)) => {
                     tracing::info!(path = %file.display(), duration, "recording saved");
                     crate::history::record_video(file.clone(), thumbnail.0.clone(), duration);
+                    if crate::upload::auto_upload() {
+                        crate::upload::start(mtm, file.clone());
+                    }
                     crate::quick_access::add_video(
                         mtm,
                         file,

@@ -41,6 +41,12 @@
 	<string>14.0</string>
 	<key>LSUIElement</key>
 	<true/>
+	<key>NSAppTransportSecurity</key>
+	<dict>
+		<!-- Allows uploads to plain-HTTP servers on the local network. -->
+		<key>NSAllowsLocalNetworking</key>
+		<true/>
+	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>CleanShotZ shows your camera as an overlay while recording the screen.</string>
 	<key>NSHighResolutionCapable</key>
