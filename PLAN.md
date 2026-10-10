@@ -185,7 +185,8 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   reachable from Rust. Mitigation: a tiny Swift shim target linked as a static
   library, only where unavoidable.
 - **TCC permission resets:** unsigned or ad-hoc rebuilds lose Screen Recording
-  permission. Mitigation: sign every dev build with a fixed local certificate.
+  permission. Mitigation: dev builds are signed with a self-signed
+  "CleanShotZ Dev" certificate (`cargo xtask create-dev-cert`).
 - **Desktop icon hiding:** CleanShot covers icons with a wallpaper window
   rather than toggling Finder; we do the same (desktop-level NSWindow showing
   the wallpaper) to avoid restarting Finder.

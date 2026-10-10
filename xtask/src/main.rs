@@ -2,11 +2,13 @@
 //!
 //! - `bundle [--release]`: build and assemble a signed `CleanShotZ.app`
 //! - `run [--release]`: bundle, then launch the app
+//! - `create-dev-cert`: create the self-signed "CleanShotZ Dev" signing
+//!   identity in the login keychain
 //!
-//! Signing uses the identity in `CLEANSHOTZ_SIGN_IDENTITY` (a name or SHA-1
-//! from `security find-identity -p codesigning`). Without it the app is
-//! ad-hoc signed, which works but makes macOS forget the Screen Recording
-//! permission after every rebuild. See README.md.
+//! Signing identity, in order: `CLEANSHOTZ_SIGN_IDENTITY` (a name or SHA-1
+//! from `security find-identity -p codesigning`), then "CleanShotZ Dev" if it
+//! is in the keychain, then ad-hoc. Ad-hoc works but makes macOS forget the
+//! Screen Recording permission after every rebuild. See README.md.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -16,6 +18,7 @@ use anyhow::{Context, Result, bail};
 
 const APP_NAME: &str = "CleanShotZ";
 const BINARY: &str = "cleanshotz";
+const DEV_IDENTITY: &str = "CleanShotZ Dev";
 
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
@@ -33,7 +36,8 @@ fn main() -> Result<()> {
                 .status();
             run(Command::new("/usr/bin/open").arg("-n").arg(&app))?;
         }
-        _ => bail!("usage: cargo xtask <bundle|run> [--release]"),
+        Some("create-dev-cert") => create_dev_cert()?,
+        _ => bail!("usage: cargo xtask <bundle|run> [--release] | create-dev-cert"),
     }
     Ok(())
 }
@@ -80,25 +84,107 @@ fn bundle(release: bool) -> Result<PathBuf> {
 }
 
 fn sign(app: &Path, entitlements: &Path, release: bool) -> Result<()> {
-    let identity = std::env::var("CLEANSHOTZ_SIGN_IDENTITY").unwrap_or_default();
-    let identity = if identity.is_empty() {
-        eprintln!(
-            "note: CLEANSHOTZ_SIGN_IDENTITY is not set; ad-hoc signing. \
-             Screen Recording permission will reset on each rebuild."
-        );
-        "-".to_string()
-    } else {
-        identity
+    let identity = match std::env::var("CLEANSHOTZ_SIGN_IDENTITY") {
+        Ok(identity) if !identity.is_empty() => identity,
+        _ if has_identity(DEV_IDENTITY)? => DEV_IDENTITY.to_string(),
+        _ => {
+            eprintln!(
+                "note: no signing identity found; ad-hoc signing. Screen Recording \
+                 permission will reset on each rebuild. Run `cargo xtask create-dev-cert` once."
+            );
+            "-".to_string()
+        }
     };
     let mut codesign = Command::new("/usr/bin/codesign");
     codesign
         .args(["--force", "--sign", &identity, "--entitlements"])
         .arg(entitlements);
     if release {
-        // Hardened runtime and secure timestamp, as required for notarization.
-        codesign.args(["--options", "runtime", "--timestamp"]);
+        // Hardened runtime, as required for notarization.
+        codesign.args(["--options", "runtime"]);
+        // Apple's timestamp service only accepts Apple-issued certificates.
+        if identity.starts_with("Developer ID") {
+            codesign.arg("--timestamp");
+        }
     }
     run(codesign.arg(app))
+}
+
+/// Whether the keychain has a code signing identity (certificate plus private
+/// key) with this name. Untrusted self-signed identities count: codesign can
+/// use them, and TCC only needs the signature to be stable.
+fn has_identity(name: &str) -> Result<bool> {
+    let output = Command::new("/usr/bin/security")
+        .args(["find-identity", "-p", "codesigning"])
+        .output()
+        .context("running security find-identity")?;
+    Ok(String::from_utf8_lossy(&output.stdout).contains(&format!("\"{name}\"")))
+}
+
+/// Creates a self-signed code signing certificate and imports it, with its
+/// private key, into the login keychain. Codesign is pre-authorized to use
+/// the key. No trust settings are changed.
+fn create_dev_cert() -> Result<()> {
+    if has_identity(DEV_IDENTITY)? {
+        println!("\"{DEV_IDENTITY}\" already exists in the keychain");
+        return Ok(());
+    }
+    let dir = std::env::temp_dir().join(format!("cleanshotz-cert-{}", std::process::id()));
+    fs::create_dir_all(&dir)?;
+    let result = (|| {
+        fs::write(
+            dir.join("cert.cnf"),
+            format!(
+                "[req]\ndistinguished_name = dn\nx509_extensions = ext\nprompt = no\n\
+                 [dn]\nCN = {DEV_IDENTITY}\n\
+                 [ext]\nbasicConstraints = critical,CA:false\n\
+                 keyUsage = critical,digitalSignature\n\
+                 extendedKeyUsage = critical,codeSigning\n"
+            ),
+        )?;
+        // macOS's LibreSSL writes PKCS#12 files that `security import` accepts
+        // (OpenSSL 3 defaults to algorithms it rejects).
+        let openssl = "/usr/bin/openssl";
+        run(Command::new(openssl).current_dir(&dir).args([
+            "req", "-x509", "-newkey", "rsa:2048", "-nodes", "-days", "3650", "-config",
+            "cert.cnf", "-keyout", "key.pem", "-out", "cert.pem",
+        ]))?;
+        let output = Command::new(openssl)
+            .args(["rand", "-hex", "16"])
+            .output()?;
+        let password = String::from_utf8(output.stdout)?.trim().to_string();
+        run(Command::new(openssl)
+            .current_dir(&dir)
+            .args([
+                "pkcs12",
+                "-export",
+                "-inkey",
+                "key.pem",
+                "-in",
+                "cert.pem",
+                "-out",
+                "id.p12",
+                "-name",
+                DEV_IDENTITY,
+                "-passout",
+            ])
+            .arg(format!("pass:{password}")))?;
+        let keychain = std::env::var("HOME")? + "/Library/Keychains/login.keychain-db";
+        run(Command::new("/usr/bin/security").current_dir(&dir).args([
+            "import",
+            "id.p12",
+            "-k",
+            &keychain,
+            "-P",
+            &password,
+            "-T",
+            "/usr/bin/codesign",
+        ]))
+    })();
+    let _ = fs::remove_dir_all(&dir);
+    result?;
+    println!("created \"{DEV_IDENTITY}\"; `cargo xtask bundle` now signs with it");
+    Ok(())
 }
 
 fn package_version(manifest: &Path) -> Result<String> {

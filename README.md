@@ -22,14 +22,21 @@ attribute privacy permissions and the login item to it.
 ### Code signing and the Screen Recording permission
 
 macOS ties the Screen Recording permission to the app's code signature. An
-ad-hoc signature changes on every build, so macOS forgets the permission
-after each rebuild. To keep it, sign with a stable identity:
+ad-hoc signature changes on every build, so macOS would forget the permission
+after each rebuild. Builds are therefore signed with a self-signed
+certificate, which keeps the signature's designated requirement stable.
 
-1. Open Keychain Access, choose Certificate Assistant > Create a Certificate,
-   name it `CleanShotZ Dev`, identity type Self Signed Root, certificate type
-   Code Signing.
-2. `export CLEANSHOTZ_SIGN_IDENTITY="CleanShotZ Dev"` (for example in your shell profile).
-3. Rebuild with `cargo xtask run` and grant the permission once more.
+Once per machine, create it in your login keychain:
+
+```sh
+cargo xtask create-dev-cert
+```
+
+`cargo xtask bundle` and `run` then sign with "CleanShotZ Dev" automatically.
+To use a different identity, set `CLEANSHOTZ_SIGN_IDENTITY` to its name or
+SHA-1. Without any identity, builds fall back to ad-hoc signing. The
+certificate is not marked as trusted and does not need to be; it is only for
+local development, and release distribution needs a Developer ID (M10).
 
 ### Files
 
