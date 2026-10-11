@@ -414,6 +414,105 @@ is independent; the order is a suggestion (quick ones first).
   opaque window body is shown on a background). The editor's style menu,
   ••• menu and background labels are now translated too.
 
+### M13: Studio recordings
+Group 3 of the October 2026 comparison (CleanShot X 5.0's Studio Mode,
+Screen Studio, Cap): record the screen once, then decide afterwards how it
+looks: zooms that follow the action, a smooth cursor of any size, a
+background around the video, and the camera and keystrokes placed freely.
+The key change is that the cursor, clicks, keystrokes and camera are
+recorded as data and separate tracks instead of being burned into the
+video, and a renderer draws them at export (and in the preview).
+
+- **Recording in Studio mode:** a Studio switch in the Recording settings
+  and a "Record Screen (Studio)" action (menu, shortcut setting, URL
+  command, Shortcuts). The screen is recorded without the cursor and
+  without the keystroke pill and camera bubble windows (the recording
+  filter leaves them out; they still show on screen while recording).
+  Alongside it:
+  - cursor positions sampled at 120 Hz with timestamps relative to the
+    first video frame (in display points), plus the cursor image whenever
+    it changes (arrow, I-beam, hand…), stored once each with its hotspot;
+  - clicks (down and up, which button) and scrolls from the existing event
+    tap, and keystrokes from the keystroke display's tap (shortcuts only
+    by default, as now);
+  - the camera as its own movie file (AVCaptureSession with a movie
+    output), not as a window in the screen video;
+  - system audio and microphone as now.
+- **Project format:** a `.cszrec` package (a folder macOS shows as one
+  file) with `screen.mp4`, optional `camera.mov`, `events.json` (cursor
+  samples, cursor images, clicks, scrolls, keys), `cursors/*.png` and
+  `project.json` (the edits; versioned like `.cszdoc`). Quick Access and
+  History show it like a recording; Annotate opens the Studio editor.
+  "Export…" writes a normal MP4 or GIF.
+- **Renderer:** a custom `AVVideoCompositing` class written in Rust
+  (objc2 `define_class!`) that draws each output frame with Core Image on
+  a Metal-backed `CIContext`: background canvas → screen frame through the
+  current zoom transform (with optional motion blur) → rounded corners and
+  shadow → cursor sprite and click effects → keystroke pills → camera
+  frame (masked to a circle or rounded rectangle). The same compositor
+  drives the editor's preview (an `AVPlayerItem` video composition) and
+  the export (`AVAssetExportSession`, hardware HEVC or H.264), so what is
+  previewed is what is exported. All timing comes from `events.json` and
+  `project.json`, so rendering is a pure function of the frame time,
+  testable without a player.
+- **Backgrounds** (CleanShot X 5.0 "recording backgrounds"): the image
+  editor's fills, saved presets and wallpaper, padding, corner radius,
+  shadow, and the aspect sizes from M12 (16:9 for YouTube, 9:16 for
+  stories, 1:1). Output size: source, 1080p, 1440p, 4K or a width.
+- **Smooth cursor:** positions are resampled at the frame rate and
+  smoothed with a critically damped spring (no overshoot), with clicks as
+  fixed points the cursor must hit at the moment of the click. Settings:
+  smoothing (off to strong), cursor size (0.5x to 3x, drawn from the
+  recorded cursor images, scaled crisply), hide after a few idle seconds
+  (fades), and the click effect (none, ring, ripple).
+- **Automatic zooms:** clicks and bursts of typing are grouped when they
+  are close in time (within about 2.5 s) and place (within a third of the
+  frame); each group becomes a zoom segment from shortly before the first
+  event to about 1.5 s after the last, zoomed so the group's area fills
+  about 60% of the frame (clamped to 1.25x to 2.5x). While zoomed, the
+  view follows the smoothed cursor with a dead zone, never leaves the
+  recording and eases in and out (about 0.6 s, ease-in-out). Overlapping
+  segments merge. The generator is pure and unit-tested on synthetic
+  event timelines.
+- **Editing zooms:** a zoom track under the timeline: segments can be
+  moved, resized, deleted and added by dragging; each has a level (1.25x
+  to 4x) and follows the cursor or stays on a fixed point (set by
+  clicking in the preview). "Regenerate" redoes the automatic ones.
+- **Motion blur:** while the zoom moves, blur along the motion with
+  `CIMotionBlur` (angle and radius from the change of the transform
+  between frames); off by default, one switch.
+- **Camera and keystrokes after recording:** the camera's corner, size,
+  shape (circle, rounded square), border and visibility, and the
+  keystroke pills' position, size and visibility can all be changed in the
+  editor, and hidden for parts of the timeline.
+- **Editor:** the Studio editor builds on the video editor (trim, speed,
+  crop, mute keep working; crop applies to the screen video before the
+  background). Inspector tabs: Background, Cursor, Zoom, Camera, Keys,
+  Export. Edits are undoable and saved in `project.json`.
+- **Phases:** (a) Studio recording and the `.cszrec` format, opened in
+  the plain video editor (screen only); (b) the compositor with
+  background, cursor and clicks, preview and export; (c) automatic and
+  manual zooms with motion blur; (d) camera and keystrokes after
+  recording; (e) polish: performance (60 fps preview of a 1440p canvas on
+  an M1; export faster than real time), VoiceOver for the timeline,
+  translations, README.
+- **Risks:** a custom video compositor written through objc2 (it is called
+  on AVFoundation's own queues, so all state it reads must be immutable
+  per render request or behind a lock); reading the system cursor image
+  (`NSCursor.currentSystemCursor` covers most cursors; custom app cursors
+  may come out as the arrow); camera and screen clocks (both timed against
+  the host clock and aligned at the first frame); macOS 14, where clicks
+  come from the event tap fallback as they do today.
+
+### Future work
+- **Captions** (from group 3, deferred): subtitles made on the Mac with
+  Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor and
+  burned in or exported as SRT.
+- **Group 4, organization and workflow:** tags, ratings, notes and
+  collections in History; step capture; snapping to UI elements while
+  selecting; printing scrolling captures across pages; cropping the notch
+  out of full-screen captures.
+
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
   xtask dist` (zip, DMG, checksums), `cargo xtask create-release-cert`, the
