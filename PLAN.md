@@ -253,7 +253,7 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   noise), the best hash candidates and their neighbors are checked pixel
   by pixel with a small tolerance.
 
-### M9: History, uploads, automation
+### M9: History, uploads, automation (done)
 - History window with thumbnails, search, re-open, re-copy, delete.
   Done: SQLite store with FTS5 search over recognized text (improvement
   #4), thumbnails, filters, retention, and unsaved captures kept in the
@@ -311,6 +311,37 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   capture is saved in about 0.28 s (mostly PNG encoding); memory stays
   level over repeated captures (about 56 MB footprint). No changes were
   needed.
+
+### M11: Small tools from other capture apps
+Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
+(October 2026). Each item is small and independent.
+- **QR codes in Capture Text:** detect QR codes (and other barcodes) in the
+  selected area with Vision's barcode request, next to the text request.
+  Copy the payload; for a link, the toast offers to open it. The
+  `capture-text` command returns the payload too.
+- **Color picker:** a capture-overlay mode with its own shortcut and a
+  `pick-color` command. The magnifier loupe shows the pixel under the
+  pointer; click or Return copies it as hex (`#RRGGBB`), Shift copies
+  `rgb()`, Escape cancels. Dragging copies the average color of the
+  area. Colors are converted to sRGB first, so the value matches what
+  other apps and the web show. A toast shows a swatch and the value.
+- **Rotate and flip in the editor:** rotate 90° left or right, flip
+  horizontally or vertically, from the ••• menu with shortcuts; each is one
+  undo step. Annotations, crop and background turn with the image.
+- **Resize in the editor:** a sheet with width and height (linked by
+  default), percentages and 1x for Retina captures; one undo step. Reuses
+  the pipeline's `resize` code.
+- **Microphone level and mute warning:** a level meter next to the timer
+  in the recording bar while the microphone is on, and a warning toast
+  when it has been silent for the first few seconds (muted or the wrong
+  input).
+- **Convert to sRGB:** a Screenshots setting (off by default) that converts
+  captures from the display's color space to sRGB before saving, copying
+  and uploading, so colors look the same on other screens. Also a
+  `srgb` pipeline step.
+- **Raycast extension:** a separate repository with commands that open
+  `cleanshotz://` URLs (capture modes, recording, history, pins), using the
+  existing URL scheme; no changes to the app.
 
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
