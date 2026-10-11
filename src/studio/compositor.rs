@@ -70,8 +70,9 @@ impl Renderer {
         events: &Events,
         project: &Project,
         video: (f64, f64),
+        duration: f64,
     ) -> Result<Self, String> {
-        let scene = Scene::new(events, project, video);
+        let scene = Scene::new(events, project, video, duration);
         let layout = scene.layout;
         let output = project.output.fit(layout.canvas.0, layout.canvas.1);
         let background = match &project.background {
@@ -108,6 +109,11 @@ impl Renderer {
         })
     }
 
+    /// The view at `t`.
+    pub fn view(&self, t: f64) -> super::zoom::View {
+        self.scene.view(t)
+    }
+
     /// The rendered frame size in pixels.
     pub fn output(&self) -> (usize, usize) {
         self.output
@@ -129,7 +135,13 @@ impl Renderer {
         // SAFETY: Core Image calls on immutable images.
         unsafe {
             let spot = self.ci_rect(layout.video);
-            let video = source.imageByApplyingTransform(translate(spot.origin.x, spot.origin.y));
+            let video = source.imageByApplyingTransform(self.video_transform(frame.view, spot));
+            let video = if self.scene.motion_blur {
+                self.blur_motion(&video, &frame)
+            } else {
+                video
+            };
+            let video = video.imageByCroppingToRect(spot);
             let video = if layout.radius > 0.0 {
                 rounded(&video, spot, layout.radius)
             } else {
@@ -163,6 +175,79 @@ impl Renderer {
                     )
                     .imageByCroppingToRect(CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(ow, oh)))
             }
+        }
+    }
+
+    /// Maps the screen video (Core Image coordinates, pixels) so the part
+    /// in `view` fills `spot`.
+    fn video_transform(&self, view: super::zoom::View, spot: CGRect) -> CGAffineTransform {
+        let (vw, vh) = (spot.size.width, spot.size.height);
+        let s = self.scene.scale;
+        let z = view.level;
+        // The visible part's left and bottom edges, in video pixels with
+        // Core Image's bottom-left origin.
+        let left = view.center.x * s - vw / z / 2.0;
+        let bottom = vh - (view.center.y * s + vh / z / 2.0);
+        CGAffineTransform {
+            a: z,
+            b: 0.0,
+            c: 0.0,
+            d: z,
+            tx: spot.origin.x - left * z,
+            ty: spot.origin.y - bottom * z,
+        }
+    }
+
+    /// Blurs the video along the view's movement since the last frame
+    /// (panning) and toward its center (zooming).
+    fn blur_motion(&self, video: &CIImage, frame: &super::scene::Frame) -> Retained<CIImage> {
+        let spot = self.ci_rect(self.scene.layout.video);
+        let now = self.video_transform(frame.view, spot);
+        let before = self.video_transform(frame.previous, spot);
+        // How far the middle of the picture moved, in canvas pixels.
+        let (mx, my) = (
+            spot.origin.x + spot.size.width / 2.0,
+            spot.origin.y + spot.size.height / 2.0,
+        );
+        let (ax, ay) = ((mx - now.tx) / now.a, (my - now.ty) / now.d);
+        let moved = (
+            before.a * ax + before.tx - mx,
+            before.d * ay + before.ty - my,
+        );
+        let pan = moved.0.hypot(moved.1);
+        let zoom = (frame.view.level - frame.previous.level).abs() * 60.0;
+        // SAFETY: built-in filters with valid parameters.
+        unsafe {
+            let mut image = video.retain();
+            if pan > 1.5 {
+                image = image.imageByApplyingFilter_withInputParameters(
+                    &NSString::from_str("CIMotionBlur"),
+                    &params(&[
+                        (
+                            "inputRadius",
+                            NSNumber::new_f64((pan * 0.8).min(30.0)).into(),
+                        ),
+                        (
+                            "inputAngle",
+                            NSNumber::new_f64(moved.1.atan2(moved.0)).into(),
+                        ),
+                    ]),
+                );
+            }
+            if zoom > 0.05 {
+                let center = CIVector::vectorWithX_Y(mx, my);
+                image = image.imageByApplyingFilter_withInputParameters(
+                    &NSString::from_str("CIZoomBlur"),
+                    &params(&[
+                        ("inputCenter", center.into()),
+                        (
+                            "inputAmount",
+                            NSNumber::new_f64((zoom * 6.0).min(20.0)).into(),
+                        ),
+                    ]),
+                );
+            }
+            image
         }
     }
 
@@ -240,17 +325,6 @@ impl Renderer {
 
 fn ease_out(x: f64) -> f64 {
     1.0 - (1.0 - x.clamp(0.0, 1.0)).powi(3)
-}
-
-fn translate(x: f64, y: f64) -> CGAffineTransform {
-    CGAffineTransform {
-        a: 1.0,
-        b: 0.0,
-        c: 0.0,
-        d: 1.0,
-        tx: x,
-        ty: y,
-    }
 }
 
 fn scale(x: f64, y: f64) -> CGAffineTransform {

@@ -278,6 +278,9 @@
 /* src/editor/window.rs */
 "Double Arrow" = "Double Arrow";
 
+/* src/studio/track.rs */
+"Drag a zoom to move it or its edges to resize it. Double-click to add one; Delete removes the selected one." = "Drag a zoom to move it or its edges to resize it. Double-click to add one; Delete removes the selected one.";
+
 /* src/video_editor/crop.rs */
 "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop." = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
 
@@ -286,6 +289,9 @@
 
 /* src/capture/overlay.rs */
 "Drag to select an area. Space picks a window instead. Escape cancels." = "Drag to select an area. Space picks a window instead. Escape cancels.";
+
+/* src/studio/window.rs */
+"Drag zooms in the track under the video. Double-click it to add one." = "Drag zooms in the track under the video. Double-click it to add one.";
 
 /* src/editor/tools.rs */
 "Ellipse" = "Ellipse";

@@ -22,12 +22,18 @@ use objc2_foundation::{NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize
 use super::compositor::Renderer;
 use super::events::Events;
 use super::project::{ClickEffect, OutputSize, Project};
+use super::track::ZoomTrack;
+use super::zoom::{Focus, Zoom};
 use super::{media, package};
 use crate::editor::model::{Aspect, Background, Fill};
 use crate::editor::presets;
 
 const INSPECTOR: f64 = 300.0;
 const ROW: f64 = 30.0;
+/// The zoom track's height.
+const TRACK: f64 = 52.0;
+/// Room for the whole inspector.
+const MIN_HEIGHT: f64 = 780.0;
 
 /// A choice in the background menu.
 #[derive(Clone)]
@@ -49,6 +55,10 @@ struct Ui {
     smoothing: Retained<NSSlider>,
     hide_idle: Retained<NSButton>,
     clicks: Retained<NSPopUpButton>,
+    zoom_level: Retained<NSSlider>,
+    zoom_follow: Retained<NSButton>,
+    zoom_delete: Retained<NSButton>,
+    motion_blur: Retained<NSButton>,
     output: Retained<NSPopUpButton>,
     export: Retained<NSButton>,
     status: Retained<NSTextField>,
@@ -59,6 +69,7 @@ pub struct Ivars {
     package: PathBuf,
     events: Events,
     video: (f64, f64),
+    duration: f64,
     project: RefCell<Project>,
     renderer: RefCell<Arc<Renderer>>,
     choices: RefCell<Vec<BackgroundChoice>>,
@@ -66,6 +77,11 @@ pub struct Ivars {
     player: OnceCell<Retained<AVPlayer>>,
     item: OnceCell<Retained<AVPlayerItem>>,
     ui: OnceCell<Ui>,
+    track: OnceCell<Retained<ZoomTrack>>,
+    /// The playhead observer, removed when the window closes.
+    observer: OnceCell<Retained<AnyObject>>,
+    /// The zoom selected in the track.
+    selected: std::cell::Cell<Option<usize>>,
 }
 
 impl Ivars {
@@ -87,8 +103,13 @@ define_class!(
         #[unsafe(method(windowWillClose:))]
         fn window_will_close(&self, _notification: &NSNotification) {
             if let Some(player) = self.ivars().player.get() {
-                // SAFETY: pausing a player.
-                unsafe { player.pause() };
+                // SAFETY: pausing a player and removing its observer.
+                unsafe {
+                    player.pause();
+                    if let Some(observer) = self.ivars().observer.get() {
+                        player.removeTimeObserver(observer);
+                    }
+                }
             }
             super::registry::remove(self.ivars().id);
         }
@@ -104,23 +125,39 @@ define_class!(
         fn export_action(&self, _sender: &AnyObject) {
             self.export();
         }
+
+        #[unsafe(method(zoomChanged:))]
+        fn zoom_changed(&self, _sender: &AnyObject) {
+            self.apply_zoom_controls();
+        }
+
+        #[unsafe(method(deleteZoom:))]
+        fn delete_zoom_action(&self, _sender: &AnyObject) {
+            self.delete_zoom();
+        }
+
+        #[unsafe(method(regenerateZooms:))]
+        fn regenerate_zooms(&self, _sender: &AnyObject) {
+            self.regenerate();
+        }
     }
 );
 
 impl StudioEditor {
     pub fn open(mtm: MainThreadMarker, id: u64, package: &Path) -> Result<Retained<Self>, String> {
-        let events = package::load_events(package)?;
-        let project = package::load_project(package);
-        let (w, h, _) = media::screen_info(package);
-        if w <= 0.0 || h <= 0.0 {
-            return Err(format!("{} has no screen video", package.display()));
-        }
-        let renderer = Arc::new(Renderer::new(package, &events, &project, (w, h))?);
+        let super::Loaded {
+            events,
+            project,
+            video: (w, h),
+            duration,
+        } = super::load(package)?;
+        let renderer = Arc::new(Renderer::new(package, &events, &project, (w, h), duration)?);
         let this = Self::alloc(mtm).set_ivars(Ivars {
             id,
             package: package.to_path_buf(),
             events,
             video: (w, h),
+            duration,
             project: RefCell::new(project),
             renderer: RefCell::new(renderer),
             choices: RefCell::new(Vec::new()),
@@ -128,6 +165,9 @@ impl StudioEditor {
             player: OnceCell::new(),
             item: OnceCell::new(),
             ui: OnceCell::new(),
+            track: OnceCell::new(),
+            observer: OnceCell::new(),
+            selected: std::cell::Cell::new(None),
         });
         // SAFETY: NSObject's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -145,7 +185,10 @@ impl StudioEditor {
         let fit = (visible.size.width * 0.8 - INSPECTOR) / ow as f64;
         let fit = fit.min(visible.size.height * 0.8 / oh as f64).min(0.6);
         let (pw, ph) = ((ow as f64 * fit).max(480.0), (oh as f64 * fit).max(400.0));
-        let frame = NSRect::new(NSPoint::ZERO, NSSize::new(pw + INSPECTOR, ph.max(560.0)));
+        let frame = NSRect::new(
+            NSPoint::ZERO,
+            NSSize::new(pw + INSPECTOR, (ph + TRACK).max(MIN_HEIGHT)),
+        );
         // SAFETY: designated NSWindow initializer.
         let window = unsafe {
             NSWindow::initWithContentRect_styleMask_backing_defer(
@@ -167,7 +210,7 @@ impl StudioEditor {
             .file_stem()
             .map_or_else(|| "Studio".into(), |n| n.to_string_lossy().into_owned());
         window.setTitle(&NSString::from_str(&title));
-        window.setContentMinSize(NSSize::new(480.0 + INSPECTOR, 560.0));
+        window.setContentMinSize(NSSize::new(480.0 + INSPECTOR, MIN_HEIGHT));
         window.setDelegate(Some(ProtocolObject::from_ref(self)));
         let content = window.contentView().expect("windows have a content view");
         let height = frame.size.height;
@@ -182,8 +225,8 @@ impl StudioEditor {
             let view = AVPlayerView::initWithFrame(
                 AVPlayerView::alloc(mtm),
                 NSRect::new(
-                    NSPoint::ZERO,
-                    NSSize::new(frame.size.width - INSPECTOR, height),
+                    NSPoint::new(0.0, TRACK),
+                    NSSize::new(frame.size.width - INSPECTOR, height - TRACK),
                 ),
             );
             view.setControlsStyle(AVPlayerViewControlsStyle::Inline);
@@ -195,6 +238,36 @@ impl StudioEditor {
                 | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         content.addSubview(&view);
+        let track = ZoomTrack::new(
+            mtm,
+            self.ivars().id,
+            NSRect::new(
+                NSPoint::ZERO,
+                NSSize::new(frame.size.width - INSPECTOR, TRACK),
+            ),
+        );
+        track.setAutoresizingMask(NSAutoresizingMaskOptions::ViewWidthSizable);
+        content.addSubview(&track);
+        let _ = self.ivars().track.set(track);
+        // Move the playhead along with playback.
+        let id = self.ivars().id;
+        let block = block2::RcBlock::new(move |_time: CMTime| {
+            if let Some(track) =
+                super::registry::get(id).and_then(|e| e.ivars().track.get().cloned())
+            {
+                track.setNeedsDisplay(true);
+            }
+        });
+        // SAFETY: a main-queue observer with a block of the right signature;
+        // removed when the window closes.
+        let observer = unsafe {
+            player.addPeriodicTimeObserverForInterval_queue_usingBlock(
+                CMTime::with_seconds(1.0 / 30.0, 600),
+                None,
+                &block,
+            )
+        };
+        let _ = self.ivars().observer.set(observer);
 
         let inspector = NSView::initWithFrame(
             NSView::alloc(mtm),
@@ -348,6 +421,56 @@ impl StudioEditor {
         let clicks = popup(&crate::i18n::labels(&["None", "Ring", "Ripple"]), y);
         y -= ROW + 14.0;
 
+        heading("Zoom", y);
+        y -= ROW + 2.0;
+        label("Level:", y);
+        let zoom_level = slider(super::zoom::MIN_LEVEL, super::zoom::MAX_LEVEL, y);
+        // SAFETY: the action exists on the editor.
+        unsafe { zoom_level.setAction(Some(sel!(zoomChanged:))) };
+        y -= ROW;
+        let zoom_follow = check("Follow the cursor", y);
+        // SAFETY: the action exists on the editor.
+        unsafe { zoom_follow.setAction(Some(sel!(zoomChanged:))) };
+        y -= ROW;
+        let button = |title: &str, action, y: f64, left: f64, w: f64| {
+            // SAFETY: the action exists on the editor.
+            let b = unsafe {
+                NSButton::buttonWithTitle_target_action(
+                    &NSString::from_str(&crate::i18n::tr(title)),
+                    Some(target),
+                    Some(action),
+                    mtm,
+                )
+            };
+            place(&b, NSRect::new(NSPoint::new(left, y), NSSize::new(w, 28.0)));
+            b
+        };
+        let zoom_delete = button("Delete Zoom", sel!(deleteZoom:), y, x + 96.0, width - 96.0);
+        y -= ROW + 2.0;
+        button(
+            "Make Automatic Zooms Again",
+            sel!(regenerateZooms:),
+            y,
+            x,
+            width,
+        );
+        y -= ROW;
+        let motion_blur = check("Motion blur", y);
+        y -= ROW;
+        let hint = NSTextField::wrappingLabelWithString(
+            &NSString::from_str(&t!(
+                "Drag zooms in the track under the video. Double-click it to add one."
+            )),
+            mtm,
+        );
+        hint.setFont(Some(&NSFont::systemFontOfSize(11.0)));
+        hint.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+        place(
+            &hint,
+            NSRect::new(NSPoint::new(x, y - 10.0), NSSize::new(width, 30.0)),
+        );
+        y -= ROW + 20.0;
+
         heading("Export", y);
         y -= ROW + 2.0;
         label("Output:", y);
@@ -393,6 +516,10 @@ impl StudioEditor {
             smoothing,
             hide_idle,
             clicks,
+            zoom_level,
+            zoom_follow,
+            zoom_delete,
+            motion_blur,
             output,
             export,
             status,
@@ -485,6 +612,27 @@ impl StudioEditor {
                 .position(|o| *o == project.output)
                 .unwrap_or(0) as isize,
         );
+        ui.motion_blur.setState(on(project.motion_blur));
+        let selected = self
+            .ivars()
+            .selected
+            .get()
+            .and_then(|i| project.zooms.get(i));
+        for control in [
+            &*ui.zoom_level as &objc2_app_kit::NSControl,
+            &ui.zoom_follow,
+            &ui.zoom_delete,
+        ] {
+            control.setEnabled(selected.is_some());
+        }
+        if let Some(zoom) = selected {
+            ui.zoom_level.setDoubleValue(zoom.level);
+            ui.zoom_follow
+                .setState(on(zoom.focus == super::zoom::Focus::Cursor));
+        }
+        if let Some(track) = self.ivars().track.get() {
+            track.setNeedsDisplay(true);
+        }
     }
 
     /// Reads the controls into the project, saves it and updates the
@@ -548,6 +696,7 @@ impl StudioEditor {
             .get(ui.output.indexOfSelectedItem().max(0) as usize)
             .copied()
             .unwrap_or(OutputSize::P1080);
+        project.motion_blur = ui.motion_blur.state() == NSControlStateValueOn;
         if let Err(e) = self.set_project(project) {
             tracing::error!(error = %e, "studio change not applied");
             crate::ui::toast::show(mtm, &e);
@@ -564,6 +713,7 @@ impl StudioEditor {
             &ivars.events,
             &project,
             ivars.video,
+            ivars.duration,
         )?);
         package::save_project(&ivars.package, &project)?;
         *ivars.project.borrow_mut() = project;
@@ -584,6 +734,157 @@ impl StudioEditor {
             }
         }
         Ok(())
+    }
+
+    pub fn duration(&self) -> f64 {
+        self.ivars().duration
+    }
+
+    pub fn zooms(&self) -> Vec<Zoom> {
+        self.ivars().project.borrow().zooms.clone()
+    }
+
+    pub fn selected_zoom(&self) -> Option<usize> {
+        self.ivars().selected.get()
+    }
+
+    pub fn select_zoom(&self, index: Option<usize>) {
+        self.ivars().selected.set(index);
+        self.sync_controls();
+    }
+
+    /// The playhead, in seconds.
+    pub fn current_time(&self) -> f64 {
+        self.ivars()
+            .player
+            .get()
+            // SAFETY: reading the player's time.
+            .map_or(0.0, |p| unsafe { p.currentTime().seconds() })
+            .max(0.0)
+    }
+
+    pub fn seek(&self, t: f64) {
+        if let Some(player) = self.ivars().player.get() {
+            // SAFETY: seeking a player on the main thread.
+            unsafe {
+                let zero = CMTime::with_seconds(0.0, 600);
+                player.seekToTime_toleranceBefore_toleranceAfter(
+                    CMTime::with_seconds(t, 600),
+                    zero,
+                    zero,
+                );
+            }
+        }
+        if let Some(track) = self.ivars().track.get() {
+            track.setNeedsDisplay(true);
+        }
+    }
+
+    /// Changes the zooms for display only (while dragging in the track).
+    pub fn set_zooms_quietly(&self, zooms: Vec<Zoom>) {
+        self.ivars().project.borrow_mut().zooms = zooms;
+    }
+
+    /// Applies the zooms changed while dragging to the preview.
+    pub fn commit_zooms(&self) {
+        let project = self.ivars().project.borrow().clone();
+        self.apply(project);
+    }
+
+    /// Adds a two-second zoom on the cursor at `t` (shortened to fit before
+    /// the next one).
+    pub fn add_zoom(&self, t: f64) {
+        let mut project = self.ivars().project.borrow().clone();
+        let next = project
+            .zooms
+            .iter()
+            .filter(|z| z.start > t)
+            .map(|z| z.start)
+            .fold(self.duration(), f64::min);
+        if project.zooms.iter().any(|z| t >= z.start && t <= z.end) || next - t < 0.5 {
+            return;
+        }
+        project.zooms.push(Zoom {
+            start: t,
+            end: (t + 2.0).min(next),
+            level: 2.0,
+            focus: Focus::Cursor,
+            auto: false,
+        });
+        project.zooms.sort_by(|a, b| a.start.total_cmp(&b.start));
+        let index = project.zooms.iter().position(|z| z.start == t);
+        self.ivars().selected.set(index);
+        self.apply(project);
+    }
+
+    pub fn delete_zoom(&self) {
+        let Some(index) = self.ivars().selected.take() else {
+            return;
+        };
+        let mut project = self.ivars().project.borrow().clone();
+        if index < project.zooms.len() {
+            project.zooms.remove(index);
+            self.apply(project);
+        }
+    }
+
+    /// Replaces the automatic zooms with freshly made ones; zooms added or
+    /// changed by hand stay.
+    fn regenerate(&self) {
+        let ivars = self.ivars();
+        let mut project = ivars.project.borrow().clone();
+        let scale = if ivars.events.scale > 0.0 {
+            ivars.events.scale
+        } else {
+            1.0
+        };
+        let made = super::zoom::automatic(
+            &ivars.events,
+            (ivars.video.0 / scale, ivars.video.1 / scale),
+            ivars.duration,
+        );
+        project.zooms.retain(|z| !z.auto);
+        let kept = project.zooms.clone();
+        project.zooms.extend(
+            made.into_iter()
+                .filter(|m| !kept.iter().any(|k| m.start < k.end && k.start < m.end)),
+        );
+        project.zooms.sort_by(|a, b| a.start.total_cmp(&b.start));
+        ivars.selected.set(None);
+        self.apply(project);
+    }
+
+    /// Reads the selected zoom's controls.
+    fn apply_zoom_controls(&self) {
+        let (Some(ui), Some(index)) = (self.ivars().ui.get(), self.ivars().selected.get()) else {
+            return;
+        };
+        let mut project = self.ivars().project.borrow().clone();
+        let Some(zoom) = project.zooms.get_mut(index) else {
+            return;
+        };
+        zoom.level = (ui.zoom_level.doubleValue() * 4.0).round() / 4.0;
+        zoom.focus = if ui.zoom_follow.state() == NSControlStateValueOn {
+            Focus::Cursor
+        } else {
+            // Stay where the view is in the middle of the zoom.
+            let middle = (zoom.start + zoom.end) / 2.0;
+            let view = self.ivars().renderer.borrow().view(middle);
+            Focus::Fixed {
+                x: view.center.x,
+                y: view.center.y,
+            }
+        };
+        zoom.auto = false;
+        self.apply(project);
+    }
+
+    fn apply(&self, project: Project) {
+        if let Err(e) = self.set_project(project) {
+            tracing::error!(error = %e, "studio change not applied");
+            crate::ui::toast::show(self.mtm(), &e);
+        }
+        self.sync_controls();
     }
 
     /// Renders the recording to an MP4 in the save folder and shows it in

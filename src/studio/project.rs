@@ -16,6 +16,11 @@ pub struct Project {
     pub background: Option<Background>,
     pub cursor: CursorStyle,
     pub output: OutputSize,
+    pub zooms: Vec<super::zoom::Zoom>,
+    /// The automatic zooms were made (so deleting them all sticks).
+    pub zooms_made: bool,
+    /// Blur along the motion while the view moves.
+    pub motion_blur: bool,
 }
 
 impl Default for Project {
@@ -25,6 +30,9 @@ impl Default for Project {
             background: Some(Background::default()),
             cursor: CursorStyle::default(),
             output: OutputSize::P1080,
+            zooms: Vec::new(),
+            zooms_made: false,
+            motion_blur: false,
         }
     }
 }

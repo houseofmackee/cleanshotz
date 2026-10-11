@@ -10,7 +10,9 @@ pub mod media;
 pub mod package;
 pub mod project;
 pub mod scene;
+mod track;
 mod window;
+pub mod zoom;
 
 use std::path::Path;
 
@@ -25,6 +27,42 @@ pub fn recorded(mtm: MainThreadMarker, package: &Path) {
         crate::history::record_video(package.to_path_buf(), thumbnail, duration);
     }
     open(mtm, package);
+}
+
+/// A package's events and edits, and its screen video's size and length.
+pub struct Loaded {
+    pub events: events::Events,
+    pub project: project::Project,
+    pub video: (f64, f64),
+    pub duration: f64,
+}
+
+/// Loads a package; the first time, makes its automatic zooms.
+pub fn load(package: &Path) -> Result<Loaded, String> {
+    let events = package::load_events(package)?;
+    let mut project = package::load_project(package);
+    let (w, h, duration) = media::screen_info(package);
+    if w <= 0.0 || h <= 0.0 {
+        return Err(format!("{} has no screen video", package.display()));
+    }
+    if !project.zooms_made {
+        let scale = if events.scale > 0.0 {
+            events.scale
+        } else {
+            1.0
+        };
+        project.zooms = zoom::automatic(&events, (w / scale, h / scale), duration);
+        project.zooms_made = true;
+        if let Err(e) = package::save_project(package, &project) {
+            tracing::warn!(error = %e, "studio project not saved");
+        }
+    }
+    Ok(Loaded {
+        events,
+        project,
+        video: (w, h),
+        duration,
+    })
 }
 
 /// Opens a `.cszrec` package in the Studio editor.
@@ -91,14 +129,14 @@ mod registry {
 /// an MP4, to check the compositor without the editor.
 #[cfg(debug_assertions)]
 pub fn export_sample(package: &Path, output: &Path) -> Result<(), String> {
-    let events = package::load_events(package)?;
-    let project = package::load_project(package);
-    let (w, h, duration) = media::screen_info(package);
+    let Loaded {
+        events,
+        project,
+        video,
+        duration,
+    } = load(package)?;
     let renderer = std::sync::Arc::new(compositor::Renderer::new(
-        package,
-        &events,
-        &project,
-        (w, h),
+        package, &events, &project, video, duration,
     )?);
     let started = std::time::Instant::now();
     media::export(package, renderer, output)?;

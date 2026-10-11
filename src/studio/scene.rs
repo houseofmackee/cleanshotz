@@ -8,6 +8,7 @@
 
 use super::events::{Click, CursorSample, Events};
 use super::project::{CursorStyle, Project};
+use super::zoom::{Camera, View};
 use crate::capture::geometry::{Point, Rect};
 use crate::editor::model::Background;
 
@@ -233,6 +234,10 @@ pub struct ClickDraw {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Frame {
+    /// How close the view is and where it looks.
+    pub view: View,
+    /// The view a frame earlier, for motion blur.
+    pub previous: View,
     pub cursor: Option<CursorDraw>,
     pub clicks: Vec<ClickDraw>,
 }
@@ -246,42 +251,64 @@ pub struct Scene {
     pub style: CursorStyle,
     path: CursorPath,
     clicks: Vec<Click>,
+    camera: Camera,
+    /// The recorded area's size in points.
+    area: (f64, f64),
+    pub motion_blur: bool,
 }
 
 impl Scene {
-    /// `video`: the screen video's size in pixels.
-    pub fn new(events: &Events, project: &Project, video: (f64, f64)) -> Self {
+    /// `video`: the screen video's size in pixels; `duration` its length.
+    pub fn new(events: &Events, project: &Project, video: (f64, f64), duration: f64) -> Self {
         let scale = if events.scale > 0.0 {
             events.scale
         } else {
             1.0
         };
+        let path = CursorPath::new(&events.cursor, &events.clicks, project.cursor.smoothing);
+        let area = (video.0 / scale, video.1 / scale);
+        let camera = Camera::new(&project.zooms, area, duration, 60.0, |t| path.position(t));
         Self {
             layout: layout(video, project.background.as_ref(), scale),
             scale,
             style: project.cursor,
-            path: CursorPath::new(&events.cursor, &events.clicks, project.cursor.smoothing),
+            path,
             clicks: events.clicks.iter().filter(|c| c.down).copied().collect(),
+            camera,
+            area,
+            motion_blur: project.motion_blur,
         }
     }
 
-    /// A point of the recorded area on the canvas.
-    pub fn to_canvas(&self, p: Point) -> Point {
+    /// The view at `t` (the whole recording when there is no zoom).
+    pub fn view(&self, t: f64) -> View {
+        self.camera.view(t).unwrap_or(View {
+            level: 1.0,
+            center: Point::new(self.area.0 / 2.0, self.area.1 / 2.0),
+        })
+    }
+
+    /// A point of the recorded area on the canvas, through `view`.
+    pub fn to_canvas(&self, p: Point, view: View) -> Point {
+        let left = view.center.x - self.area.0 / view.level / 2.0;
+        let top = view.center.y - self.area.1 / view.level / 2.0;
         Point::new(
-            self.layout.video.x + p.x * self.scale,
-            self.layout.video.y + p.y * self.scale,
+            self.layout.video.x + (p.x - left) * view.level * self.scale,
+            self.layout.video.y + (p.y - top) * view.level * self.scale,
         )
     }
 
     pub fn frame(&self, t: f64) -> Frame {
         let style = self.style;
+        let view = self.view(t);
+        let previous = self.view(t - 1.0 / 60.0);
         let cursor = (style.visible)
             .then(|| self.path.position(t))
             .flatten()
             .map(|p| CursorDraw {
                 image: self.path.image(t),
-                tip: self.to_canvas(p),
-                scale: self.scale * style.size.clamp(0.5, 3.0),
+                tip: self.to_canvas(p, view),
+                scale: self.scale * style.size.clamp(0.5, 3.0) * view.level,
                 opacity: if style.hide_when_idle {
                     self.path.idle_opacity(t)
                 } else {
@@ -296,13 +323,18 @@ impl Scene {
                 .iter()
                 .filter(|c| t >= c.t && t < c.t + CLICK)
                 .map(|c| ClickDraw {
-                    at: self.to_canvas(Point::new(c.x, c.y)),
+                    at: self.to_canvas(Point::new(c.x, c.y), view),
                     progress: (t - c.t) / CLICK,
-                    scale: self.scale * style.size.clamp(0.5, 3.0),
+                    scale: self.scale * style.size.clamp(0.5, 3.0) * view.level,
                 })
                 .collect()
         };
-        Frame { cursor, clicks }
+        Frame {
+            view,
+            previous,
+            cursor,
+            clicks,
+        }
     }
 }
 
@@ -427,7 +459,7 @@ mod tests {
             background: None,
             ..Project::default()
         };
-        let scene = Scene::new(&events, &project, (400.0, 300.0));
+        let scene = Scene::new(&events, &project, (400.0, 300.0), 1.0);
         let frame = scene.frame(0.6);
         let cursor = frame.cursor.unwrap();
         assert_eq!(cursor.tip, Point::new(20.0, 40.0));
