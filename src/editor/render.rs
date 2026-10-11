@@ -363,6 +363,40 @@ fn smooth_path(points: &[Point]) -> Retained<NSBezierPath> {
     path
 }
 
+/// The outline of a tapered arrow from `start` to `end` for stroke width
+/// `width`: the tail point, then one side of the shaft, barb, tip, the
+/// other barb and side. The head grows a little with the arrow's length,
+/// and the barbs reach back past the point where the shaft joins the head.
+pub fn tapered_outline(start: Point, end: Point, width: f64) -> [Point; 7] {
+    let (dx, dy) = (end.x - start.x, end.y - start.y);
+    let length = dx.hypot(dy).max(1.0);
+    let (ux, uy) = (dx / length, dy / length);
+    // Unit normal.
+    let (nx, ny) = (-uy, ux);
+    // Not `clamp`: half a very short arrow is less than the minimum.
+    let head = (width * 6.0 + length * 0.1).max(12.0).min(length * 0.5);
+    let barb = head * 0.55;
+    let neck = (width * 1.2).max(head * 0.15);
+    let tail = (width * 0.12).min(1.0);
+    let at = |along: f64, side: f64| {
+        Point::new(
+            start.x + ux * along + nx * side,
+            start.y + uy * along + ny * side,
+        )
+    };
+    let barb_at = length - head;
+    let neck_at = length - head * 0.7;
+    [
+        at(0.0, -tail),
+        at(neck_at, -neck),
+        at(barb_at, -barb),
+        end,
+        at(barb_at, barb),
+        at(neck_at, neck),
+        at(0.0, tail),
+    ]
+}
+
 fn draw_arrow(start: Point, end: Point, style: ArrowStyle, width: f64, color: &NSColor) {
     let (dx, dy) = (end.x - start.x, end.y - start.y);
     let length = dx.hypot(dy);
@@ -406,6 +440,22 @@ fn draw_arrow(start: Point, end: Point, style: ArrowStyle, width: f64, color: &N
             if style == ArrowStyle::Double {
                 filled_head(start, -ux, -uy);
             }
+        }
+        ArrowStyle::Tapered => {
+            let outline = tapered_outline(start, end, width);
+            let path = NSBezierPath::bezierPath();
+            path.moveToPoint(np(outline[0]));
+            for p in &outline[1..] {
+                path.lineToPoint(np(*p));
+            }
+            path.closePath();
+            color.setFill();
+            path.fill();
+            // A hairline in the same color rounds the corners slightly.
+            path.setLineJoinStyle(NSLineJoinStyle::Round);
+            path.setLineWidth(1.0);
+            color.setStroke();
+            path.stroke();
         }
         ArrowStyle::Open => {
             let path = NSBezierPath::bezierPath();
@@ -545,4 +595,28 @@ pub fn export(doc: &Document, base: &BaseImage) -> Option<CFRetained<CGImage>> {
     context.flushGraphics();
     NSGraphicsContext::setCurrentContext(previous.as_deref());
     CGBitmapContextCreateImage(Some(&cg))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tapered_arrows_widen_toward_a_swept_back_head() {
+        let (start, end) = (Point::new(0.0, 0.0), Point::new(200.0, 0.0));
+        let [tail, neck, barb, tip, barb2, neck2, tail2] = tapered_outline(start, end, 4.0);
+        assert_eq!(tip, end);
+        // Symmetric about the shaft.
+        for (a, b) in [(tail, tail2), (neck, neck2), (barb, barb2)] {
+            assert!((a.x - b.x).abs() < 1e-9 && (a.y + b.y).abs() < 1e-9);
+        }
+        // The shaft widens, the barbs are wider still and sit behind the
+        // neck (swept back), and the tail is almost a point.
+        assert!(tail.y.abs() < 1.0);
+        assert!(neck.y.abs() > tail.y.abs() && barb.y.abs() > neck.y.abs() * 2.0);
+        assert!(barb.x < neck.x && neck.x < tip.x);
+        // Short arrows keep a head no longer than half of them.
+        let [_, _, barb, ..] = tapered_outline(start, Point::new(20.0, 0.0), 8.0);
+        assert!(barb.x >= 10.0 - 1e-9);
+    }
 }

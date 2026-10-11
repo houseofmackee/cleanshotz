@@ -190,6 +190,7 @@ define_class!(
                     Tool::Arrow => session.set_arrow_style(match index {
                         1 => ArrowStyle::Open,
                         2 => ArrowStyle::Double,
+                        3 => ArrowStyle::Tapered,
                         _ => ArrowStyle::Filled,
                     }),
                     Tool::Rectangle | Tool::Ellipse => session.set_filled(index == 1),
@@ -767,11 +768,17 @@ impl EditorController {
         let tool = session.tool;
         let (items, index): (&[&str], isize) = match tool {
             Tool::Arrow => (
-                &["Filled Arrow", "Open Arrow", "Double Arrow"],
+                &[
+                    "Filled Arrow",
+                    "Open Arrow",
+                    "Double Arrow",
+                    "Tapered Arrow",
+                ],
                 match session.arrow_style {
                     ArrowStyle::Filled => 0,
                     ArrowStyle::Open => 1,
                     ArrowStyle::Double => 2,
+                    ArrowStyle::Tapered => 3,
                 },
             ),
             Tool::Rectangle | Tool::Ellipse => (&["Outline", "Filled"], session.filled as isize),

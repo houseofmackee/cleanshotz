@@ -355,6 +355,54 @@ Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
   pull request to Raycast's extensions repository and needs the
   maintainer's Raycast username as `author`.
 
+### M12: Editor tools from other capture apps
+Group 2 of the October 2026 comparison, plus CleanShot X's arrow. Each item
+is independent; the order is a suggestion (quick ones first).
+- **Tapered arrow** (CleanShot X): a fourth arrow style, one filled shape
+  that widens from a point at the tail into a large head with swept-back
+  barbs; the head grows a little with the arrow's length. Done:
+  `render::tapered_outline`, matched against a CleanShot X screenshot.
+- **Magnify callout** (Shottr, Snagit): a tool (M) that drags out a source
+  circle on the image; the callout circle (2x by default, 1.5x to 4x)
+  starts beside it and can be moved and resized, joined to the source by
+  two tangent lines. A new `Shape::Magnify { source, callout, zoom }`
+  samples the turned base image like Blur and Pixelate do, so layers and
+  annotations are not magnified (as for blur).
+- **Overlay compare** (Shottr): an opacity for image layers (a slider while
+  one is selected, saved per annotation) to line two captures up, and
+  "Export Before/After GIF…" in the ••• menu: two frames, the image without
+  and with the top image layer, written with the GIF code recordings use.
+- **Curved arrows** (Shottr): a bend handle in the middle of a selected
+  arrow; dragging it stores a control point and the shaft follows a
+  quadratic curve (the tapered outline sampled along it, heads aligned
+  with the curve's end tangent). Straight unless bent.
+- **Hand-drawn style** (Shottr): a "Sketchy" option for rectangles,
+  ellipses, lines and arrows that draws each stroke twice with small
+  offsets and wobble from a random number seeded by the annotation id, so
+  it looks the same on every redraw and export.
+- **Pixel ruler** (Shottr): a Measure tool (U) that draws a dimension line
+  with end ticks and its length in pixels (image pixels, not points). Shift
+  keeps it horizontal or vertical. Clicking without dragging measures
+  automatically: it scans left and right (or up and down with Shift) from
+  the click to the first pixel that differs clearly from the clicked
+  color, which measures a button or a gap in one click.
+- **Smart highlighter** (CleanShot X): the Highlighter gets a Text mode;
+  a drag snaps to the lines of recognized text it crosses (Vision runs
+  once per editor, in the background, and the result is cached) and draws
+  one rounded marker per line at the line's height. Free drawing stays the
+  default outside text.
+- **Social media sizes and auto-balance** (Xnapper): more aspect ratios in
+  the Background tool (1:1, 4:5, 9:16, 3:2, 1.91:1 for link previews, with
+  the platforms named in the menu) and an Auto-balance switch that trims
+  uniform margins (a solid color at the edges, within a small tolerance)
+  before padding, so the content sits centered.
+- **Editable window screenshots** (CleanShot X): opening a window capture
+  (transparent margins with a shadow) and adding a background trims the
+  transparent margin and draws the editor's own shadow instead, so the
+  background can be changed or removed later without a doubled shadow.
+  Quick Access gets "Add Background" for window captures, which opens the
+  editor with the last used background applied.
+
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
   xtask dist` (zip, DMG, checksums), `cargo xtask create-release-cert`, the

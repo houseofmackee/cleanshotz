@@ -437,7 +437,7 @@ Image.
 | --- | --- | --- |
 | Select | V | Click to select, drag to move, drag handles to resize, Delete to remove |
 | Crop | C | Drag a region; Return applies, Escape resets |
-| Arrow | A | Filled, open or double-headed |
+| Arrow | A | Filled, open, double-headed or tapered (a solid shape that widens into a swept-back head) |
 | Line | L | |
 | Rectangle, Ellipse | R, O | Outline or filled |
 | Pen, Highlighter | P, H | Freehand |

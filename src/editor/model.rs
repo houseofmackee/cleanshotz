@@ -35,6 +35,9 @@ pub enum ArrowStyle {
     Open,
     /// Solid heads on both ends.
     Double,
+    /// One solid shape: a shaft that widens from a point at the tail into
+    /// a large head with swept-back barbs (CleanShot X's arrow).
+    Tapered,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
