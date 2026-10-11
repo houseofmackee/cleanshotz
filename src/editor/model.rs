@@ -183,6 +183,146 @@ pub struct Document {
     pub crop: Option<Rect>,
     pub background: Option<Background>,
     pub next_id: u64,
+    /// How the captured image is turned. Image points are those of the
+    /// turned image.
+    pub orientation: Orientation,
+    /// Exported pixels relative to the capture's own (Resize); `None` is
+    /// the original size.
+    pub output_scale: Option<f64>,
+}
+
+/// The Resize factor for what was typed as the width and height, given
+/// the exported size at the original scale (`native`) and the size shown
+/// before (`shown`). Each field takes pixels or a percentage of the
+/// original; the field that changed decides, keeping proportions. `None`
+/// for the original size; `Err` when the input makes no sense.
+pub fn resize_factor(
+    width: &str,
+    height: &str,
+    native: (usize, usize),
+    shown: (usize, usize),
+) -> Result<Option<f64>, ()> {
+    let parse = |text: &str, native: usize| -> Result<f64, ()> {
+        let text = text.trim();
+        let factor = match text.strip_suffix('%') {
+            Some(percent) => percent.trim().parse::<f64>().map_err(|_| ())? / 100.0,
+            None => {
+                let px = text.trim_end_matches("px").trim();
+                px.parse::<f64>().map_err(|_| ())? / native.max(1) as f64
+            }
+        };
+        if factor.is_finite() && factor > 0.0 && factor <= 8.0 {
+            Ok(factor)
+        } else {
+            Err(())
+        }
+    };
+    let unchanged = |text: &str, shown: usize| text.trim() == shown.to_string();
+    let factor = if !unchanged(width, shown.0) {
+        parse(width, native.0)?
+    } else if !unchanged(height, shown.1) {
+        parse(height, native.1)?
+    } else {
+        // Nothing typed: keep the shown size.
+        shown.0 as f64 / native.0.max(1) as f64
+    };
+    Ok(((factor - 1.0).abs() > 0.001).then_some(factor))
+}
+
+/// Rotating or mirroring the whole image.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Turn {
+    /// A quarter turn clockwise.
+    Right,
+    /// A quarter turn counterclockwise.
+    Left,
+    /// Mirror left to right.
+    FlipHorizontal,
+    /// Mirror top to bottom.
+    FlipVertical,
+}
+
+impl Turn {
+    /// Where `p` goes, in an image `w` x `h` points before the turn (top-left
+    /// origin).
+    pub fn map(self, p: Point, w: f64, h: f64) -> Point {
+        match self {
+            Turn::Right => Point::new(h - p.y, p.x),
+            Turn::Left => Point::new(p.y, w - p.x),
+            Turn::FlipHorizontal => Point::new(w - p.x, p.y),
+            Turn::FlipVertical => Point::new(p.x, h - p.y),
+        }
+    }
+
+    pub fn map_rect(self, r: Rect, w: f64, h: f64) -> Rect {
+        Rect::from_corners(
+            self.map(Point::new(r.x, r.y), w, h),
+            self.map(Point::new(r.max_x(), r.max_y()), w, h),
+        )
+    }
+
+    /// Whether width and height swap.
+    pub fn is_quarter(self) -> bool {
+        matches!(self, Turn::Right | Turn::Left)
+    }
+}
+
+/// Mirrored left to right first (if `mirrored`), then turned clockwise by
+/// `quarter_turns`.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Orientation {
+    pub quarter_turns: u8,
+    pub mirrored: bool,
+}
+
+impl Orientation {
+    /// This orientation followed by `turn`.
+    pub fn then(self, turn: Turn) -> Self {
+        let t = self.quarter_turns % 4;
+        match turn {
+            Turn::Right => Self {
+                quarter_turns: (t + 1) % 4,
+                ..self
+            },
+            Turn::Left => Self {
+                quarter_turns: (t + 3) % 4,
+                ..self
+            },
+            // Mirroring after a turn is mirroring first and turning the
+            // other way.
+            Turn::FlipHorizontal => Self {
+                quarter_turns: (4 - t) % 4,
+                mirrored: !self.mirrored,
+            },
+            Turn::FlipVertical => Self {
+                quarter_turns: (6 - t) % 4,
+                mirrored: !self.mirrored,
+            },
+        }
+    }
+
+    /// The turns that produce this orientation from the original image.
+    pub fn turns(self) -> Vec<Turn> {
+        let mut turns = Vec::new();
+        if self.mirrored {
+            turns.push(Turn::FlipHorizontal);
+        }
+        turns.extend(std::iter::repeat_n(
+            Turn::Right,
+            usize::from(self.quarter_turns % 4),
+        ));
+        turns
+    }
+
+    /// The turned size of an image `w` x `h`.
+    pub fn size(self, w: f64, h: f64) -> (f64, f64) {
+        if self.quarter_turns % 2 == 1 {
+            (h, w)
+        } else {
+            (w, h)
+        }
+    }
 }
 
 /// Where the image sits on the output canvas.
@@ -301,6 +441,54 @@ impl Document {
             .rev()
             .find(|a| a.hit(p, tolerance))
             .map(|a| a.id)
+    }
+
+    /// Turns everything with the image, which is `w` x `h` points before
+    /// the turn. Text stays upright; `turn_picture` turns image layers.
+    pub fn turn(&mut self, turn: Turn, w: f64, h: f64, turn_picture: impl Fn(&Picture) -> Picture) {
+        let point = |p: Point| turn.map(p, w, h);
+        let rect = |r: Rect| turn.map_rect(r, w, h);
+        // Moves `r` so its center follows the turn, keeping its size.
+        let follow = |r: Rect, width: f64, height: f64| {
+            let c = point(Point::new(r.x + r.width / 2.0, r.y + r.height / 2.0));
+            Rect::new(c.x - width / 2.0, c.y - height / 2.0, width, height)
+        };
+        for a in &mut self.annotations {
+            match &mut a.shape {
+                Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
+                    *start = point(*start);
+                    *end = point(*end);
+                }
+                Shape::Rectangle { rect: r, .. }
+                | Shape::Ellipse { rect: r, .. }
+                | Shape::Pixelate { rect: r }
+                | Shape::Blur { rect: r }
+                | Shape::Spotlight { rect: r } => *r = rect(*r),
+                Shape::Pen { points } | Shape::Highlighter { points } => {
+                    for p in points.iter_mut() {
+                        *p = point(*p);
+                    }
+                }
+                Shape::Text { origin, bounds, .. } => {
+                    let moved = follow(*bounds, bounds.width, bounds.height);
+                    *origin =
+                        Point::new(origin.x + moved.x - bounds.x, origin.y + moved.y - bounds.y);
+                    *bounds = moved;
+                }
+                Shape::Counter { center, .. } => *center = point(*center),
+                Shape::Image { rect: r, picture } => {
+                    let (width, height) = if turn.is_quarter() {
+                        (r.height, r.width)
+                    } else {
+                        (r.width, r.height)
+                    };
+                    *r = follow(*r, width, height);
+                    *picture = turn_picture(picture);
+                }
+            }
+        }
+        self.crop = self.crop.map(rect);
+        self.orientation = self.orientation.then(turn);
     }
 
     /// The number for the next counter: one more than the highest so far.
@@ -613,6 +801,138 @@ impl History {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    const TURNS: [Turn; 4] = [
+        Turn::Right,
+        Turn::Left,
+        Turn::FlipHorizontal,
+        Turn::FlipVertical,
+    ];
+
+    /// Applies `turns` to `p` one by one in an image `w` x `h`.
+    fn apply(turns: &[Turn], mut p: Point, (mut w, mut h): (f64, f64)) -> Point {
+        for turn in turns {
+            p = turn.map(p, w, h);
+            if turn.is_quarter() {
+                (w, h) = (h, w);
+            }
+        }
+        p
+    }
+
+    #[test]
+    fn parses_resize_input() {
+        let native = (2000, 1000);
+        let same = (2000, 1000);
+        assert_eq!(resize_factor("1000", "1000", native, same), Ok(Some(0.5)));
+        assert_eq!(resize_factor("2000", "500", native, same), Ok(Some(0.5)));
+        assert_eq!(resize_factor("50%", "1000", native, same), Ok(Some(0.5)));
+        assert_eq!(
+            resize_factor(" 1500 px ", "1000", native, same),
+            Ok(Some(0.75))
+        );
+        assert_eq!(resize_factor("2000", "1000", native, same), Ok(None));
+        assert_eq!(resize_factor("100%", "1000", native, same), Ok(None));
+        // Already resized to half: unchanged fields keep it.
+        assert_eq!(
+            resize_factor("1000", "500", native, (1000, 500)),
+            Ok(Some(0.5))
+        );
+        assert_eq!(resize_factor("abc", "1000", native, same), Err(()));
+        assert_eq!(resize_factor("0", "1000", native, same), Err(()));
+        assert_eq!(resize_factor("-5%", "1000", native, same), Err(()));
+    }
+
+    #[test]
+    fn turns_map_corners() {
+        let (w, h) = (40.0, 10.0);
+        let top_left = Point::new(0.0, 0.0);
+        assert_eq!(Turn::Right.map(top_left, w, h), Point::new(10.0, 0.0));
+        assert_eq!(Turn::Left.map(top_left, w, h), Point::new(0.0, 40.0));
+        assert_eq!(
+            Turn::FlipHorizontal.map(top_left, w, h),
+            Point::new(40.0, 0.0)
+        );
+        assert_eq!(
+            Turn::FlipVertical.map(top_left, w, h),
+            Point::new(0.0, 10.0)
+        );
+        assert_eq!(
+            Turn::Right.map_rect(Rect::new(0.0, 0.0, 40.0, 10.0), w, h),
+            Rect::new(0.0, 0.0, 10.0, 40.0)
+        );
+    }
+
+    #[test]
+    fn orientations_compose_like_the_turns() {
+        let size = (40.0, 10.0);
+        let p = Point::new(3.0, 7.0);
+        // Every sequence of up to three turns.
+        for a in TURNS {
+            for b in TURNS {
+                for c in TURNS {
+                    let sequence = [a, b, c];
+                    let o = sequence
+                        .iter()
+                        .fold(Orientation::default(), |o, t| o.then(*t));
+                    assert_eq!(
+                        apply(&o.turns(), p, size),
+                        apply(&sequence, p, size),
+                        "{sequence:?} as {o:?}"
+                    );
+                    let (w, h) = o.size(size.0, size.1);
+                    let quarters = sequence.iter().filter(|t| t.is_quarter()).count();
+                    assert_eq!((w, h) == size, quarters % 2 == 0);
+                }
+            }
+        }
+        let back = Orientation::default().then(Turn::Right).then(Turn::Left);
+        assert_eq!(back, Orientation::default());
+    }
+
+    #[test]
+    fn turning_moves_annotations_and_keeps_text_upright() {
+        let mut doc = Document::default();
+        let arrow = doc.add(
+            Shape::Arrow {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(10.0, 5.0),
+                style: ArrowStyle::Filled,
+            },
+            Color::RED,
+            4.0,
+        );
+        let text = doc.add(
+            Shape::Text {
+                origin: Point::new(0.0, 0.0),
+                text: "Hi".into(),
+                size: 24.0,
+                style: TextStyle::Plain,
+                bounds: Rect::new(0.0, 0.0, 20.0, 10.0),
+            },
+            Color::RED,
+            4.0,
+        );
+        doc.crop = Some(Rect::new(0.0, 0.0, 40.0, 10.0));
+        doc.turn(Turn::Right, 40.0, 10.0, Picture::clone);
+        assert_eq!(doc.orientation.quarter_turns, 1);
+        assert_eq!(doc.crop, Some(Rect::new(0.0, 0.0, 10.0, 40.0)));
+        match &doc.get(arrow).unwrap().shape {
+            Shape::Arrow { start, end, .. } => {
+                assert_eq!(*start, Point::new(10.0, 0.0));
+                assert_eq!(*end, Point::new(5.0, 10.0));
+            }
+            other => panic!("{other:?}"),
+        }
+        match &doc.get(text).unwrap().shape {
+            // The 20 x 10 box centered at (10, 5) moves to (5, 10).
+            Shape::Text { origin, bounds, .. } => {
+                assert_eq!(*bounds, Rect::new(-5.0, 5.0, 20.0, 10.0));
+                assert_eq!(*origin, Point::new(-5.0, 5.0));
+            }
+            other => panic!("{other:?}"),
+        }
+    }
 
     fn doc_with(shape: Shape) -> (Document, u64) {
         let mut doc = Document::default();

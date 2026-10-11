@@ -2,7 +2,7 @@
 //! release do with each tool. Points are image points.
 
 use super::model::{
-    Annotation, ArrowStyle, Background, Color, Document, Handle, History, Shape, TextStyle,
+    Annotation, ArrowStyle, Background, Color, Document, Handle, History, Shape, TextStyle, Turn,
 };
 use super::picture::Picture;
 use super::tools::Tool;
@@ -44,12 +44,13 @@ pub struct Session {
     pub crop_draft: Option<Rect>,
     /// Changed since the last save or copy.
     pub dirty: bool,
-    /// The captured image's size in points.
-    image_size: (f64, f64),
+    /// The captured image's size in points, before any turn.
+    original_size: (f64, f64),
     drag: Option<Drag>,
 }
 
 impl Session {
+    /// `image_width` and `image_height`: the original (unturned) capture.
     pub fn new(doc: Document, image_width: f64, image_height: f64) -> Self {
         Self {
             doc,
@@ -64,7 +65,7 @@ impl Session {
             selection: None,
             crop_draft: None,
             dirty: false,
-            image_size: (image_width, image_height),
+            original_size: (image_width, image_height),
             drag: None,
         }
     }
@@ -72,7 +73,8 @@ impl Session {
     /// Everything that can be shown: the captured image plus image layers
     /// placed beyond it.
     pub fn extent(&self) -> Rect {
-        self.doc.extent(self.image_size.0, self.image_size.1)
+        let (w, h) = self.image_size();
+        self.doc.extent(w, h)
     }
 
     /// Adds `picture` as an image layer centered on `center` (or on the
@@ -80,7 +82,7 @@ impl Session {
     /// and selects it.
     pub fn insert_picture(&mut self, picture: Picture, center: Option<Point>) -> u64 {
         let (w, h) = picture.size();
-        let (iw, ih) = self.image_size;
+        let (iw, ih) = self.image_size();
         let fit = (iw * 0.8 / w).min(ih * 0.8 / h).min(1.0);
         let (w, h) = (w * fit, h * fit);
         let c = center.unwrap_or(Point::new(iw / 2.0, ih / 2.0));
@@ -112,6 +114,31 @@ impl Session {
             .add(Shape::Image { rect, picture }, self.color, self.width);
         self.selection = Some(id);
         id
+    }
+
+    /// The captured image's size in points, as turned.
+    pub fn image_size(&self) -> (f64, f64) {
+        self.doc
+            .orientation
+            .size(self.original_size.0, self.original_size.1)
+    }
+
+    /// Sets the Resize factor (`None`: original size), as one undo step.
+    pub fn set_output_scale(&mut self, scale: Option<f64>) {
+        if self.doc.output_scale != scale {
+            self.change();
+            self.doc.output_scale = scale;
+        }
+    }
+
+    /// Rotates or mirrors the image and everything on it, as one undo step.
+    pub fn turn(&mut self, turn: Turn) {
+        self.change();
+        let (w, h) = self.image_size();
+        self.doc.turn(turn, w, h, |p| p.turned(turn));
+        if self.tool == Tool::Crop {
+            self.crop_draft = Some(self.doc.crop.unwrap_or(self.extent()));
+        }
     }
 
     fn change(&mut self) {

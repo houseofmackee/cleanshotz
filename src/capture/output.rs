@@ -48,9 +48,14 @@ pub struct Delivered {
 ///
 /// Steps from a request, or the pipeline chosen in the settings, replace
 /// all of that (see [`crate::pipeline`]).
-pub fn deliver(mtm: MainThreadMarker, captured: Captured, settings: &CaptureSettings) {
+pub fn deliver(mtm: MainThreadMarker, mut captured: Captured, settings: &CaptureSettings) {
     if settings.play_sound {
         play_shutter(mtm);
+    }
+    if settings.convert_to_srgb
+        && let Some(srgb) = image::to_srgb(&captured.image)
+    {
+        captured.image = srgb;
     }
     match steps_for(settings) {
         Ok(Some(steps)) => return crate::pipeline::run(captured, settings, steps),

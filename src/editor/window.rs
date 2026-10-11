@@ -20,7 +20,9 @@ use objc2_foundation::{
     NSString, ns_string,
 };
 
-use super::model::{Annotation, ArrowStyle, Aspect, Background, Color, Fill, Shape, TextStyle};
+use super::model::{
+    Annotation, ArrowStyle, Aspect, Background, Color, Fill, Shape, TextStyle, Turn,
+};
 use super::picture::{Origin, Picture};
 use super::presets::{self, Preset};
 use super::render::{self, BaseImage};
@@ -50,6 +52,11 @@ const MORE_COPY_TEXT: isize = 4;
 const MORE_REDACT: isize = 5;
 const MORE_ADD_RIGHT: isize = 6;
 const MORE_ADD_BELOW: isize = 7;
+const MORE_ROTATE_RIGHT: isize = 8;
+const MORE_ROTATE_LEFT: isize = 9;
+const MORE_FLIP_HORIZONTAL: isize = 10;
+const MORE_FLIP_VERTICAL: isize = 11;
+const MORE_RESIZE: isize = 12;
 
 // Tags of the background menu's items.
 const BG_NONE: isize = 1;
@@ -91,7 +98,7 @@ struct TextEdit {
 
 pub struct EditorIvars {
     pub id: u64,
-    base: BaseImage,
+    base: RefCell<BaseImage>,
     session: RefCell<Session>,
     source: RefCell<Source>,
     window: OnceCell<Retained<NSWindow>>,
@@ -238,6 +245,11 @@ define_class!(
                 MORE_REDACT => self.redact(),
                 MORE_ADD_RIGHT => self.add_images(false),
                 MORE_ADD_BELOW => self.add_images(true),
+                MORE_ROTATE_RIGHT => self.turn(Turn::Right),
+                MORE_ROTATE_LEFT => self.turn(Turn::Left),
+                MORE_FLIP_HORIZONTAL => self.turn(Turn::FlipHorizontal),
+                MORE_FLIP_VERTICAL => self.turn(Turn::FlipVertical),
+                MORE_RESIZE => self.resize(),
                 _ => {}
             }
         }
@@ -263,7 +275,7 @@ impl EditorController {
     ) -> Retained<Self> {
         let this = Self::alloc(mtm).set_ivars(EditorIvars {
             id,
-            base,
+            base: RefCell::new(base),
             session: RefCell::new(session),
             source: RefCell::new(source),
             window: OnceCell::new(),
@@ -312,7 +324,11 @@ impl EditorController {
     }
 
     fn build_window(&self, mtm: MainThreadMarker, title: &str) {
-        let layout = self.ivars().base.layout(&self.ivars().session.borrow().doc);
+        let layout = self
+            .ivars()
+            .base
+            .borrow()
+            .layout(&self.ivars().session.borrow().doc);
         // Fit the image, within most of the screen.
         let visible = objc2_app_kit::NSScreen::mainScreen(mtm).map_or(
             NSRect::new(NSPoint::ZERO, NSSize::new(1440.0, 900.0)),
@@ -373,6 +389,8 @@ impl EditorController {
             vec![
                 editor_action("Undo", |e| e.undo()),
                 editor_action("Redo", |e| e.redo()),
+                editor_action("Rotate Right", |e| e.turn(Turn::Right)),
+                editor_action("Rotate Left", |e| e.turn(Turn::Left)),
                 editor_action("Copy Image", |e| e.copy_to_clipboard()),
                 editor_action("Save", |e| e.save()),
             ],
@@ -501,6 +519,11 @@ impl EditorController {
             "Redact Sensitive Info",
             "Add Image to the Right…",
             "Add Image Below…",
+            "Rotate Right",
+            "Rotate Left",
+            "Flip Horizontally",
+            "Flip Vertically",
+            "Resize…",
         ] {
             more.addItemWithTitle(&NSString::from_str(title));
         }
@@ -986,6 +1009,7 @@ impl EditorController {
 
     /// Redraws the canvas and updates the controls.
     pub fn refresh(&self) {
+        self.sync_orientation();
         if let Some(canvas) = self.ivars().canvas.get() {
             canvas.setNeedsDisplay(true);
             self.describe_canvas(canvas);
@@ -993,11 +1017,77 @@ impl EditorController {
         self.sync_controls();
     }
 
+    /// Rebuilds the turned image when the document's orientation changed
+    /// (a turn, or undoing one).
+    fn sync_orientation(&self) {
+        let orientation = self.ivars().session.borrow().doc.orientation;
+        if self.ivars().base.borrow().orientation == orientation {
+            return;
+        }
+        let turned = self.ivars().base.borrow().with_orientation(orientation);
+        *self.ivars().base.borrow_mut() = turned;
+    }
+
+    /// Asks for the exported size and sets it.
+    pub fn resize(&self) {
+        self.commit_text();
+        let (native, shown, retina) = {
+            let mut doc = self.ivars().session.borrow().doc.clone();
+            let base = self.ivars().base.borrow();
+            let shown = render::export_size(&doc, &base);
+            doc.output_scale = None;
+            (render::export_size(&doc, &base), shown, base.scale > 1.0)
+        };
+        let Some(answer) = ask_size(self.mtm(), shown, retina) else {
+            return;
+        };
+        let scale = match answer {
+            SizeAnswer::Original => None,
+            SizeAnswer::OneX => {
+                let scale = self.ivars().base.borrow().scale;
+                Some(1.0 / scale)
+            }
+            SizeAnswer::Typed(width, height) => {
+                match super::model::resize_factor(&width, &height, native, shown) {
+                    Ok(scale) => scale,
+                    Err(()) => {
+                        crate::ui::toast::show(
+                            self.mtm(),
+                            "Type a size in pixels or a percentage, such as 1280 or 50%",
+                        );
+                        return;
+                    }
+                }
+            }
+        };
+        self.ivars().session.borrow_mut().set_output_scale(scale);
+        let size = render::export_size(
+            &self.ivars().session.borrow().doc,
+            &self.ivars().base.borrow(),
+        );
+        crate::ui::toast::show(
+            self.mtm(),
+            &t!(
+                "Exports at {width} × {height} pixels",
+                width = size.0,
+                height = size.1
+            ),
+        );
+        self.refresh();
+    }
+
+    /// Rotates or mirrors the image with its annotations.
+    pub fn turn(&self, turn: Turn) {
+        self.commit_text();
+        self.ivars().session.borrow_mut().turn(turn);
+        self.refresh();
+    }
+
     /// What VoiceOver says for the canvas: the image, how many annotations
     /// it has and the current tool.
     fn describe_canvas(&self, canvas: &CanvasView) {
         let session = self.ivars().session.borrow();
-        let base = &self.ivars().base;
+        let base = self.ivars().base.borrow();
         let count = session.doc.annotations.len();
         let annotations = match count {
             0 => t!("no annotations"),
@@ -1143,7 +1233,7 @@ impl EditorController {
         if let Some(draft) = session.crop_draft {
             doc.crop = Some(draft);
         }
-        render::export(&doc, &self.ivars().base)
+        render::export(&doc, &self.ivars().base.borrow())
     }
 
     fn copy_to_clipboard(&self) {
@@ -1167,7 +1257,10 @@ impl EditorController {
             return;
         };
         let source = self.ivars().source.borrow().clone();
-        let scale = self.ivars().base.scale;
+        let scale = render::export_scale(
+            &self.ivars().session.borrow().doc,
+            &self.ivars().base.borrow(),
+        );
         let result = match &source {
             Source::Capture { file } => {
                 let format = format_for(file);
@@ -1180,7 +1273,7 @@ impl EditorController {
             }
             Source::Project { path } => {
                 let doc = self.ivars().session.borrow().doc.clone();
-                project::save(path, &self.ivars().base, &doc).map(|()| path.clone())
+                project::save(path, &self.ivars().base.borrow(), &doc).map(|()| path.clone())
             }
             Source::File { .. } | Source::Clipboard => {
                 let settings = crate::quick_access::capture_settings();
@@ -1266,7 +1359,7 @@ impl EditorController {
             return;
         };
         let doc = self.ivars().session.borrow().doc.clone();
-        match project::save(&path, &self.ivars().base, &doc) {
+        match project::save(&path, &self.ivars().base.borrow(), &doc) {
             Ok(()) => {
                 self.ivars().session.borrow_mut().dirty = false;
                 *self.ivars().source.borrow_mut() = Source::Project { path: path.clone() };
@@ -1290,8 +1383,11 @@ impl EditorController {
             Source::File { path } | Source::Project { path } => path.clone(),
             Source::Clipboard => PathBuf::from("Annotated.png"),
         };
-        let item =
-            crate::quick_access::Item::new(image, self.ivars().base.scale, None, file, false);
+        let scale = render::export_scale(
+            &self.ivars().session.borrow().doc,
+            &self.ivars().base.borrow(),
+        );
+        let item = crate::quick_access::Item::new(image, scale, None, file, false);
         crate::pin::pin(self.mtm(), &item);
     }
 
@@ -1305,8 +1401,10 @@ impl EditorController {
     /// thread) and covers it.
     fn redact(&self) {
         let id = self.ivars().id;
-        let image = self.ivars().base.cg.clone();
-        let (width, height) = (self.ivars().base.width, self.ivars().base.height);
+        let base = self.ivars().base.borrow();
+        let image = base.cg.clone();
+        let (width, height) = (base.width, base.height);
+        drop(base);
         let settings = crate::ocr::settings();
         crate::ui::toast::show(self.mtm(), "Looking for sensitive info…");
         std::thread::spawn(move || {
@@ -1375,6 +1473,72 @@ fn choose_images(mtm: MainThreadMarker, several: bool) -> Vec<Picture> {
         .filter_map(|url| url.path())
         .filter_map(|path| Picture::load(std::path::Path::new(&path.to_string())))
         .collect()
+}
+
+enum SizeAnswer {
+    Original,
+    OneX,
+    Typed(String, String),
+}
+
+/// Asks for the exported width and height, showing `shown` (pixels).
+/// `retina` offers 1x. `None` when cancelled.
+fn ask_size(mtm: MainThreadMarker, shown: (usize, usize), retina: bool) -> Option<SizeAnswer> {
+    let alert = NSAlert::new(mtm);
+    alert.setMessageText(&NSString::from_str(&t!("Resize")));
+    alert.setInformativeText(&NSString::from_str(&t!(
+        "The size of the exported image in pixels. Type pixels or a percentage of the original; proportions are kept."
+    )));
+    alert.addButtonWithTitle(&NSString::from_str(&t!("Resize")));
+    alert.addButtonWithTitle(&NSString::from_str(&t!("Cancel")));
+    alert.addButtonWithTitle(&NSString::from_str(&t!("Original Size")));
+    if retina {
+        alert.addButtonWithTitle(&NSString::from_str(&t!("1x")));
+    }
+    let view = NSView::initWithFrame(
+        NSView::alloc(mtm),
+        NSRect::new(NSPoint::ZERO, NSSize::new(240.0, 58.0)),
+    );
+    let row = |label: &str, value: usize, y: f64| {
+        let text = NSTextField::labelWithString(&NSString::from_str(&crate::i18n::tr(label)), mtm);
+        text.setFrame(NSRect::new(
+            NSPoint::new(0.0, y + 3.0),
+            NSSize::new(64.0, 18.0),
+        ));
+        view.addSubview(&text);
+        let field = NSTextField::initWithFrame(
+            NSTextField::alloc(mtm),
+            NSRect::new(NSPoint::new(68.0, y), NSSize::new(110.0, 24.0)),
+        );
+        field.setStringValue(&NSString::from_str(&value.to_string()));
+        view.addSubview(&field);
+        let unit = NSTextField::labelWithString(ns_string!("px"), mtm);
+        unit.setFrame(NSRect::new(
+            NSPoint::new(184.0, y + 3.0),
+            NSSize::new(40.0, 18.0),
+        ));
+        view.addSubview(&unit);
+        field
+    };
+    let width = row("Width:", shown.0, 32.0);
+    let height = row("Height:", shown.1, 0.0);
+    // SAFETY: both fields live in the alert for as long as it runs.
+    unsafe { width.setNextKeyView(Some(&height)) };
+    alert.setAccessoryView(Some(&view));
+    alert.window().setInitialFirstResponder(Some(&width));
+    let response = alert.runModal();
+    if response == objc2_app_kit::NSAlertFirstButtonReturn {
+        Some(SizeAnswer::Typed(
+            width.stringValue().to_string(),
+            height.stringValue().to_string(),
+        ))
+    } else if response == objc2_app_kit::NSAlertThirdButtonReturn {
+        Some(SizeAnswer::Original)
+    } else if response == objc2_app_kit::NSAlertThirdButtonReturn + 1 {
+        Some(SizeAnswer::OneX)
+    } else {
+        None
+    }
 }
 
 /// Asks for a name; `None` when cancelled or left empty.
@@ -1680,7 +1844,11 @@ impl CanvasView {
         if let Some(frozen) = self.ivars().frozen.get() {
             return frozen;
         }
-        let layout = editor.ivars().base.layout(&Self::display_doc(editor));
+        let layout = editor
+            .ivars()
+            .base
+            .borrow()
+            .layout(&Self::display_doc(editor));
         let b = self.bounds();
         let zoom = ((b.size.width - 2.0 * CANVAS_MARGIN) / layout.width)
             .min((b.size.height - 2.0 * CANVAS_MARGIN) / layout.height)
@@ -1741,6 +1909,8 @@ impl CanvasView {
             .map(|s| s.to_string().to_lowercase())
             .unwrap_or_default();
         match (command, event.keyCode(), chars.as_str()) {
+            (true, _, "r") if shift => editor.turn(Turn::Left),
+            (true, _, "r") => editor.turn(Turn::Right),
             (true, _, "z") if shift => editor.redo(),
             (true, _, "z") => editor.undo(),
             (true, _, "c") => editor.copy_to_clipboard(),
@@ -1798,13 +1968,17 @@ impl CanvasView {
         transform.scaleBy(zoom);
         // While frozen the document may have grown: keep its image points
         // where the frozen layout put them.
-        let now = editor.ivars().base.layout(&doc);
+        let now = editor.ivars().base.borrow().layout(&doc);
         transform.translateXBy_yBy(
             (layout.content.x - layout.source.x) - (now.content.x - now.source.x),
             (layout.content.y - layout.source.y) - (now.content.y - now.source.y),
         );
         objc2_app_kit::NSAffineTransformNSAppKitAdditions::concat(&*transform);
-        render::render(&doc, &editor.ivars().base, editor.editing_text_id());
+        render::render(
+            &doc,
+            &editor.ivars().base.borrow(),
+            editor.editing_text_id(),
+        );
         context.restoreGraphicsState();
 
         let session = editor.ivars().session.borrow();

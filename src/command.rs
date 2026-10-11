@@ -10,7 +10,7 @@ use crate::capture::naming::expand_home;
 use crate::pipeline::Step;
 
 /// Every command, in the order `--help` lists them.
-pub const NAMES: [&str; 21] = [
+pub const NAMES: [&str; 22] = [
     "capture-area",
     "capture-previous-area",
     "capture-fullscreen",
@@ -19,6 +19,7 @@ pub const NAMES: [&str; 21] = [
     "scrolling-capture",
     "all-in-one",
     "capture-text",
+    "pick-color",
     "record-screen",
     "pin",
     "open-annotate",
@@ -126,6 +127,7 @@ pub enum Request {
         region: Option<Region>,
         line_breaks: Option<bool>,
     },
+    PickColor,
     RecordScreen {
         region: Option<Region>,
     },
@@ -223,6 +225,7 @@ pub fn parse(command: &str, params: &[(String, String)]) -> Result<Request, Stri
             region: p.region()?,
             line_breaks: p.bool("linebreaks")?,
         },
+        "pick-color" => Request::PickColor,
         "record-screen" => Request::RecordScreen {
             region: p.region()?,
         },

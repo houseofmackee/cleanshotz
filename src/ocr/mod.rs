@@ -16,8 +16,8 @@ use objc2::rc::Retained;
 use objc2_core_graphics::CGImage;
 use objc2_foundation::{NSArray, NSDictionary, NSError, NSRange, NSString};
 use objc2_vision::{
-    VNImageRequestHandler, VNRecognizeTextRequest, VNRecognizedText, VNRectangleObservation,
-    VNRequest, VNRequestTextRecognitionLevel,
+    VNDetectBarcodesRequest, VNImageRequestHandler, VNRecognizeTextRequest, VNRecognizedText,
+    VNRectangleObservation, VNRequest, VNRequestTextRecognitionLevel,
 };
 
 use crate::capture::geometry::Rect;
@@ -36,22 +36,49 @@ pub fn settings() -> TextSettings {
 }
 
 /// Recognizes the text in `image` on a background thread, copies it to the
-/// clipboard and confirms with a toast. `line_breaks` overrides the
-/// setting.
+/// clipboard and confirms with a toast. When the area is mostly a QR code
+/// (or another barcode), its content is copied instead, and a link can be
+/// opened from the toast. `line_breaks` overrides the setting.
 pub fn copy_text(image: CFRetained<CGImage>, line_breaks: Option<bool>) {
     let settings = settings();
     let keep_line_breaks = line_breaks.unwrap_or(settings.keep_line_breaks);
     std::thread::spawn(move || {
+        let codes = detect_codes(&image).unwrap_or_else(|e| {
+            tracing::warn!(error = %e, "barcode detection failed");
+            Vec::new()
+        });
         let result = recognize(&image, &settings, |_| Vec::new())
             .map(|lines| assemble(&lines, keep_line_breaks));
+        let found = match result {
+            Ok(text) => Ok(choose(text, &codes)),
+            Err(_) if !codes.is_empty() => Ok(choose(String::new(), &codes)),
+            Err(e) => Err(e),
+        };
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
-            match result {
-                Ok(text) if text.is_empty() => crate::ui::toast::show(mtm, "No text found"),
-                Ok(text) => {
+            match found {
+                Ok(Found::Nothing) => crate::ui::toast::show(mtm, "No text found"),
+                Ok(Found::Text(text)) => {
                     copy_string(&text);
                     tracing::info!(characters = text.chars().count(), "text copied");
                     crate::ui::toast::show(mtm, &t!("Copied: {text}", text = preview(&text)));
+                }
+                Ok(Found::Code(payload)) => {
+                    copy_string(&payload);
+                    tracing::info!(characters = payload.chars().count(), "code copied");
+                    match web_link(&payload) {
+                        Some(url) => crate::ui::toast::show_with_action(
+                            mtm,
+                            &t!("Copied link: {text}", text = preview(&payload)),
+                            "Click to open",
+                            "Open Link",
+                            move || crate::platform::open_url(&url),
+                        ),
+                        None => crate::ui::toast::show(
+                            mtm,
+                            &t!("Copied QR code: {text}", text = preview(&payload)),
+                        ),
+                    }
                 }
                 Err(e) => {
                     tracing::error!(error = %e, "text recognition failed");
@@ -60,6 +87,84 @@ pub fn copy_text(image: CFRetained<CGImage>, line_breaks: Option<bool>) {
             }
         });
     });
+}
+
+/// A QR code or other barcode, with the share of the image it covers.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Code {
+    pub payload: String,
+    /// 0 to 1.
+    pub area: f64,
+}
+
+/// What Capture Text copies.
+#[derive(Debug, PartialEq)]
+pub enum Found {
+    Nothing,
+    Text(String),
+    Code(String),
+}
+
+/// A code covering at least this share of the selection wins over text.
+const CODE_AREA: f64 = 0.15;
+
+/// The codes when the selection is mostly codes or has no other text,
+/// otherwise the text. Several codes are copied one per line.
+pub fn choose(text: String, codes: &[Code]) -> Found {
+    let covered: f64 = codes.iter().map(|c| c.area).sum();
+    if !codes.is_empty() && (text.trim().is_empty() || covered >= CODE_AREA) {
+        let payloads: Vec<&str> = codes.iter().map(|c| c.payload.as_str()).collect();
+        Found::Code(payloads.join("\n"))
+    } else if text.is_empty() {
+        Found::Nothing
+    } else {
+        Found::Text(text)
+    }
+}
+
+/// `payload` if it is a single web link.
+pub fn web_link(payload: &str) -> Option<String> {
+    let payload = payload.trim();
+    let lower = payload.to_ascii_lowercase();
+    ((lower.starts_with("https://") || lower.starts_with("http://"))
+        && !payload.contains(char::is_whitespace))
+    .then(|| payload.to_string())
+}
+
+/// QR codes and other barcodes in `image` that carry text.
+pub fn detect_codes(image: &CGImage) -> Result<Vec<Code>, String> {
+    // SAFETY: a plain request with default settings (every symbology).
+    let request = unsafe { VNDetectBarcodesRequest::new() };
+    // SAFETY: valid image and an empty options dictionary.
+    let handler = unsafe {
+        VNImageRequestHandler::initWithCGImage_options(
+            VNImageRequestHandler::alloc(),
+            image,
+            &NSDictionary::new(),
+        )
+    };
+    let requests: Retained<NSArray<VNRequest>> =
+        NSArray::from_retained_slice(&[Retained::into_super(Retained::into_super(
+            request.clone(),
+        ))]);
+    handler
+        .performRequests_error(&requests)
+        .map_err(|e| e.localizedDescription().to_string())?;
+    let mut codes: Vec<Code> = Vec::new();
+    // SAFETY: plain property reads on finished observations.
+    for observation in unsafe { request.results() }.unwrap_or_default().iter() {
+        let Some(payload) = (unsafe { observation.payloadStringValue() }) else {
+            continue;
+        };
+        let payload = payload.to_string();
+        let b = unsafe { observation.boundingBox() };
+        let area = (b.size.width * b.size.height).clamp(0.0, 1.0);
+        // Vision can report one code more than once.
+        if !codes.iter().any(|c| c.payload == payload) {
+            codes.push(Code { payload, area });
+        }
+    }
+    Ok(codes)
 }
 
 pub fn copy_string(text: &str) {
@@ -375,6 +480,65 @@ pub fn assemble(lines: &[Line], keep_line_breaks: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_qr_codes() {
+        let image = crate::capture::image::decode(include_bytes!("fixtures/qr-link.png"))
+            .expect("the fixture decodes");
+        let codes = detect_codes(&image).expect("Vision runs");
+        assert_eq!(codes.len(), 1);
+        assert_eq!(
+            codes[0].payload,
+            "https://github.com/houseofmackee/cleanshotz"
+        );
+        assert!(
+            codes[0].area > 0.5,
+            "the code fills the image: {}",
+            codes[0].area
+        );
+    }
+
+    #[test]
+    fn prefers_codes_that_fill_the_selection() {
+        let code = |area| Code {
+            payload: "https://example.com".into(),
+            area,
+        };
+        let link = || Found::Code("https://example.com".into());
+        assert_eq!(choose(String::new(), &[code(0.05)]), link());
+        assert_eq!(choose("Scan me".into(), &[code(0.4)]), link());
+        assert_eq!(
+            choose("A long page".into(), &[code(0.02)]),
+            Found::Text("A long page".into())
+        );
+        assert_eq!(choose(String::new(), &[]), Found::Nothing);
+        let two = [
+            code(0.3),
+            Code {
+                payload: "WIFI:S:x;;".into(),
+                area: 0.3,
+            },
+        ];
+        assert_eq!(
+            choose(String::new(), &two),
+            Found::Code("https://example.com\nWIFI:S:x;;".into())
+        );
+    }
+
+    #[test]
+    fn finds_web_links() {
+        assert_eq!(
+            web_link(" https://a.example/x?y=1 ").as_deref(),
+            Some("https://a.example/x?y=1")
+        );
+        assert_eq!(
+            web_link("HTTP://A.EXAMPLE").as_deref(),
+            Some("HTTP://A.EXAMPLE")
+        );
+        assert_eq!(web_link("WIFI:S:home;T:WPA;P:secret;;"), None);
+        assert_eq!(web_link("https://a.example and more"), None);
+        assert_eq!(web_link("javascript:alert(1)"), None);
+    }
 
     fn line(text: &str, x: f64, y: f64) -> Line {
         Line {

@@ -11,6 +11,9 @@
 //! - Space (not dragging): toggle area and window mode
 //! - arrow keys: move the pointer by 1 point (10 with Shift)
 //! - Escape or right click: cancel
+//!
+//! In color mode a click (or Return) picks the pixel under the pointer and
+//! a drag the average color of the area; Shift picks as CSS `rgb()`.
 
 use std::cell::RefCell;
 
@@ -37,6 +40,8 @@ use crate::ui::draw::{draw_label, inset, ns_rect, stroke_rect};
 pub enum Mode {
     Area,
     Window,
+    /// Pick a color (needs snapshots).
+    Color,
 }
 
 /// A display to cover, with an optional snapshot of its current contents
@@ -73,6 +78,11 @@ pub enum Selection {
     },
     Window {
         window_id: u32,
+    },
+    Color {
+        rgb: super::color::Rgb,
+        /// Shift was held: copy as CSS `rgb()` instead of hex.
+        css: bool,
     },
 }
 
@@ -184,6 +194,9 @@ pub fn begin(
         Mode::Window => {
             t!("Move the pointer over a window and click to capture it. Escape cancels.")
         }
+        Mode::Color => t!(
+            "Move the pointer over a color and click to copy it, or drag for the average of an area. Escape cancels."
+        ),
         _ => t!("Drag to select an area. Space picks a window instead. Escape cancels."),
     });
     for surface in &session.surfaces {
@@ -360,7 +373,7 @@ impl Session {
     fn mouse_down(&mut self, surface: usize, p: Point) -> Outcome {
         self.cursor = Some((surface, p));
         match self.mode {
-            Mode::Area => {
+            Mode::Area | Mode::Color => {
                 self.drag = Some(Drag {
                     surface,
                     anchor: p,
@@ -382,6 +395,9 @@ impl Session {
         let selection = self.selection();
         self.drag = None;
         self.space_anchor = None;
+        if self.mode == Mode::Color {
+            return self.pick(selection);
+        }
         match selection {
             Some((s, rect)) if rect.is_usable() => {
                 let display = &self.surfaces[s].display;
@@ -409,8 +425,33 @@ impl Session {
         }
     }
 
+    /// The color of `area` (a drag), or of the pixel under the pointer.
+    fn color(&self, area: Option<(usize, Rect)>) -> Option<super::color::Rgb> {
+        let (s, rect) = match area.filter(|(_, r)| r.is_usable()) {
+            Some(area) => area,
+            None => {
+                let (s, p) = self.cursor?;
+                (s, Rect::new(p.x, p.y, 0.0, 0.0))
+            }
+        };
+        let display = &self.surfaces[s].display;
+        super::color::sample(display.snapshot.as_ref()?, rect, display.scale)
+    }
+
+    fn pick(&self, area: Option<(usize, Rect)>) -> Outcome {
+        match self.color(area) {
+            Some(rgb) => Outcome::Done(Some(Selection::Color {
+                rgb,
+                css: self.shift,
+            })),
+            None => Outcome::Continue,
+        }
+    }
+
     fn key_down(&mut self, key_code: u16, shift: bool) -> Outcome {
         const ESCAPE: u16 = 53;
+        const RETURN: u16 = 36;
+        const KEYPAD_ENTER: u16 = 76;
         const SPACE: u16 = 49;
         const LEFT: u16 = 123;
         const RIGHT: u16 = 124;
@@ -418,6 +459,10 @@ impl Session {
         const UP: u16 = 126;
         match key_code {
             ESCAPE => return Outcome::Done(None),
+            RETURN | KEYPAD_ENTER if self.mode == Mode::Color => {
+                self.shift = shift;
+                return self.pick(None);
+            }
             SPACE if self.drag.is_some() => {
                 if self.space_anchor.is_none() {
                     self.space_anchor = self.cursor.map(|(_, p)| p);
@@ -427,6 +472,7 @@ impl Session {
                 self.mode = match self.mode {
                     Mode::Area => Mode::Window,
                     Mode::Window => Mode::Area,
+                    Mode::Color => Mode::Color,
                 };
                 self.hovered = self.cursor.and_then(|(s, p)| self.window_at(s, p));
             }
@@ -475,16 +521,28 @@ impl Session {
         }
 
         let hole = match self.mode {
-            Mode::Area => self
+            Mode::Area | Mode::Color => self
                 .selection()
                 .filter(|(s, _)| *s == index)
                 .map(|(_, r)| r),
             Mode::Window => self.hovered.map(|w| self.window_rect_on(w, index)),
         };
-        fill_except(bounds, hole, &NSColor::colorWithWhite_alpha(0.0, 0.35));
+        // Colors are judged against the real screen, so color mode barely
+        // tints it: fully clear pixels would let clicks through.
+        if self.mode == Mode::Color {
+            fill_except(bounds, None, &NSColor::colorWithWhite_alpha(0.0, 0.01));
+        } else {
+            fill_except(bounds, hole, &NSColor::colorWithWhite_alpha(0.0, 0.35));
+        }
 
         if let Some(hole) = hole.filter(|h| h.width > 0.0 && h.height > 0.0) {
             match self.mode {
+                Mode::Color => {
+                    NSColor::blackColor().setStroke();
+                    stroke_rect(inset(hole, -1.5), 1.0);
+                    NSColor::whiteColor().setStroke();
+                    stroke_rect(inset(hole, -0.5), 1.0);
+                }
                 Mode::Area => {
                     NSColor::whiteColor().setStroke();
                     stroke_rect(inset(hole, -0.5), 1.0);
@@ -521,15 +579,22 @@ impl Session {
 
         if let Some((s, p)) = self.cursor
             && s == index
-            && self.mode == Mode::Area
+            && matches!(self.mode, Mode::Area | Mode::Color)
         {
-            if self.drag.is_none() {
+            if self.drag.is_none() && self.mode == Mode::Area {
                 draw_crosshair(bounds, p);
             }
             if self.magnifier
                 && let Some(image) = &surface.image
             {
-                draw_magnifier(image, surface.display.scale, bounds, p);
+                let label = match self.mode {
+                    Mode::Color => match self.color(self.selection()) {
+                        Some(rgb) => super::color::hex(rgb),
+                        None => String::new(),
+                    },
+                    _ => format!("{}, {}", p.x.floor(), p.y.floor()),
+                };
+                draw_magnifier(image, surface.display.scale, bounds, p, &label);
             }
         }
     }
@@ -540,7 +605,7 @@ const MAGNIFIER_SIZE: f64 = 135.0;
 
 /// A zoomed view of the pixels around the pointer, with a pixel grid and
 /// the pointer's pixel outlined.
-fn draw_magnifier(image: &NSImage, scale: f64, bounds: Rect, p: Point) {
+fn draw_magnifier(image: &NSImage, scale: f64, bounds: Rect, p: Point, label: &str) {
     let origin = geometry::panel_origin(p, MAGNIFIER_SIZE, 24.0, bounds);
     let dest = Rect::new(origin.x, origin.y, MAGNIFIER_SIZE, MAGNIFIER_SIZE);
     let cell = MAGNIFIER_SIZE / MAGNIFIER_PIXELS;
@@ -603,7 +668,6 @@ fn draw_magnifier(image: &NSImage, scale: f64, bounds: Rect, p: Point) {
     border.setLineWidth(1.0);
     border.stroke();
 
-    let label = format!("{}, {}", p.x.floor(), p.y.floor());
     let below = Point::new(dest.x, dest.max_y() + 4.0);
     let above = Point::new(dest.x, dest.y - 24.0);
     let at = if below.y + 20.0 <= bounds.max_y() {
@@ -611,7 +675,7 @@ fn draw_magnifier(image: &NSImage, scale: f64, bounds: Rect, p: Point) {
     } else {
         above
     };
-    draw_label(&label, at, 11.0);
+    draw_label(label, at, 11.0);
 }
 
 fn draw_crosshair(bounds: Rect, p: Point) {

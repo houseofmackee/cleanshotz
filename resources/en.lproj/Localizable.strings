@@ -101,7 +101,7 @@
 /* src/settings/mod.rs */
 "Camera:" = "Camera:";
 
-/* src/app/mod.rs */
+/* src/app/mod.rs, src/editor/window.rs */
 "Cancel" = "Cancel";
 
 /* src/action.rs */
@@ -152,6 +152,9 @@
 /* src/settings/mod.rs */
 "Click a shortcut, then press the new keys. Escape cancels; Delete removes it." = "Click a shortcut, then press the new keys. Escape cancels; Delete removes it.";
 
+/* src/capture/flow.rs */
+"Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel" = "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel";
+
 /* src/settings/mod.rs */
 "Clicks" = "Clicks";
 
@@ -172,6 +175,18 @@
 
 /* src/settings/mod.rs */
 "Command:" = "Command:";
+
+/* src/settings/mod.rs */
+"Convert colors to sRGB" = "Convert colors to sRGB";
+
+/* src/ocr/mod.rs */
+"Copied QR code: {text}" = "Copied QR code: {text}";
+
+/* src/ocr/mod.rs */
+"Copied link: {text}" = "Copied link: {text}";
+
+/* src/capture/flow.rs */
+"Copied {color}" = "Copied {color}";
 
 /* src/ocr/mod.rs */
 "Copied: {text}" = "Copied: {text}";
@@ -212,6 +227,9 @@
 /* src/video_editor/crop.rs */
 "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop." = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
 
+/* src/record/session.rs */
+"Drag to record an area · Click to record the screen · Space for a window · Esc to cancel" = "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel";
+
 /* src/capture/overlay.rs */
 "Drag to select an area. Space picks a window instead. Escape cancels." = "Drag to select an area. Space picks a window instead. Escape cancels.";
 
@@ -226,6 +244,9 @@
 
 /* src/video_editor/window.rs */
 "Exporting…" = "Exporting…";
+
+/* src/editor/window.rs */
+"Exports at {width} × {height} pixels" = "Exports at {width} × {height} pixels";
 
 /* src/settings/mod.rs */
 "File field:" = "File field:";
@@ -383,8 +404,14 @@
 /* src/record/session.rs */
 "Microphone access is off in System Settings" = "Microphone access is off in System Settings";
 
+/* src/record/session.rs */
+"Microphone level" = "Microphone level";
+
 /* src/settings/mod.rs */
 "Mouse pointer" = "Mouse pointer";
+
+/* src/capture/overlay.rs */
+"Move the pointer over a color and click to copy it, or drag for the average of an area. Escape cancels." = "Move the pointer over a color and click to copy it, or drag for the average of an area. Escape cancels.";
 
 /* src/capture/overlay.rs */
 "Move the pointer over a window and click to capture it. Escape cancels." = "Move the pointer over a window and click to capture it. Escape cancels.";
@@ -431,6 +458,9 @@
 /* src/settings/mod.rs */
 "Or run a pipeline of steps instead: add one to [pipelines] in the settings file." = "Or run a pipeline of steps instead: add one to [pipelines] in the settings file.";
 
+/* src/editor/window.rs */
+"Original Size" = "Original Size";
+
 /* src/settings/mod.rs */
 "Otherwise they are mixed into one track, which every player plays." = "Otherwise they are mixed into one track, which every player plays.";
 
@@ -448,6 +478,9 @@
 
 /* src/app/mod.rs */
 "Permissions" = "Permissions";
+
+/* src/action.rs */
+"Pick Color" = "Pick Color";
 
 /* src/editor/window.rs */
 "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions." = "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions.";
@@ -526,6 +559,9 @@
 
 /* src/settings/mod.rs */
 "Removed it from {action}." = "Removed it from {action}.";
+
+/* src/editor/window.rs */
+"Resize" = "Resize";
 
 /* src/action.rs */
 "Restore Recently Closed" = "Restore Recently Closed";
@@ -665,14 +701,23 @@
 /* src/history/window.rs */
 "The file is no longer there" = "The file is no longer there";
 
+/* src/record/session.rs */
+"The microphone is silent. Check that it is not muted and that the right input is chosen in System Settings > Sound." = "The microphone is silent. Check that it is not muted and that the right input is chosen in System Settings > Sound.";
+
 /* src/pipeline.rs */
 "The pipeline stopped" = "The pipeline stopped";
 
 /* src/record/session.rs */
 "The recording could not be saved" = "The recording could not be saved";
 
+/* src/editor/window.rs */
+"The size of the exported image in pixels. Type pixels or a percentage of the original; proportions are kept." = "The size of the exported image in pixels. Type pixels or a percentage of the original; proportions are kept.";
+
 /* src/settings/mod.rs */
 "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file." = "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file.";
+
+/* src/editor/window.rs */
+"Type a size in pixels or a percentage, such as 1280 or 50%" = "Type a size in pixels or a percentage, such as 1280 or 50%";
 
 /* src/settings/mod.rs */
 "URL:" = "URL:";

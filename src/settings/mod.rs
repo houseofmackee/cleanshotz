@@ -1031,6 +1031,12 @@ fn screenshots(f: &mut Form) {
         |c| c.capture.downscale_retina,
         |c, v| c.capture.downscale_retina = v,
     );
+    f.check(
+        "",
+        "Convert colors to sRGB",
+        |c| c.capture.convert_to_srgb,
+        |c, v| c.capture.convert_to_srgb = v,
+    );
     f.gap();
     f.check(
         "Capture:",

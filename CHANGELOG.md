@@ -6,6 +6,19 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Capture Text reads QR codes and other barcodes; links can be opened from
+  the confirmation.
+- Pick Color: copy a color from the screen as hex (or `rgb()` with Shift),
+  or the average of an area, converted to sRGB.
+- Rotate, flip and Resize in the editor, undoable and saved in projects.
+- A microphone level meter in the recording bar, and a warning when the
+  microphone stays silent.
+- Convert colors to sRGB (Settings > Screenshots) and an `srgb` pipeline
+  step.
+- A Raycast extension in `raycast/`.
+
 ## [0.1.1] - 2026-10-10
 
 ### Changed

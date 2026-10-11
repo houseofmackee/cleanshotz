@@ -1,5 +1,6 @@
 //! Still captures: fullscreen, area and window.
 
+pub mod color;
 pub mod countdown;
 pub mod flow;
 pub mod geometry;

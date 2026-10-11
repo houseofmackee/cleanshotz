@@ -77,6 +77,9 @@ pub struct CaptureSettings {
     pub webp_quality: f64,
     /// Save Retina captures at 1x (point) resolution.
     pub downscale_retina: bool,
+    /// Convert captures from the display's color space to sRGB, so colors
+    /// look the same on other screens.
+    pub convert_to_srgb: bool,
     /// Include the mouse pointer in fullscreen and area captures.
     pub show_cursor: bool,
     /// Freeze the screen while selecting an area, so the capture matches
@@ -112,6 +115,7 @@ impl Default for CaptureSettings {
             jpeg_quality: 0.9,
             webp_quality: 1.0,
             downscale_retina: false,
+            convert_to_srgb: false,
             show_cursor: false,
             freeze_screen: false,
             hide_desktop_icons: false,
@@ -498,6 +502,7 @@ pub struct Hotkeys {
     pub self_timer: String,
     pub capture_scrolling: String,
     pub capture_text: String,
+    pub pick_color: String,
     pub record_screen: String,
     pub open_history: String,
 }
@@ -512,6 +517,7 @@ impl Default for Hotkeys {
             self_timer: String::new(),
             capture_scrolling: "alt+shift+s".into(),
             capture_text: "alt+shift+o".into(),
+            pick_color: String::new(),
             record_screen: "alt+shift+5".into(),
             open_history: String::new(),
         }
@@ -520,7 +526,7 @@ impl Default for Hotkeys {
 
 impl Hotkeys {
     /// The actions that can have a global shortcut.
-    pub const ACTIONS: [Action; 9] = [
+    pub const ACTIONS: [Action; 10] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -528,6 +534,7 @@ impl Hotkeys {
         Action::SelfTimer,
         Action::CaptureScrolling,
         Action::CaptureText,
+        Action::PickColor,
         Action::RecordScreen,
         Action::OpenHistory,
     ];
@@ -541,6 +548,7 @@ impl Hotkeys {
             Action::SelfTimer => &mut self.self_timer,
             Action::CaptureScrolling => &mut self.capture_scrolling,
             Action::CaptureText => &mut self.capture_text,
+            Action::PickColor => &mut self.pick_color,
             Action::RecordScreen => &mut self.record_screen,
             Action::OpenHistory => &mut self.open_history,
             _ => return None,
@@ -569,6 +577,7 @@ impl Hotkeys {
             (Action::SelfTimer, &self.self_timer),
             (Action::CaptureScrolling, &self.capture_scrolling),
             (Action::CaptureText, &self.capture_text),
+            (Action::PickColor, &self.pick_color),
             (Action::RecordScreen, &self.record_screen),
             (Action::OpenHistory, &self.open_history),
         ]

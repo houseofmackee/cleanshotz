@@ -312,13 +312,15 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   level over repeated captures (about 56 MB footprint). No changes were
   needed.
 
-### M11: Small tools from other capture apps
+### M11: Small tools from other capture apps (done)
 Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
 (October 2026). Each item is small and independent.
 - **QR codes in Capture Text:** detect QR codes (and other barcodes) in the
   selected area with Vision's barcode request, next to the text request.
-  Copy the payload; for a link, the toast offers to open it. The
-  `capture-text` command returns the payload too.
+  Copy the payload; for a link, the toast offers to open it. Done: a
+  code wins when codes cover at least 15% of the selection or there is no
+  other text. Commands only answer ok or an error, so the payload goes to
+  the clipboard, as recognized text does.
 - **Color picker:** a capture-overlay mode with its own shortcut and a
   `pick-color` command. The magnifier loupe shows the pixel under the
   pointer; click or Return copies it as hex (`#RRGGBB`), Shift copies
@@ -342,6 +344,16 @@ Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
 - **Raycast extension:** a separate repository with commands that open
   `cleanshotz://` URLs (capture modes, recording, history, pins), using the
   existing URL scheme; no changes to the app.
+- Status: all done. The color overlay keeps a barely visible tint, since
+  fully clear pixels let clicks through to the windows below. Rotation is
+  stored in the document (`orientation`) and the turned image is rebuilt
+  from the original, so undo and projects work; text stays upright. Resize
+  is an export scale (`output_scale`), so annotations render sharply at the
+  new size; projects using either are written as version 2, which 0.1.x
+  refuses instead of misplacing annotations. The Raycast extension lives in
+  `raycast/` in this repository rather than its own; publishing it is a
+  pull request to Raycast's extensions repository and needs the
+  maintainer's Raycast username as `author`.
 
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo

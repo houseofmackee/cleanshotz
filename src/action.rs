@@ -10,6 +10,7 @@ pub enum Action {
     SelfTimer,
     CaptureScrolling,
     CaptureText,
+    PickColor,
     RecordScreen,
     OpenHistory,
     OpenInEditor,
@@ -32,7 +33,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 26] = [
+    pub const ALL: [Action; 27] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -40,6 +41,7 @@ impl Action {
         Action::SelfTimer,
         Action::CaptureScrolling,
         Action::CaptureText,
+        Action::PickColor,
         Action::RecordScreen,
         Action::OpenHistory,
         Action::OpenInEditor,
@@ -82,6 +84,7 @@ impl Action {
             Action::SelfTimer => "Self-Timer",
             Action::CaptureScrolling => "Scrolling Capture",
             Action::CaptureText => "Capture Text",
+            Action::PickColor => "Pick Color",
             Action::RecordScreen => "Record Screen",
             Action::OpenHistory => "Capture History…",
             Action::OpenInEditor => "Open in Editor…",

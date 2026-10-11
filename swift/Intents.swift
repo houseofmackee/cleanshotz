@@ -125,6 +125,19 @@ struct CaptureTextIntent: AppIntent {
     }
 }
 
+struct PickColorIntent: AppIntent {
+    static var title: LocalizedStringResource { "Pick Color" }
+    static var description: IntentDescription {
+        "Click a color on the screen to copy it as hex, or drag for the average of an area."
+    }
+
+    @MainActor
+    func perform() async throws -> some IntentResult {
+        try run("pick-color")
+        return .result()
+    }
+}
+
 struct ScrollingCaptureIntent: AppIntent {
     static var title: LocalizedStringResource { "Scrolling Capture" }
     static var description: IntentDescription { "Capture content that scrolls, down or sideways." }

@@ -161,6 +161,9 @@
 				<cocoa key="linebreaks"/>
 			</parameter>
 		</command>
+		<command name="pick color" code="CszZPCol" description="Pick a color on the screen and copy it as hex (Shift: as rgb()).">
+			<cocoa class="CSZScriptCommand"/>
+		</command>
 		<command name="record screen" code="CszZCRec" description="Start a screen recording, or stop the one in progress.">
 			<cocoa class="CSZScriptCommand"/>
 			<parameter name="x" code="XPos" optional="yes" description="Left edge of the area, in points from the left of the display.">

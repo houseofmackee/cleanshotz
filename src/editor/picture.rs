@@ -12,6 +12,7 @@ use objc2_core_foundation::CFRetained;
 use objc2_core_graphics::CGImage;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
+use super::model::{Orientation, Turn};
 use crate::capture::image;
 use crate::config::ImageFormat;
 
@@ -58,6 +59,14 @@ impl Picture {
                 path: path.to_path_buf(),
             },
         ))
+    }
+
+    /// The picture turned with the image.
+    pub fn turned(&self, turn: Turn) -> Self {
+        match turn_image(&self.0.cg, turn) {
+            Some(cg) => Self::new(cg, self.0.scale, self.0.origin.clone()),
+            None => self.clone(),
+        }
     }
 
     pub fn cg(&self) -> &CGImage {
@@ -144,5 +153,76 @@ impl<'de> Deserialize<'de> for Picture {
         let cg =
             image::decode(&png).ok_or_else(|| serde::de::Error::custom("damaged image data"))?;
         Ok(Picture::new(cg, stored.scale, stored.origin))
+    }
+}
+
+/// `image` rotated a quarter turn or mirrored.
+pub fn turn_image(image: &CGImage, turn: Turn) -> Option<CFRetained<CGImage>> {
+    let (w, h) = image::pixel_size(image);
+    let (fw, fh) = (w as f64, h as f64);
+    // Where pixels go, with CoreGraphics' bottom-left origin.
+    let (a, b, c, d, tx, ty, size) = match turn {
+        Turn::Right => (0.0, -1.0, 1.0, 0.0, 0.0, fw, (h, w)),
+        Turn::Left => (0.0, 1.0, -1.0, 0.0, fh, 0.0, (h, w)),
+        Turn::FlipHorizontal => (-1.0, 0.0, 0.0, 1.0, fw, 0.0, (w, h)),
+        Turn::FlipVertical => (1.0, 0.0, 0.0, -1.0, 0.0, fh, (w, h)),
+    };
+    let transform = objc2_core_foundation::CGAffineTransform { a, b, c, d, tx, ty };
+    image::transformed(image, size.0, size.1, transform)
+}
+
+/// `image` in `orientation`, from the original.
+pub fn orient_image(image: &CGImage, orientation: Orientation) -> Option<CFRetained<CGImage>> {
+    let mut out: Option<CFRetained<CGImage>> = None;
+    for turn in orientation.turns() {
+        out = Some(turn_image(out.as_deref().unwrap_or(image), turn)?);
+    }
+    out.or_else(|| Some(objc2_core_foundation::Type::retain(image)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const RED: u32 = 0xFFFF_0000;
+    const GREEN: u32 = 0xFF00_FF00;
+    const BLUE: u32 = 0xFF00_00FF;
+    const WHITE: u32 = 0xFFFF_FFFF;
+
+    /// Pixels, top row first, of `turn` applied to a 2 x 2 image with
+    /// red, green on top and blue, white below.
+    fn turned(turns: &[Turn]) -> Vec<u32> {
+        let image = image::from_pixels(2, 2, &[RED, GREEN, BLUE, WHITE]).unwrap();
+        let o = turns.iter().fold(Orientation::default(), |o, t| o.then(*t));
+        let out = orient_image(&image, o).unwrap();
+        image::to_pixels(&out).unwrap().2
+    }
+
+    #[test]
+    fn turns_pixels() {
+        assert_eq!(turned(&[]), [RED, GREEN, BLUE, WHITE]);
+        assert_eq!(turned(&[Turn::Right]), [BLUE, RED, WHITE, GREEN]);
+        assert_eq!(turned(&[Turn::Left]), [GREEN, WHITE, RED, BLUE]);
+        assert_eq!(turned(&[Turn::FlipHorizontal]), [GREEN, RED, WHITE, BLUE]);
+        assert_eq!(turned(&[Turn::FlipVertical]), [BLUE, WHITE, RED, GREEN]);
+        assert_eq!(
+            turned(&[Turn::Right, Turn::FlipVertical]),
+            [WHITE, GREEN, BLUE, RED]
+        );
+    }
+
+    #[test]
+    fn turns_wide_images() {
+        let image = image::from_pixels(3, 1, &[RED, GREEN, BLUE]).unwrap();
+        let right = turn_image(&image, Turn::Right).unwrap();
+        assert_eq!(
+            image::to_pixels(&right).unwrap(),
+            (1, 3, vec![RED, GREEN, BLUE])
+        );
+        let left = turn_image(&image, Turn::Left).unwrap();
+        assert_eq!(
+            image::to_pixels(&left).unwrap(),
+            (1, 3, vec![BLUE, GREEN, RED])
+        );
     }
 }

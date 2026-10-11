@@ -7,10 +7,11 @@
 //! ```json
 //! {
 //!   "format": "cleanshotz-project",
-//!   "version": 1,
+//!   "version": 1,             // 2 when the image is turned or resized
 //!   "scale": 2.0,             // image pixels per point
 //!   "image_png": "iVBOR...",  // the original image, base64 PNG
-//!   "document": { ... }       // annotations, crop, background
+//!   "document": { ... }       // annotations, crop, background,
+//!                             // orientation, output size
 //! }
 //! ```
 
@@ -30,7 +31,10 @@ use crate::config::ImageFormat;
 
 pub const EXTENSION: &str = "cszdoc";
 const FORMAT: &str = "cleanshotz-project";
-const VERSION: u32 = 1;
+/// The newest version this app reads. Version 2 adds the document's
+/// orientation and output size; files that use neither are written as
+/// version 1, so older versions of the app can still open them.
+const VERSION: u32 = 2;
 
 #[derive(Serialize, Deserialize)]
 struct ProjectFile {
@@ -42,16 +46,26 @@ struct ProjectFile {
 }
 
 pub fn save(path: &Path, base: &BaseImage, doc: &Document) -> Result<(), String> {
-    let png = image::encode(&base.cg, ImageFormat::Png, 1.0).ok_or("could not encode the image")?;
+    // The original capture: the document turns it.
+    let png =
+        image::encode(&base.original, ImageFormat::Png, 1.0).ok_or("could not encode the image")?;
     let file = ProjectFile {
         format: FORMAT.into(),
-        version: VERSION,
+        version: version_for(doc),
         scale: base.scale,
         image_png: STANDARD.encode(png),
         document: doc.clone(),
     };
     let json = serde_json::to_vec(&file).map_err(|e| e.to_string())?;
     fs::write(path, json).map_err(|e| format!("{}: {e}", path.display()))
+}
+
+fn version_for(doc: &Document) -> u32 {
+    if doc.orientation == Default::default() && doc.output_scale.is_none() {
+        1
+    } else {
+        VERSION
+    }
 }
 
 pub fn load(path: &Path) -> Result<(CFRetained<CGImage>, f64, Document), String> {

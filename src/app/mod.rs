@@ -302,6 +302,7 @@ impl AppDelegate {
             | Action::CaptureFullscreen
             | Action::CaptureWindow
             | Action::CaptureText
+            | Action::PickColor
             | Action::CaptureScrolling
             | Action::RecordScreen
             | Action::SelfTimer => {
@@ -323,6 +324,7 @@ impl AppDelegate {
                         region: None,
                         autoscroll: false,
                     },
+                    Action::PickColor => Request::PickColor,
                     _ => Request::RecordScreen { region: None },
                 };
                 // Errors were already shown.
@@ -468,6 +470,10 @@ impl AppDelegate {
                     None => interactive(flow::Kind::Text, settings),
                 }
             }
+            Request::PickColor => {
+                self.require_screen_recording()?;
+                interactive(flow::Kind::Color, settings)
+            }
             Request::ScrollingCapture { region, autoscroll } => {
                 self.require_screen_recording()?;
                 let area = region.map(|r| resolve_region(mtm, r)).transpose()?;
@@ -596,6 +602,7 @@ impl AppDelegate {
             Action::SelfTimer,
             Action::CaptureScrolling,
             Action::CaptureText,
+            Action::PickColor,
         ] {
             menu.addItem(&self.menu_item(action));
         }

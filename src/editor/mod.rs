@@ -92,7 +92,13 @@ pub fn has_unsaved_changes() -> bool {
 }
 
 fn open(mtm: MainThreadMarker, base: BaseImage, doc: Document, source: Source, title: &str) {
-    let session = Session::new(doc, base.width, base.height);
+    let (width, height) = base.original_size();
+    let base = if doc.orientation == base.orientation {
+        base
+    } else {
+        base.with_orientation(doc.orientation)
+    };
+    let session = Session::new(doc, width, height);
     let id = registry::next_id();
     let editor = window::EditorController::open(mtm, id, base, session, source, title);
     registry::add(editor);

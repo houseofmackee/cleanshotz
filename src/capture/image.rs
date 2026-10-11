@@ -138,6 +138,48 @@ fn draw_into_bitmap(image: &CGImage, width: usize, height: usize) -> Option<CFRe
     Some(context)
 }
 
+/// Redraws `image` into a `width` x `height` pixel bitmap through the
+/// affine `transform` (bottom-left origin), keeping its color space. Used
+/// to rotate and mirror.
+pub fn transformed(
+    image: &CGImage,
+    width: usize,
+    height: usize,
+    transform: objc2_core_foundation::CGAffineTransform,
+) -> Option<CFRetained<CGImage>> {
+    let space = CGImage::color_space(Some(image));
+    let context = bitmap_context(width, height, space.as_deref())?;
+    CGContext::concat_ctm(Some(&context), transform);
+    let (w, h) = pixel_size(image);
+    CGContext::draw_image(
+        Some(&context),
+        CGRect::new(CGPoint::new(0.0, 0.0), CGSize::new(w as f64, h as f64)),
+        Some(image),
+    );
+    CGBitmapContextCreateImage(Some(&context))
+}
+
+/// `image` converted to sRGB, or `None` if it already is (or the
+/// conversion failed). Shared screenshots then look the same on displays
+/// with a wider gamut than the viewer's.
+pub fn to_srgb(image: &CGImage) -> Option<CFRetained<CGImage>> {
+    let srgb = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
+    if CGImage::color_space(Some(image)).is_some_and(|space| space == srgb) {
+        return None;
+    }
+    let (width, height) = pixel_size(image);
+    let context = bitmap_context(width, height, Some(&srgb))?;
+    CGContext::draw_image(
+        Some(&context),
+        CGRect::new(
+            CGPoint::new(0.0, 0.0),
+            CGSize::new(width as f64, height as f64),
+        ),
+        Some(image),
+    );
+    CGBitmapContextCreateImage(Some(&context))
+}
+
 pub fn pixel_size(image: &CGImage) -> (usize, usize) {
     (CGImage::width(Some(image)), CGImage::height(Some(image)))
 }
@@ -206,7 +248,7 @@ fn encode_webp(image: &CGImage, quality: f64) -> Option<Vec<u8>> {
 }
 
 /// The image in sRGB as straight (not premultiplied) RGBA bytes.
-fn to_srgb_rgba(image: &CGImage) -> Option<(usize, usize, Vec<u8>)> {
+pub fn to_srgb_rgba(image: &CGImage) -> Option<(usize, usize, Vec<u8>)> {
     let (width, height) = pixel_size(image);
     let context = bitmap_context(width, height, None)?;
     CGContext::draw_image(
@@ -321,6 +363,29 @@ pub fn from_pixels(width: usize, height: usize, pixels: &[u32]) -> Option<CFReta
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn converts_to_srgb() {
+        // An orange in Display P3 is more saturated in sRGB terms.
+        let p3 =
+            CGColorSpace::with_name(Some(unsafe { objc2_core_graphics::kCGColorSpaceDisplayP3 }))
+                .unwrap();
+        let context = bitmap_context(2, 2, Some(&p3)).unwrap();
+        let data = CGBitmapContextGetData(Some(&context)) as *mut u8;
+        let stride = CGBitmapContextGetBytesPerRow(Some(&context));
+        for y in 0..2 {
+            // SAFETY: each row holds 2 BGRA pixels.
+            let row = unsafe { std::slice::from_raw_parts_mut(data.add(y * stride), 8) };
+            row.copy_from_slice(&[51, 102, 204, 255, 51, 102, 204, 255]);
+        }
+        let image = CGBitmapContextCreateImage(Some(&context)).unwrap();
+        let srgb = to_srgb(&image).expect("a P3 image is converted");
+        let (_, _, rgba) = to_srgb_rgba(&srgb).unwrap();
+        let [r, g, b, a] = [rgba[0], rgba[1], rgba[2], rgba[3]];
+        assert_eq!(a, 255);
+        assert!(r > 214 && g < 100 && b < 45, "{r} {g} {b}");
+        assert!(to_srgb(&srgb).is_none(), "already sRGB");
+    }
 
     /// A gradient with a transparent corner, in the layout `to_pixels`
     /// uses (premultiplied BGRA).

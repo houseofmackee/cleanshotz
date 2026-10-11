@@ -1,7 +1,7 @@
 //! A recording from selection to Quick Access: pick what to record, count
 //! down, record with a control bar on screen, then finish the file.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::path::PathBuf;
 use std::ptr::NonNull;
 use std::time::{Duration, Instant};
@@ -12,7 +12,7 @@ use objc2::runtime::{AnyObject, NSObject};
 use objc2::{MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSAccessibility, NSBox, NSBoxType, NSButton, NSColor, NSFont, NSFontWeightMedium, NSImage,
-    NSPanel, NSScreen, NSTextField, NSTitlePosition,
+    NSLevelIndicator, NSLevelIndicatorStyle, NSPanel, NSScreen, NSTextField, NSTitlePosition,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
 
@@ -69,6 +69,12 @@ struct Active {
     controls: Retained<NSPanel>,
     time_label: Retained<NSTextField>,
     pause_button: Retained<NSButton>,
+    /// The microphone level, when recording the microphone.
+    meter: Option<Retained<NSLevelIndicator>>,
+    /// The meter's reading, falling back slowly between peaks.
+    level: Cell<f64>,
+    /// The silent-microphone warning was shown.
+    warned: Cell<bool>,
     border: Option<Retained<NSPanel>>,
     timer: Retained<NSTimer>,
     started: Instant,
@@ -142,10 +148,9 @@ pub fn toggle(
         freeze: false,
         windows: content.pickable_windows(),
         click_selects_display: true,
-        hint: Some(
+        hint: Some(t!(
             "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel"
-                .into(),
-        ),
+        )),
     };
     STATE.with(|s| *s.borrow_mut() = State::Preparing);
     overlay::begin(mtm, displays, options, move |selection| {
@@ -154,7 +159,7 @@ pub fn toggle(
                 display_id, rect, ..
             }) => Target::Area { display_id, rect },
             Some(Selection::Window { window_id }) => Target::Window { window_id },
-            None => {
+            Some(Selection::Color { .. }) | None => {
                 STATE.with(|s| *s.borrow_mut() = State::Idle);
                 return;
             }
@@ -381,7 +386,8 @@ fn begin_recording(
     let full_screen = matches!(target, Target::Area { display_id, rect }
         if screen_for(mtm, display_id).is_some_and(|s| s.frame().size.width <= rect.width));
     let border = (!full_screen).then(|| panels::border_panel(mtm, cocoa_rect));
-    let (controls, time_label, pause_button) = control_panel(mtm, cocoa_rect);
+    let (controls, time_label, pause_button, meter) = control_panel(mtm, cocoa_rect, microphone);
+    engine::level::reset();
     let timer = tick_timer();
     STATE.with(|s| {
         *s.borrow_mut() = State::Recording(Box::new(Active {
@@ -390,6 +396,9 @@ fn begin_recording(
             controls,
             time_label,
             pause_button,
+            meter,
+            level: Cell::new(0.0),
+            warned: Cell::new(false),
             border,
             timer,
             started: Instant::now(),
@@ -608,17 +617,49 @@ fn update_time(active: &Active) {
         .setStringValue(&NSString::from_str(&label));
 }
 
+/// How long the microphone may stay silent before the warning.
+const SILENT_WARNING: Duration = Duration::from_secs(4);
+
+/// Updates the meter from the loudest sample since the last tick, and
+/// warns once if the microphone has picked up nothing so far.
+fn update_meter(mtm: MainThreadMarker, active: &Active) {
+    let Some(meter) = &active.meter else {
+        return;
+    };
+    let reading = engine::level::meter(engine::level::take_peak());
+    // Rise at once, fall gently, like a VU meter.
+    let shown = reading.max(active.level.get() - 0.08);
+    active.level.set(shown);
+    meter.setDoubleValue(shown);
+    if !active.warned.get()
+        && active.paused_at.is_none()
+        && active.started.elapsed() >= SILENT_WARNING
+        && !engine::level::heard()
+    {
+        active.warned.set(true);
+        tracing::warn!("the microphone is silent");
+        toast::show(
+            mtm,
+            "The microphone is silent. Check that it is not muted and that the right input is chosen in System Settings > Sound.",
+        );
+    }
+}
+
 fn tick_timer() -> Retained<NSTimer> {
     let block = RcBlock::new(|_timer: NonNull<NSTimer>| {
+        let Some(mtm) = MainThreadMarker::new() else {
+            return;
+        };
         STATE.with(|s| {
             if let State::Recording(active) = &*s.borrow() {
                 update_time(active);
+                update_meter(mtm, active);
             }
         });
     });
     // SAFETY: the block has the expected signature; the run loop owns the
     // timer until it is invalidated in `stop`.
-    unsafe { NSTimer::scheduledTimerWithTimeInterval_repeats_block(0.25, true, &block) }
+    unsafe { NSTimer::scheduledTimerWithTimeInterval_repeats_block(0.1, true, &block) }
 }
 
 fn symbol_image(name: &str) -> Option<Retained<NSImage>> {
@@ -629,11 +670,19 @@ const BAR: NSSize = NSSize {
     width: 220.0,
     height: 44.0,
 };
+/// Room for the microphone meter.
+const METER: f64 = 44.0;
 
-fn control_panel(
-    mtm: MainThreadMarker,
-    area: NSRect,
-) -> (Retained<NSPanel>, Retained<NSTextField>, Retained<NSButton>) {
+type Controls = (
+    Retained<NSPanel>,
+    Retained<NSTextField>,
+    Retained<NSButton>,
+    Option<Retained<NSLevelIndicator>>,
+);
+
+fn control_panel(mtm: MainThreadMarker, area: NSRect, microphone: bool) -> Controls {
+    let extra = if microphone { METER } else { 0.0 };
+    let bar = NSSize::new(BAR.width + extra, BAR.height);
     let visible = NSScreen::screens(mtm)
         .iter()
         .find(|s| {
@@ -648,7 +697,7 @@ fn control_panel(
         .map_or(area, |s| s.visibleFrame());
     let panel = panels::floating_panel(
         mtm,
-        NSRect::new(panels::control_origin(area, visible, BAR), BAR),
+        NSRect::new(panels::control_origin(area, visible, bar), bar),
     );
     panel.setHasShadow(true);
 
@@ -656,9 +705,9 @@ fn control_panel(
     background.setBoxType(NSBoxType::Custom);
     background.setTitlePosition(NSTitlePosition::NoTitle);
     background.setBorderWidth(0.0);
-    background.setCornerRadius(BAR.height / 2.0);
+    background.setCornerRadius(bar.height / 2.0);
     background.setFillColor(&NSColor::colorWithWhite_alpha(0.1, 0.9));
-    background.setFrame(NSRect::new(NSPoint::ZERO, BAR));
+    background.setFrame(NSRect::new(NSPoint::ZERO, bar));
     panel.setContentView(Some(&background));
 
     let dot = NSTextField::labelWithString(&NSString::from_str("●"), mtm);
@@ -701,11 +750,41 @@ fn control_panel(
         background.addSubview(&b);
         b
     };
-    let pause = button("pause.fill", "Pause or resume", sel!(togglePause:), 104.0);
-    button("stop.fill", "Stop and save", sel!(stopRecording:), 140.0);
-    button("trash", "Stop and discard", sel!(discardRecording:), 176.0);
+    let meter = microphone.then(|| {
+        let meter = NSLevelIndicator::initWithFrame(
+            NSLevelIndicator::alloc(mtm),
+            NSRect::new(NSPoint::new(96.0, 16.0), NSSize::new(36.0, 12.0)),
+        );
+        meter.setLevelIndicatorStyle(NSLevelIndicatorStyle::ContinuousCapacity);
+        meter.setMinValue(0.0);
+        meter.setMaxValue(1.0);
+        meter.setWarningValue(0.85);
+        meter.setCriticalValue(0.97);
+        meter.setToolTip(Some(&NSString::from_str(&t!("Microphone level"))));
+        meter.setAccessibilityLabel(Some(&NSString::from_str(&t!("Microphone level"))));
+        background.addSubview(&meter);
+        meter
+    });
+    let pause = button(
+        "pause.fill",
+        "Pause or resume",
+        sel!(togglePause:),
+        104.0 + extra,
+    );
+    button(
+        "stop.fill",
+        "Stop and save",
+        sel!(stopRecording:),
+        140.0 + extra,
+    );
+    button(
+        "trash",
+        "Stop and discard",
+        sel!(discardRecording:),
+        176.0 + extra,
+    );
     panel.orderFrontRegardless();
-    (panel, time, pause)
+    (panel, time, pause, meter)
 }
 
 define_class!(

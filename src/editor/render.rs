@@ -17,12 +17,15 @@ use objc2_core_foundation::CFRetained;
 use objc2_core_graphics::{CGBitmapContextCreateImage, CGContext, CGImage};
 use objc2_foundation::{NSAffineTransform, NSPoint, NSRect, NSSize};
 
-use super::model::{Annotation, ArrowStyle, CanvasLayout, Color, Document, Fill, Shape, TextStyle};
+use super::model::{
+    Annotation, ArrowStyle, CanvasLayout, Color, Document, Fill, Orientation, Shape, TextStyle,
+};
 use crate::capture::geometry::{Point, Rect};
 use crate::capture::image;
 use crate::ui::draw::{self, Weight};
 
-/// The captured image being annotated.
+/// The captured image being annotated, as turned by the document's
+/// orientation.
 pub struct BaseImage {
     pub cg: CFRetained<CGImage>,
     pub ns: Retained<NSImage>,
@@ -31,10 +34,22 @@ pub struct BaseImage {
     /// Size in points.
     pub width: f64,
     pub height: f64,
+    /// The capture before any turn (what projects store).
+    pub original: CFRetained<CGImage>,
+    pub orientation: Orientation,
 }
 
 impl BaseImage {
     pub fn new(cg: CFRetained<CGImage>, scale: f64) -> Self {
+        Self::turned(cg.clone(), cg, scale, Orientation::default())
+    }
+
+    fn turned(
+        original: CFRetained<CGImage>,
+        cg: CFRetained<CGImage>,
+        scale: f64,
+        orientation: Orientation,
+    ) -> Self {
         let (w, h) = image::pixel_size(&cg);
         let (width, height) = (w as f64 / scale, h as f64 / scale);
         let ns = NSImage::initWithCGImage_size(NSImage::alloc(), &cg, NSSize::new(width, height));
@@ -44,7 +59,22 @@ impl BaseImage {
             scale,
             width,
             height,
+            original,
+            orientation,
         }
+    }
+
+    /// The same capture in `orientation`.
+    pub fn with_orientation(&self, orientation: Orientation) -> Self {
+        let cg = super::picture::orient_image(&self.original, orientation)
+            .unwrap_or_else(|| self.original.clone());
+        Self::turned(self.original.clone(), cg, self.scale, orientation)
+    }
+
+    /// The original capture's size in points.
+    pub fn original_size(&self) -> (f64, f64) {
+        let (w, h) = image::pixel_size(&self.original);
+        (w as f64 / self.scale, h as f64 / self.scale)
     }
 
     pub fn layout(&self, doc: &Document) -> CanvasLayout {
@@ -58,6 +88,21 @@ pub fn ns_color(c: Color) -> Retained<NSColor> {
 
 fn np(p: Point) -> NSPoint {
     NSPoint::new(p.x, p.y)
+}
+
+/// Pixels per point of the exported image: the capture's, times Resize.
+pub fn export_scale(doc: &Document, base: &BaseImage) -> f64 {
+    base.scale * doc.output_scale.unwrap_or(1.0)
+}
+
+/// The exported image's size in pixels.
+pub fn export_size(doc: &Document, base: &BaseImage) -> (usize, usize) {
+    let layout = base.layout(doc);
+    let scale = export_scale(doc, base);
+    (
+        ((layout.width * scale).round() as usize).max(1),
+        ((layout.height * scale).round() as usize).max(1),
+    )
 }
 
 /// Draws the whole document. `skip` leaves out one annotation (the one
@@ -487,13 +532,12 @@ fn draw_resampled(
 
 /// Renders the document at the image's full resolution.
 pub fn export(doc: &Document, base: &BaseImage) -> Option<CFRetained<CGImage>> {
-    let layout = base.layout(doc);
-    let width = (layout.width * base.scale).round() as usize;
-    let height = (layout.height * base.scale).round() as usize;
+    let scale = export_scale(doc, base);
+    let (width, height) = export_size(doc, base);
     let cg = image::bitmap_context(width, height, None)?;
     // Top-left origin in points.
     CGContext::translate_ctm(Some(&cg), 0.0, height as f64);
-    CGContext::scale_ctm(Some(&cg), base.scale, -base.scale);
+    CGContext::scale_ctm(Some(&cg), scale, -scale);
     let context = NSGraphicsContext::graphicsContextWithCGContext_flipped(&cg, true);
     let previous = NSGraphicsContext::currentContext();
     NSGraphicsContext::setCurrentContext(Some(&context));

@@ -146,6 +146,7 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
 | Self-Timer | none |
 | Scrolling Capture | `alt+shift+s` |
 | Capture Text | `alt+shift+o` |
+| Pick Color | none |
 | Record Screen | `alt+shift+5` |
 | Capture History | none |
 
@@ -169,7 +170,15 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
   one tall (or wide) image; sticky headers and sidebars appear once and
   scroll bars are removed.
 - **Capture Text:** select an area (or press Space and pick a window); the
-  text in it is recognized on your Mac and copied to the clipboard.
+  text in it is recognized on your Mac and copied to the clipboard. If the
+  area is mostly a QR code (or another barcode), or has no other text, the
+  code's content is copied instead; for a link, click the confirmation to
+  open it.
+- **Pick Color:** the magnifier shows the pixel under the pointer and its
+  hex value. Click (or press Return) to copy it as `#RRGGBB`, or drag to
+  copy the average color of an area. Hold Shift to copy `rgb(r, g, b)`
+  instead. Colors are converted to sRGB, so they match what browsers and
+  design apps show. Escape cancels.
 
 Captures are copied to the clipboard (as PNG) and saved to the Desktop by
 default. Options live in the `[capture]` section of the settings file:
@@ -184,6 +193,7 @@ default. Options live in the `[capture]` section of the settings file:
 | `jpeg_quality` | `0.9` | 0.0 to 1.0 |
 | `webp_quality` | `1.0` | 0.0 to 1.0; 1.0 is lossless |
 | `downscale_retina` | `false` | Save Retina captures at 1x |
+| `convert_to_srgb` | `false` | Convert captures from the display's color space to sRGB, so colors look the same on other screens |
 | `show_cursor` | `false` | Include the pointer in area and fullscreen captures |
 | `freeze_screen` | `false` | Freeze the screen while selecting |
 | `hide_desktop_icons` | `false` | Leave desktop icons and widgets out of captures |
@@ -217,6 +227,7 @@ slack = ["save", "open Slack"]
 | `resize 50%`, `resize 1280px`, `resize 1x` | Scale by a percentage, to at most a width, or to one pixel per point |
 | `background [preset]` | Put the image on a saved background preset, or on the editor's default background |
 | `redact` | Cover emails, API keys, tokens, card numbers and similar text |
+| `srgb` | Convert to sRGB |
 | `format png`, `format jpeg 80%`, `format webp [85%]` | The format of files written after this step (WebP without a quality is lossless) |
 | `save [folder]` | Save to the save folder, or to `folder` |
 | `copy` | Copy the image to the clipboard |
@@ -291,6 +302,10 @@ out of recordings instead of switching on Do Not Disturb, so they still
 reach you; desktop widgets stay in the recording. On macOS 14 the
 microphone is recorded through AVFoundation and clicks are drawn by the
 cursor overlay, since ScreenCaptureKit can do neither there.
+
+While the microphone records, a level meter sits next to the timer in the
+recording bar. If the microphone picks up nothing at all in the first few
+seconds (muted, or the wrong input chosen), a message says so.
 
 ### Video editor
 
@@ -436,8 +451,15 @@ Hold Shift for squares, circles and 45-degree lines. Color, width and style
 changes apply to the selected annotation too. Cmd+Z and Shift+Cmd+Z undo and
 redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
 for opened images, saves a new capture). The ••• menu has Save As…, Save
-Project…, Pin to Screen, Copy Text, Redact Sensitive Info, and Add Image to
-the Right… / Below….
+Project…, Pin to Screen, Copy Text, Redact Sensitive Info, Add Image to the
+Right… / Below…, Rotate Right / Left, Flip Horizontally / Vertically and
+Resize….
+
+**Rotate and flip** (Cmd+R and Shift+Cmd+R rotate) turn the image with
+everything on it; text stays upright. **Resize…** sets the size of the
+exported image in pixels or as a percentage, keeping proportions (1x gives
+a Retina capture one pixel per point); annotations are drawn at the new size, so they
+stay sharp. Both are undoable and saved in projects.
 
 **Images and combining captures:** Cmd+V pastes an image (or a copied image
 file) as a layer you can move and resize; corner handles keep its shape.
@@ -485,6 +507,7 @@ into your `PATH` to use it.
 | `scrolling-capture` | `x`, `y`, `width`, `height`, `display`, `autoscroll`, `start` |
 | `all-in-one` | `x`, `y`, `width`, `height`, `display` (same as `capture-area`) |
 | `capture-text` | `filepath`, `x`, `y`, `width`, `height`, `display`, `linebreaks` |
+| `pick-color` | none |
 | `record-screen` | `x`, `y`, `width`, `height`, `display` |
 | `pin` | `filepath` (asks for a file without it) |
 | `open-annotate` | `filepath` (asks for a file without it) |
@@ -538,14 +561,22 @@ The first time a script controls CleanShotZ, macOS asks you to allow it.
 
 CleanShotZ also offers actions to the Shortcuts app (and Spotlight): Capture
 Area, Capture Fullscreen, Capture Window, Capture Previous Area (each with an
-optional "Then" action), Capture Text, Scrolling Capture, Record Screen, Open
-Capture History, Hide Desktop Icons and Run Pipeline. Search for CleanShotZ
-in the Shortcuts app's action list. Every command is also available through
+optional "Then" action), Capture Text, Pick Color, Scrolling Capture, Record
+Screen, Open Capture History, Hide Desktop Icons and Run Pipeline. Search for
+CleanShotZ in the Shortcuts app's action list. Every command is also available through
 the Open URLs action (`cleanshotz://...`), Run AppleScript, or Run Shell
 Script with the command line.
 
 Building the actions needs Xcode (for `appintentsmetadataprocessor`); with
 only the Command Line Tools the app builds without them.
+
+### Raycast
+
+The [`raycast`](raycast) folder holds a Raycast extension with commands for
+every capture mode, recording, Pick Color, Capture History, and annotating,
+pinning or running a pipeline on the image selected in Finder. It uses the
+URL scheme, so it needs nothing beyond CleanShotZ. To try it: `cd raycast &&
+npm install && npm run dev`.
 
 ## Translating
 

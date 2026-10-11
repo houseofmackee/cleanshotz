@@ -20,6 +20,8 @@ pub enum Kind {
     SelfTimer,
     /// Select an area and copy the text in it.
     Text,
+    /// Copy the color under the pointer (or the average of an area).
+    Color,
 }
 
 /// Called with errors that happen after the overlay closes (the flow is
@@ -36,20 +38,28 @@ pub fn start(
     if overlay::is_active() {
         return Ok(());
     }
-    let freeze = settings.freeze_screen && kind != Kind::SelfTimer;
+    let color = kind == Kind::Color;
+    let freeze = settings.freeze_screen && kind != Kind::SelfTimer && !color;
+    let magnifier = settings.show_magnifier || color;
     let content = Content::fetch()?;
-    let displays = overlay_displays(mtm, &content, &settings, freeze || settings.show_magnifier)?;
+    let displays = overlay_displays(mtm, &content, &settings, freeze || magnifier)?;
     let options = overlay::Options {
-        mode: if kind == Kind::Window {
-            Mode::Window
-        } else {
-            Mode::Area
+        mode: match kind {
+            Kind::Window => Mode::Window,
+            Kind::Color => Mode::Color,
+            _ => Mode::Area,
         },
-        magnifier: settings.show_magnifier,
+        magnifier,
         freeze,
-        windows: content.pickable_windows(),
+        windows: if color {
+            Vec::new()
+        } else {
+            content.pickable_windows()
+        },
         click_selects_display: false,
-        hint: None,
+        hint: color.then(|| {
+            t!("Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel")
+        }),
     };
     overlay::begin(mtm, displays, options, move |selection| {
         if let Err(e) = on_selection(mtm, selection, kind, &settings, &state_path, on_error) {
@@ -85,6 +95,17 @@ fn on_selection(
         tracing::info!("capture cancelled");
         return Ok(());
     };
+    if let Selection::Color { rgb, css } = selection {
+        let text = if css {
+            super::color::css_rgb(rgb)
+        } else {
+            super::color::hex(rgb)
+        };
+        crate::ocr::copy_string(&text);
+        tracing::info!(color = text, "color copied");
+        crate::ui::toast::show_color(mtm, &t!("Copied {color}", color = text), rgb);
+        return Ok(());
+    }
     if let Selection::Area {
         display_id, rect, ..
     } = &selection
@@ -111,6 +132,7 @@ fn on_selection(
                 display_id, rect, ..
             } => super::grab_rect(display_id, rect, &settings)?,
             Selection::Window { window_id } => super::grab_window(window_id, &settings)?,
+            Selection::Color { .. } => return Ok(()),
         };
         crate::ocr::copy_text(captured.image, settings.line_breaks);
         return Ok(());
@@ -122,6 +144,7 @@ fn on_selection(
                 display_id, rect, ..
             } => (screen_for(mtm, *display_id), *rect),
             Selection::Window { .. } => (super::screen_under_mouse(mtm), Rect::default()),
+            Selection::Color { .. } => return Ok(()),
         };
         let screen = screen.ok_or(CaptureError::DisplayGone)?;
         let settings = settings.clone();
@@ -156,6 +179,7 @@ fn capture_selection(
             display_id, rect, ..
         } => capture_rect(mtm, display_id, rect, settings),
         Selection::Window { window_id } => capture_window(mtm, window_id, settings),
+        Selection::Color { .. } => Ok(()),
     }
 }
 

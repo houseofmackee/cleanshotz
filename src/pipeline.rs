@@ -33,6 +33,8 @@ pub enum Step {
     Background(Option<String>),
     /// Cover emails, keys, tokens and similar text that was recognized.
     Redact,
+    /// Convert to sRGB.
+    Srgb,
     /// The format for files written after this step, with a quality for
     /// JPEG and WebP (`format webp` alone is lossless).
     Format(ImageFormat, Option<f64>),
@@ -59,7 +61,7 @@ pub enum Resize {
 }
 
 /// Every step's syntax, for error messages.
-const SYNTAX: &str = "resize 50% | resize 1280px | resize 1x, background [preset], redact, \
+const SYNTAX: &str = "resize 50% | resize 1280px | resize 1x, background [preset], redact, srgb, \
 format png | format jpeg 80% | format webp [85%], save [folder], copy, upload, copy-link, \
 open [app], run <command>, annotate, pin, quick-access";
 
@@ -103,6 +105,7 @@ pub fn parse_step(text: &str) -> Result<Step, String> {
         }
         "background" => Ok(Step::Background(arg.map(str::to_string))),
         "redact" => no_arg(Step::Redact),
+        "srgb" => no_arg(Step::Srgb),
         "format" => {
             let arg = arg.ok_or("format needs png, jpeg or webp")?;
             let mut parts = arg.split_whitespace();
@@ -263,6 +266,7 @@ fn describe(step: &Step) -> String {
         Step::Resize(_) => "resize",
         Step::Background(_) => "background",
         Step::Redact => "redact",
+        Step::Srgb => "srgb",
         Step::Format(..) => "format",
         Step::Save(_) => "save",
         Step::Copy => "copy",
@@ -291,6 +295,12 @@ impl Job {
     fn step(&mut self, step: &Step) -> Result<(), String> {
         match step {
             Step::Resize(resize) => self.resize(*resize),
+            Step::Srgb => {
+                if let Some(srgb) = image::to_srgb(&self.image) {
+                    self.set_image(srgb);
+                }
+                Ok(())
+            }
             Step::Background(preset) => {
                 let (image, scale) = (AssertSend(self.image.clone()), self.scale);
                 let preset = preset.clone();
@@ -506,6 +516,8 @@ mod tests {
             Ok(Step::Resize(Resize::MaxWidth(1280)))
         );
         assert_eq!(parse_step("Resize 1x"), Ok(Step::Resize(Resize::OneX)));
+        assert_eq!(parse_step("srgb"), Ok(Step::Srgb));
+        assert!(parse_step("srgb now").is_err());
         assert_eq!(
             parse_step("format webp"),
             Ok(Step::Format(ImageFormat::Webp, None))

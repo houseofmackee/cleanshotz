@@ -124,6 +124,9 @@ impl StreamOutput {
         if !unsafe { buffer.is_valid() } {
             return;
         }
+        if kind == SCStreamOutputType::Microphone {
+            level::note(buffer);
+        }
         let Ok(mut state) = self.ivars().lock() else {
             return;
         };
@@ -215,6 +218,104 @@ define_class!(
         }
     }
 );
+
+/// The microphone's level, for the meter in the recording bar and the
+/// warning when it stays silent. Written on the recording queue, read on
+/// the main thread.
+pub mod level {
+    use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
+
+    use objc2_core_media::{CMAudioFormatDescriptionGetStreamBasicDescription, CMSampleBuffer};
+
+    /// The loudest sample since the meter last read it (f32 bits; for
+    /// non-negative floats the bit patterns order like the values).
+    static PEAK: AtomicU32 = AtomicU32::new(0);
+    static HEARD: AtomicBool = AtomicBool::new(false);
+    /// About -54 dBFS: quieter than any room with a working microphone.
+    pub const SILENCE: f32 = 0.002;
+
+    /// Clears the level for a new recording.
+    pub fn reset() {
+        PEAK.store(0, Ordering::Relaxed);
+        HEARD.store(false, Ordering::Relaxed);
+    }
+
+    /// The loudest sample since the last call (0 to 1).
+    pub fn take_peak() -> f32 {
+        f32::from_bits(PEAK.swap(0, Ordering::Relaxed))
+    }
+
+    /// Whether the microphone has picked up anything above silence.
+    pub fn heard() -> bool {
+        HEARD.load(Ordering::Relaxed)
+    }
+
+    pub(super) fn note(buffer: &CMSampleBuffer) {
+        let Some(peak) = peak(buffer) else {
+            return;
+        };
+        PEAK.fetch_max(peak.to_bits(), Ordering::Relaxed);
+        if peak > SILENCE {
+            HEARD.store(true, Ordering::Relaxed);
+        }
+    }
+
+    /// The loudest sample in a buffer of 32-bit float or 16-bit integer
+    /// PCM; `None` for other formats or scattered data.
+    fn peak(buffer: &CMSampleBuffer) -> Option<f32> {
+        // SAFETY: plain queries on a valid sample buffer; the data pointer
+        // covers `length` bytes when the data is contiguous (checked) and
+        // stays valid while the buffer is.
+        unsafe {
+            let format = buffer.format_description()?;
+            let asbd = CMAudioFormatDescriptionGetStreamBasicDescription(&format);
+            if asbd.is_null() {
+                return None;
+            }
+            const FLOAT: u32 = 1; // kAudioFormatFlagIsFloat
+            let (float, bits) = ((*asbd).mFormatFlags & FLOAT != 0, (*asbd).mBitsPerChannel);
+            let block = buffer.data_buffer()?;
+            let length = block.data_length();
+            if length == 0 || !block.is_range_contiguous(0, length) {
+                return None;
+            }
+            let mut data: *mut std::ffi::c_char = std::ptr::null_mut();
+            if block.data_pointer(0, std::ptr::null_mut(), std::ptr::null_mut(), &mut data) != 0
+                || data.is_null()
+            {
+                return None;
+            }
+            match (float, bits) {
+                (true, 32) if (data as usize).is_multiple_of(4) => {
+                    let samples = std::slice::from_raw_parts(data.cast::<f32>(), length / 4);
+                    Some(peak_of(samples.iter().copied()))
+                }
+                (false, 16) if (data as usize).is_multiple_of(2) => {
+                    let samples = std::slice::from_raw_parts(data.cast::<i16>(), length / 2);
+                    Some(peak_of(samples.iter().map(|s| f32::from(*s) / 32768.0)))
+                }
+                _ => None,
+            }
+        }
+    }
+
+    pub(super) fn peak_of(samples: impl Iterator<Item = f32>) -> f32 {
+        samples
+            .map(f32::abs)
+            .filter(|s| s.is_finite())
+            .fold(0.0, f32::max)
+            .min(1.0)
+    }
+
+    /// A meter reading (0 to 1) for a peak: -60 dBFS to 0 dBFS.
+    pub fn meter(peak: f32) -> f64 {
+        if peak <= 0.0 {
+            return 0.0;
+        }
+        let db = 20.0 * f64::from(peak).log10();
+        ((db + 60.0) / 60.0).clamp(0.0, 1.0)
+    }
+}
 
 /// Gain for the macOS 14 microphone path. ScreenCaptureKit's microphone
 /// (macOS 15) applies automatic gain: in tests its level varied by about
@@ -774,6 +875,17 @@ pub fn macos_at_least(major: isize) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn measures_microphone_levels() {
+        assert_eq!(level::peak_of([0.1, -0.5, 0.25].into_iter()), 0.5);
+        assert_eq!(level::peak_of([f32::NAN, 2.0].into_iter()), 1.0);
+        assert_eq!(level::peak_of(std::iter::empty()), 0.0);
+        assert_eq!(level::meter(0.0), 0.0);
+        assert_eq!(level::meter(1.0), 1.0);
+        assert!((level::meter(0.1) - 2.0 / 3.0).abs() < 1e-6, "-20 dBFS");
+        assert_eq!(level::meter(0.000_01), 0.0);
+    }
 
     #[test]
     fn soft_limit_keeps_quiet_samples_and_never_clips() {
