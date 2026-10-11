@@ -113,6 +113,9 @@
 /* src/editor/tools.rs */
 "Blur" = "Blur";
 
+/* src/studio/window.rs */
+"Bottom" = "Bottom";
+
 /* src/settings/mod.rs */
 "Bottom left" = "Bottom left";
 
@@ -167,7 +170,7 @@
 /* src/settings/mod.rs */
 "Choose…" = "Choose…";
 
-/* src/settings/mod.rs */
+/* src/settings/mod.rs, src/studio/window.rs */
 "Circle" = "Circle";
 
 /* src/app/mod.rs */
@@ -710,6 +713,9 @@
 /* src/editor/window.rs */
 "Rotate Right" = "Rotate Right";
 
+/* src/studio/window.rs */
+"Rounded Square" = "Rounded Square";
+
 /* src/settings/mod.rs */
 "Rounded rectangle" = "Rounded rectangle";
 
@@ -889,6 +895,9 @@
 
 /* src/settings/mod.rs */
 "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file." = "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file.";
+
+/* src/studio/window.rs */
+"Top" = "Top";
 
 /* src/editor/window.rs */
 "Trim plain margins so the capture sits in the middle" = "Trim plain margins so the capture sits in the middle";

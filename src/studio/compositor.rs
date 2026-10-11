@@ -50,6 +50,8 @@ pub struct Renderer {
     cursors: Vec<Option<Sprite>>,
     click: Retained<CIImage>,
     ring: Retained<CIImage>,
+    /// One pill per key label, at [`PILL_FONT`] pixels.
+    pills: Vec<Option<Retained<CIImage>>>,
     context: Retained<CIContext>,
     srgb: Option<CFRetained<CGColorSpace>>,
 }
@@ -73,6 +75,7 @@ impl Renderer {
         duration: f64,
     ) -> Result<Self, String> {
         let scene = Scene::new(events, project, video, duration);
+        let pills = scene.key_labels.clone();
         let layout = scene.layout;
         let output = project.output.fit(layout.canvas.0, layout.canvas.1);
         let background = match &project.background {
@@ -103,6 +106,14 @@ impl Renderer {
             cursors,
             click: click_sprite(true).ok_or("could not draw the click effect")?,
             ring: click_sprite(false).ok_or("could not draw the click effect")?,
+            pills: pills
+                .iter()
+                .map(|label| {
+                    let cg = pill_image(label)?;
+                    // SAFETY: a valid image.
+                    Some(unsafe { CIImage::imageWithCGImage(&cg) })
+                })
+                .collect(),
             context,
             // SAFETY: reading a CoreGraphics constant.
             srgb: CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })),
@@ -129,7 +140,7 @@ impl Renderer {
     }
 
     /// The frame at `t` seconds, from the screen video's frame `source`.
-    pub fn compose(&self, source: &CIImage, t: f64) -> Retained<CIImage> {
+    pub fn compose(&self, source: &CIImage, camera: Option<&CIImage>, t: f64) -> Retained<CIImage> {
         let layout = self.scene.layout;
         let frame = self.scene.frame(t);
         // SAFETY: Core Image calls on immutable images.
@@ -158,6 +169,16 @@ impl Renderer {
                 && let Some(sprite) = self.draw_cursor(cursor)
             {
                 image = sprite.imageByCompositingOverImage(&image);
+            }
+            if let Some((label, opacity)) = frame.key
+                && let Some(pill) = self.draw_key(label, opacity)
+            {
+                image = pill.imageByCompositingOverImage(&image);
+            }
+            if self.scene.camera_style.visible
+                && let Some(camera) = camera
+            {
+                image = self.draw_camera(camera).imageByCompositingOverImage(&image);
             }
             let canvas = CGRect::new(
                 CGPoint::new(0.0, 0.0),
@@ -304,12 +325,94 @@ impl Renderer {
         }
     }
 
-    /// Renders the frame at `t` from `source` into `target`.
-    pub fn render(&self, source: &CVPixelBuffer, target: &CVPixelBuffer, t: f64) {
+    /// A pressed key's pill near the bottom (or top) of the frame.
+    fn draw_key(&self, label: usize, opacity: f64) -> Option<Retained<CIImage>> {
+        let pill = self.pills.get(label)?.as_ref()?;
+        let (w, h) = self.scene.layout.canvas;
+        // SAFETY: Core Image calls on immutable images.
+        unsafe {
+            let extent = pill.extent();
+            let height = (h * 0.065 * self.scene.keys.size.clamp(0.6, 2.0)).max(24.0);
+            let s = height / extent.size.height;
+            let width = extent.size.width * s;
+            let margin = h * 0.06;
+            let y = if self.scene.keys.top {
+                h - margin - height
+            } else {
+                margin
+            };
+            let placed = pill.imageByApplyingTransform(CGAffineTransform {
+                a: s,
+                b: 0.0,
+                c: 0.0,
+                d: s,
+                tx: ((w - width) / 2.0).round(),
+                ty: y.round(),
+            });
+            Some(fade(&placed, opacity))
+        }
+    }
+
+    /// The camera, filling its square in the chosen shape, with a white
+    /// edge and a soft shadow.
+    fn draw_camera(&self, camera: &CIImage) -> Retained<CIImage> {
+        let rect = self.ci_rect(self.scene.camera_rect());
+        let side = rect.size.width;
+        let radius = match self.scene.camera_style.shape {
+            crate::config::CameraShape::Circle => side / 2.0,
+            crate::config::CameraShape::Rounded => side * 0.18,
+        };
+        // SAFETY: Core Image calls on immutable images.
+        unsafe {
+            let extent = camera.extent();
+            let s = side / extent.size.width.min(extent.size.height).max(1.0);
+            let (cw, ch) = (extent.size.width * s, extent.size.height * s);
+            let filled = camera
+                .imageByApplyingTransform(CGAffineTransform {
+                    a: s,
+                    b: 0.0,
+                    c: 0.0,
+                    d: s,
+                    tx: rect.origin.x - (cw - side) / 2.0 - extent.origin.x * s,
+                    ty: rect.origin.y - (ch - side) / 2.0 - extent.origin.y * s,
+                })
+                .imageByCroppingToRect(rect);
+            let face = rounded(&filled, rect, radius);
+            let edge = 3.0_f64.max(side * 0.015);
+            let ring_rect = CGRect::new(
+                CGPoint::new(rect.origin.x - edge, rect.origin.y - edge),
+                CGSize::new(side + 2.0 * edge, side + 2.0 * edge),
+            );
+            let mut image = face;
+            if let Some(ring) = shape(ring_rect, radius + edge, 1.0, 1.0, 1.0, 0.95) {
+                image = image.imageByCompositingOverImage(&ring);
+                let shadow_rect = CGRect::new(
+                    CGPoint::new(ring_rect.origin.x, ring_rect.origin.y - side * 0.03),
+                    ring_rect.size,
+                );
+                if let Some(shadow) = shape(shadow_rect, radius + edge, 0.0, 0.0, 0.0, 0.35) {
+                    let soft = shadow.imageByApplyingGaussianBlurWithSigma(side * 0.04);
+                    image = image.imageByCompositingOverImage(&soft);
+                }
+            }
+            image
+        }
+    }
+
+    /// Renders the frame at `t` from `source` (and the camera's frame, if
+    /// there is one) into `target`.
+    pub fn render(
+        &self,
+        source: &CVPixelBuffer,
+        camera: Option<&CVPixelBuffer>,
+        target: &CVPixelBuffer,
+        t: f64,
+    ) {
         // SAFETY: valid pixel buffers; Core Image renders on the GPU.
         unsafe {
             let input = CIImage::imageWithCVPixelBuffer(source);
-            let frame = self.compose(&input, t);
+            let camera = camera.map(|c| CIImage::imageWithCVPixelBuffer(c));
+            let frame = self.compose(&input, camera.as_deref(), t);
             self.context.render_toCVPixelBuffer_bounds_colorSpace(
                 &frame,
                 target,
@@ -395,6 +498,71 @@ fn rounded(image: &CIImage, spot: CGRect, radius: f64) -> Retained<CIImage> {
     }
 }
 
+/// A rounded rect (Core Image coordinates) in one color.
+fn shape(rect: CGRect, radius: f64, r: f64, g: f64, b: f64, a: f64) -> Option<Retained<CIImage>> {
+    // SAFETY: a built-in generator with valid parameters.
+    unsafe {
+        let generator = objc2_core_image::CIFilter::filterWithName(&NSString::from_str(
+            "CIRoundedRectangleGenerator",
+        ))?;
+        let set = |key: &str, value: &AnyObject| {
+            let _: () = msg_send![&generator, setValue: value, forKey: &*NSString::from_str(key)];
+        };
+        set(
+            "inputExtent",
+            &CIVector::vectorWithX_Y_Z_W(
+                rect.origin.x,
+                rect.origin.y,
+                rect.size.width,
+                rect.size.height,
+            ),
+        );
+        set("inputRadius", &NSNumber::new_f64(radius));
+        set(
+            "inputColor",
+            &CIColor::colorWithRed_green_blue_alpha(r, g, b, a),
+        );
+        generator.outputImage()
+    }
+}
+
+/// Key pills are drawn with text this many pixels high, then scaled.
+const PILL_FONT: f64 = 56.0;
+
+/// A dark rounded pill with `label` in white, like the keystroke display.
+fn pill_image(label: &str) -> Option<CFRetained<CGImage>> {
+    use objc2_app_kit::{NSColor, NSGraphicsContext};
+
+    let text = crate::ui::draw::text_size(label, PILL_FONT, crate::ui::draw::Weight::Semibold);
+    let (pad_x, pad_y) = (PILL_FONT * 0.6, PILL_FONT * 0.35);
+    let (w, h) = (
+        (text.width + 2.0 * pad_x).ceil().max(PILL_FONT * 1.6),
+        (text.height + 2.0 * pad_y).ceil(),
+    );
+    let cg = image::bitmap_context(w as usize, h as usize, None)?;
+    // Top-left origin, like the rest of the app's drawing.
+    CGContext::translate_ctm(Some(&cg), 0.0, h);
+    CGContext::scale_ctm(Some(&cg), 1.0, -1.0);
+    let context = NSGraphicsContext::graphicsContextWithCGContext_flipped(&cg, true);
+    let previous = NSGraphicsContext::currentContext();
+    NSGraphicsContext::setCurrentContext(Some(&context));
+    let pill = Rect::new(0.0, 0.0, w, h);
+    crate::ui::draw::fill_rounded(pill, h / 2.0, &NSColor::colorWithWhite_alpha(0.1, 0.88));
+    crate::ui::draw::draw_text(
+        label,
+        Point::new(
+            ((w - text.width) / 2.0).round(),
+            ((h - text.height) / 2.0).round(),
+        ),
+        PILL_FONT,
+        crate::ui::draw::Weight::Semibold,
+        &NSColor::whiteColor(),
+    );
+    context.flushGraphics();
+    NSGraphicsContext::setCurrentContext(previous.as_deref());
+    objc2_core_graphics::CGBitmapContextCreateImage(Some(&cg))
+}
+
 /// The background canvas with its shadow and a dark rounded spot where the
 /// video goes, drawn by the image editor.
 fn background_image(
@@ -448,6 +616,8 @@ pub struct InstructionIvars {
     renderer: Arc<Renderer>,
     range: CMTimeRange,
     track: CMPersistentTrackID,
+    /// The camera's track, when the recording has one.
+    camera: Option<CMPersistentTrackID>,
 }
 
 define_class!(
@@ -478,8 +648,11 @@ define_class!(
 
         #[unsafe(method_id(requiredSourceTrackIDs))]
         fn required_source_track_ids(&self) -> Option<Retained<NSArray<NSValue>>> {
-            let id: Retained<NSValue> = Retained::into_super(NSNumber::new_i32(self.ivars().track));
-            Some(NSArray::from_retained_slice(&[id]))
+            let ids: Vec<Retained<NSValue>> = std::iter::once(self.ivars().track)
+                .chain(self.ivars().camera)
+                .map(|id| Retained::into_super(NSNumber::new_i32(id)))
+                .collect();
+            Some(NSArray::from_retained_slice(&ids))
         }
 
         #[unsafe(method(passthroughTrackID))]
@@ -494,11 +667,13 @@ impl StudioInstruction {
         renderer: Arc<Renderer>,
         range: CMTimeRange,
         track: CMPersistentTrackID,
+        camera: Option<CMPersistentTrackID>,
     ) -> Retained<Self> {
         let this = Self::alloc().set_ivars(InstructionIvars {
             renderer,
             range,
             track,
+            camera,
         });
         // SAFETY: NSObject's designated initializer.
         unsafe { msg_send![super(this), init] }
@@ -565,7 +740,11 @@ fn compose_request(request: &AVAsynchronousVideoCompositionRequest) -> Result<()
             .newPixelBuffer()
             .ok_or("no output buffer")?;
         let t = request.compositionTime().seconds();
-        ivars.renderer.render(&source, &target, t);
+        // Outside the camera recording's time there is no camera frame.
+        let camera = ivars.camera.and_then(|id| request.sourceFrameByTrackID(id));
+        ivars
+            .renderer
+            .render(&source, camera.as_deref(), &target, t);
         request.finishWithComposedVideoFrame(&target);
         Ok(())
     }

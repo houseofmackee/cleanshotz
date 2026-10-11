@@ -21,6 +21,78 @@ pub struct Project {
     pub zooms_made: bool,
     /// Blur along the motion while the view moves.
     pub motion_blur: bool,
+    pub camera: CameraStyle,
+    pub keys: KeysStyle,
+}
+
+/// Where a recording's camera goes.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct CameraStyle {
+    pub visible: bool,
+    pub corner: Corner,
+    /// Its side, as a share of the frame's height (0.12 to 0.45).
+    pub size: f64,
+    pub shape: crate::config::CameraShape,
+}
+
+impl Default for CameraStyle {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            corner: Corner::BottomRight,
+            size: 0.25,
+            shape: crate::config::CameraShape::Circle,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Corner {
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+}
+
+impl Corner {
+    pub const ALL: [Corner; 4] = [
+        Corner::BottomRight,
+        Corner::BottomLeft,
+        Corner::TopRight,
+        Corner::TopLeft,
+    ];
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Corner::BottomRight => "Bottom Right",
+            Corner::BottomLeft => "Bottom Left",
+            Corner::TopRight => "Top Right",
+            Corner::TopLeft => "Top Left",
+        }
+    }
+}
+
+/// How pressed keys are shown.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct KeysStyle {
+    pub visible: bool,
+    /// At the top of the frame instead of the bottom.
+    pub top: bool,
+    /// 0.6 to 2 times the usual size.
+    pub size: f64,
+}
+
+impl Default for KeysStyle {
+    fn default() -> Self {
+        Self {
+            visible: true,
+            top: false,
+            size: 1.0,
+        }
+    }
 }
 
 impl Default for Project {
@@ -33,6 +105,8 @@ impl Default for Project {
             zooms: Vec::new(),
             zooms_made: false,
             motion_blur: false,
+            camera: CameraStyle::default(),
+            keys: KeysStyle::default(),
         }
     }
 }

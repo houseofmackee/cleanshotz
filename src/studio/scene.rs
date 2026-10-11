@@ -7,7 +7,7 @@
 //! (both top-left origin).
 
 use super::events::{Click, CursorSample, Events};
-use super::project::{CursorStyle, Project};
+use super::project::{CameraStyle, Corner, CursorStyle, KeysStyle, Project};
 use super::zoom::{Camera, View};
 use crate::capture::geometry::{Point, Rect};
 use crate::editor::model::Background;
@@ -21,6 +21,9 @@ const FADE_OUT: f64 = 0.4;
 const FADE_IN: f64 = 0.15;
 /// How long a click effect lasts.
 pub const CLICK: f64 = 0.5;
+/// How long a pressed key shows, the last part fading.
+pub const KEY: f64 = 1.5;
+const KEY_FADE: f64 = 0.3;
 
 /// The canvas and where the recording sits on it.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -240,6 +243,8 @@ pub struct Frame {
     pub previous: View,
     pub cursor: Option<CursorDraw>,
     pub clicks: Vec<ClickDraw>,
+    /// The key showing (which of [`Scene::key_labels`]) and its opacity.
+    pub key: Option<(usize, f64)>,
 }
 
 /// Everything needed to describe any frame of a recording.
@@ -255,6 +260,12 @@ pub struct Scene {
     /// The recorded area's size in points.
     area: (f64, f64),
     pub motion_blur: bool,
+    pub camera_style: CameraStyle,
+    pub keys: KeysStyle,
+    /// (time, label index) of each key press.
+    key_times: Vec<(f64, usize)>,
+    /// The distinct key labels, drawn once each.
+    pub key_labels: Vec<String>,
 }
 
 impl Scene {
@@ -268,6 +279,22 @@ impl Scene {
         let path = CursorPath::new(&events.cursor, &events.clicks, project.cursor.smoothing);
         let area = (video.0 / scale, video.1 / scale);
         let camera = Camera::new(&project.zooms, area, duration, 60.0, |t| path.position(t));
+        let mut key_labels: Vec<String> = Vec::new();
+        let mut key_times: Vec<(f64, usize)> = events
+            .keys
+            .iter()
+            .map(|k| {
+                let index = match key_labels.iter().position(|l| *l == k.label) {
+                    Some(i) => i,
+                    None => {
+                        key_labels.push(k.label.clone());
+                        key_labels.len() - 1
+                    }
+                };
+                (k.t, index)
+            })
+            .collect();
+        key_times.sort_by(|a, b| a.0.total_cmp(&b.0));
         Self {
             layout: layout(video, project.background.as_ref(), scale),
             scale,
@@ -277,7 +304,39 @@ impl Scene {
             camera,
             area,
             motion_blur: project.motion_blur,
+            camera_style: project.camera,
+            keys: project.keys,
+            key_times,
+            key_labels,
         }
+    }
+
+    /// Where the camera goes on the canvas: a square in the chosen corner.
+    pub fn camera_rect(&self) -> Rect {
+        let (w, h) = self.layout.canvas;
+        let side = (h * self.camera_style.size.clamp(0.12, 0.45))
+            .min(w * 0.45)
+            .round();
+        let margin = (w.min(h) * 0.035).round();
+        let (x, y) = match self.camera_style.corner {
+            Corner::TopLeft => (margin, margin),
+            Corner::TopRight => (w - side - margin, margin),
+            Corner::BottomLeft => (margin, h - side - margin),
+            Corner::BottomRight => (w - side - margin, h - side - margin),
+        };
+        Rect::new(x, y, side, side)
+    }
+
+    /// The key to show at `t`: the latest press within the last
+    /// [`KEY`] seconds.
+    fn key_at(&self, t: f64) -> Option<(usize, f64)> {
+        if !self.keys.visible {
+            return None;
+        }
+        let i = self.key_times.partition_point(|(at, _)| *at <= t);
+        let (at, label) = *self.key_times.get(i.checked_sub(1)?)?;
+        let age = t - at;
+        (age < KEY).then(|| (label, ((KEY - age) / KEY_FADE).min(1.0)))
     }
 
     /// The view at `t` (the whole recording when there is no zoom).
@@ -334,6 +393,7 @@ impl Scene {
             previous,
             cursor,
             clicks,
+            key: self.key_at(t),
         }
     }
 }
@@ -445,6 +505,41 @@ mod tests {
         assert_eq!(path.idle_opacity(3.5), 0.0);
         assert!(path.idle_opacity(3.2) > 0.0 && path.idle_opacity(3.2) < 1.0);
         assert!(path.idle_opacity(3.95) > 0.5, "fades back in before moving");
+    }
+
+    #[test]
+    fn places_the_camera_and_shows_keys() {
+        let events = Events {
+            scale: 1.0,
+            keys: vec![
+                crate::studio::events::KeyPress {
+                    t: 1.0,
+                    label: "⌘C".into(),
+                },
+                crate::studio::events::KeyPress {
+                    t: 1.2,
+                    label: "⌘V".into(),
+                },
+            ],
+            ..Events::default()
+        };
+        let project = Project {
+            background: None,
+            ..Project::default()
+        };
+        let scene = Scene::new(&events, &project, (1000.0, 800.0), 5.0);
+        let camera = scene.camera_rect();
+        // A quarter of the height, in the bottom-right corner.
+        assert_eq!(camera.width, 200.0);
+        assert_eq!(camera.max_x(), 1000.0 - 28.0);
+        assert_eq!(camera.max_y(), 800.0 - 28.0);
+        assert_eq!(scene.key_labels, vec!["⌘C", "⌘V"]);
+        assert_eq!(scene.frame(0.5).key, None);
+        assert_eq!(scene.frame(1.1).key, Some((0, 1.0)));
+        assert_eq!(scene.frame(1.3).key, Some((1, 1.0)));
+        let (_, fading) = scene.frame(2.55).key.unwrap();
+        assert!(fading > 0.0 && fading < 1.0);
+        assert_eq!(scene.frame(2.8).key, None);
     }
 
     #[test]

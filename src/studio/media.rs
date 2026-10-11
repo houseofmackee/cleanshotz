@@ -73,6 +73,7 @@ pub unsafe fn prepare(package: &Path, renderer: Arc<Renderer>) -> Result<Prepare
                     .map_err(|e| e.localizedDescription().to_string())?;
             }
         }
+        let camera = add_camera(package, &composition, range.duration.seconds());
         let (width, height) = renderer.output();
         let instruction = StudioInstruction::new(
             renderer,
@@ -81,6 +82,7 @@ pub unsafe fn prepare(package: &Path, renderer: Arc<Renderer>) -> Result<Prepare
                 duration: composition.duration(),
             },
             screen.trackID(),
+            camera,
         );
         let video_composition = AVMutableVideoComposition::videoComposition();
         video_composition.setCustomVideoCompositorClass(Some(StudioCompositor::class_object()));
@@ -93,6 +95,53 @@ pub unsafe fn prepare(package: &Path, renderer: Arc<Renderer>) -> Result<Prepare
             composition,
             video: video_composition,
         })
+    }
+}
+
+/// Adds the camera recording, lined up with the screen, as its own video
+/// track; returns its id. Recordings without a camera return `None`.
+///
+/// # Safety
+///
+/// AVFoundation objects, used on one thread at a time.
+unsafe fn add_camera(
+    package: &Path,
+    composition: &AVMutableComposition,
+    duration: f64,
+) -> Option<i32> {
+    let events = super::package::load_events(package).ok()?;
+    let track = events.camera?;
+    let file = package.join(&track.file);
+    if !file.exists() {
+        return None;
+    }
+    // SAFETY: per the function's contract.
+    unsafe {
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&file.to_string_lossy()));
+        let asset = AVURLAsset::URLAssetWithURL_options(&url, None);
+        let video = AVMediaTypeVideo?;
+        #[allow(deprecated)]
+        let source = asset.tracksWithMediaType(video).firstObject()?;
+        let length = source.timeRange().duration.seconds();
+        // A camera that started before the screen loses its beginning.
+        let skip = (-track.offset).max(0.0);
+        let at = track.offset.max(0.0);
+        let take = (length - skip).min(duration - at);
+        if take <= 0.0 {
+            return None;
+        }
+        let target = composition.addMutableTrackWithMediaType_preferredTrackID(video, 0)?;
+        target
+            .insertTimeRange_ofTrack_atTime_error(
+                CMTimeRange {
+                    start: time(skip),
+                    duration: time(take),
+                },
+                &source,
+                time(at),
+            )
+            .ok()?;
+        Some(target.trackID())
     }
 }
 

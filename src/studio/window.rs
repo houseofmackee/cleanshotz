@@ -32,8 +32,9 @@ const INSPECTOR: f64 = 300.0;
 const ROW: f64 = 30.0;
 /// The zoom track's height.
 const TRACK: f64 = 52.0;
-/// Room for the whole inspector.
-const MIN_HEIGHT: f64 = 780.0;
+const MIN_HEIGHT: f64 = 600.0;
+/// The inspector's full height (it scrolls in shorter windows).
+const INSPECTOR_HEIGHT: f64 = 1260.0;
 
 /// A choice in the background menu.
 #[derive(Clone)]
@@ -55,6 +56,8 @@ struct Ui {
     smoothing: Retained<NSSlider>,
     hide_idle: Retained<NSButton>,
     clicks: Retained<NSPopUpButton>,
+    camera: Option<CameraControls>,
+    keys: Option<KeyControls>,
     zoom_level: Retained<NSSlider>,
     zoom_follow: Retained<NSButton>,
     zoom_delete: Retained<NSButton>,
@@ -62,6 +65,19 @@ struct Ui {
     output: Retained<NSPopUpButton>,
     export: Retained<NSButton>,
     status: Retained<NSTextField>,
+}
+
+struct CameraControls {
+    show: Retained<NSButton>,
+    corner: Retained<NSPopUpButton>,
+    size: Retained<NSSlider>,
+    shape: Retained<NSPopUpButton>,
+}
+
+struct KeyControls {
+    show: Retained<NSButton>,
+    place: Retained<NSPopUpButton>,
+    size: Retained<NSSlider>,
 }
 
 pub struct Ivars {
@@ -269,19 +285,31 @@ impl StudioEditor {
         };
         let _ = self.ivars().observer.set(observer);
 
-        let inspector = NSView::initWithFrame(
-            NSView::alloc(mtm),
+        // The inspector scrolls when the window is short.
+        let scroll = objc2_app_kit::NSScrollView::initWithFrame(
+            objc2_app_kit::NSScrollView::alloc(mtm),
             NSRect::new(
                 NSPoint::new(frame.size.width - INSPECTOR, 0.0),
                 NSSize::new(INSPECTOR, height),
             ),
         );
-        inspector.setAutoresizingMask(
+        scroll.setHasVerticalScroller(true);
+        scroll.setDrawsBackground(false);
+        scroll.setAutoresizingMask(
             NSAutoresizingMaskOptions::ViewMinXMargin
                 | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
-        content.addSubview(&inspector);
-        let ui = self.build_inspector(mtm, &inspector, height);
+        let inspector = NSView::initWithFrame(
+            NSView::alloc(mtm),
+            NSRect::new(NSPoint::ZERO, NSSize::new(INSPECTOR, INSPECTOR_HEIGHT)),
+        );
+        scroll.setDocumentView(Some(&inspector));
+        content.addSubview(&scroll);
+        let ui = self.build_inspector(mtm, &inspector, INSPECTOR_HEIGHT);
+        // Start at the top.
+        let clip = scroll.contentView();
+        clip.scrollToPoint(NSPoint::new(0.0, (INSPECTOR_HEIGHT - height).max(0.0)));
+        scroll.reflectScrolledClipView(&clip);
         let _ = self.ivars().ui.set(ui);
         let _ = self.ivars().player.set(player);
         let _ = self.ivars().item.set(item);
@@ -471,6 +499,47 @@ impl StudioEditor {
         );
         y -= ROW + 20.0;
 
+        let camera = self.ivars().events.camera.is_some().then(|| {
+            heading("Camera", y);
+            y -= ROW + 2.0;
+            let show = check("Show the camera", y);
+            y -= ROW;
+            label("Corner:", y);
+            let corner = popup(
+                &super::project::Corner::ALL
+                    .iter()
+                    .map(|c| crate::i18n::tr(c.title()))
+                    .collect::<Vec<_>>(),
+                y,
+            );
+            y -= ROW;
+            label("Size:", y);
+            let size = slider(0.12, 0.45, y);
+            y -= ROW;
+            label("Shape:", y);
+            let shape = popup(&crate::i18n::labels(&["Circle", "Rounded Square"]), y);
+            y -= ROW + 14.0;
+            CameraControls {
+                show,
+                corner,
+                size,
+                shape,
+            }
+        });
+        let keys = (!self.ivars().events.keys.is_empty()).then(|| {
+            heading("Keys", y);
+            y -= ROW + 2.0;
+            let show = check("Show pressed keys", y);
+            y -= ROW;
+            label("Place:", y);
+            let place = popup(&crate::i18n::labels(&["Bottom", "Top"]), y);
+            y -= ROW;
+            label("Size:", y);
+            let size = slider(0.6, 2.0, y);
+            y -= ROW + 14.0;
+            KeyControls { show, place, size }
+        });
+
         heading("Export", y);
         y -= ROW + 2.0;
         label("Output:", y);
@@ -516,6 +585,8 @@ impl StudioEditor {
             smoothing,
             hide_idle,
             clicks,
+            camera,
+            keys,
             zoom_level,
             zoom_follow,
             zoom_delete,
@@ -613,6 +684,24 @@ impl StudioEditor {
                 .unwrap_or(0) as isize,
         );
         ui.motion_blur.setState(on(project.motion_blur));
+        if let Some(c) = &ui.camera {
+            let style = project.camera;
+            c.show.setState(on(style.visible));
+            c.corner.selectItemAtIndex(
+                super::project::Corner::ALL
+                    .iter()
+                    .position(|x| *x == style.corner)
+                    .unwrap_or(0) as isize,
+            );
+            c.size.setDoubleValue(style.size);
+            c.shape
+                .selectItemAtIndex((style.shape == crate::config::CameraShape::Rounded) as isize);
+        }
+        if let Some(k) = &ui.keys {
+            k.show.setState(on(project.keys.visible));
+            k.place.selectItemAtIndex(project.keys.top as isize);
+            k.size.setDoubleValue(project.keys.size);
+        }
         let selected = self
             .ivars()
             .selected
@@ -697,6 +786,24 @@ impl StudioEditor {
             .copied()
             .unwrap_or(OutputSize::P1080);
         project.motion_blur = ui.motion_blur.state() == NSControlStateValueOn;
+        if let Some(c) = &ui.camera {
+            project.camera.visible = c.show.state() == NSControlStateValueOn;
+            project.camera.corner = super::project::Corner::ALL
+                .get(c.corner.indexOfSelectedItem().max(0) as usize)
+                .copied()
+                .unwrap_or(super::project::Corner::BottomRight);
+            project.camera.size = (c.size.doubleValue() * 100.0).round() / 100.0;
+            project.camera.shape = if c.shape.indexOfSelectedItem() == 1 {
+                crate::config::CameraShape::Rounded
+            } else {
+                crate::config::CameraShape::Circle
+            };
+        }
+        if let Some(k) = &ui.keys {
+            project.keys.visible = k.show.state() == NSControlStateValueOn;
+            project.keys.top = k.place.indexOfSelectedItem() == 1;
+            project.keys.size = (k.size.doubleValue() * 10.0).round() / 10.0;
+        }
         if let Err(e) = self.set_project(project) {
             tracing::error!(error = %e, "studio change not applied");
             crate::ui::toast::show(mtm, &e);
