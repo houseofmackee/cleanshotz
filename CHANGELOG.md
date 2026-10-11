@@ -6,6 +6,8 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
 ### Added
 
 - Capture Text reads QR codes and other barcodes; links can be opened from
@@ -18,6 +20,12 @@ All notable changes to CleanShotZ. The format follows
 - Convert colors to sRGB (Settings > Screenshots) and an `srgb` pipeline
   step.
 - A Raycast extension in `raycast/`.
+
+### Changed
+
+- Projects (`.cszdoc`) with a rotated, flipped or resized image are saved
+  as format version 2, which CleanShotZ 0.1 cannot open. Other projects
+  stay compatible.
 
 ## [0.1.1] - 2026-10-10
 
@@ -63,6 +71,7 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/houseofmackee/cleanshotz/releases/tag/v0.1.0
