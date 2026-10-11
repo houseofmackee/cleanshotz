@@ -7,7 +7,7 @@
 //! ```json
 //! {
 //!   "format": "cleanshotz-project",
-//!   "version": 1,             // 2 when the image is turned or resized
+//!   "version": 1,             // 2 or 3 when newer features are used
 //!   "scale": 2.0,             // image pixels per point
 //!   "image_png": "iVBOR...",  // the original image, base64 PNG
 //!   "document": { ... }       // annotations, crop, background,
@@ -24,17 +24,19 @@ use objc2_core_foundation::CFRetained;
 use objc2_core_graphics::CGImage;
 use serde::{Deserialize, Serialize};
 
-use super::model::Document;
+use super::model::{Aspect, Document, Shape};
 use super::render::BaseImage;
 use crate::capture::image;
 use crate::config::ImageFormat;
 
 pub const EXTENSION: &str = "cszdoc";
 const FORMAT: &str = "cleanshotz-project";
-/// The newest version this app reads. Version 2 adds the document's
-/// orientation and output size; files that use neither are written as
-/// version 1, so older versions of the app can still open them.
-const VERSION: u32 = 2;
+/// The newest version this app reads. Each file gets the lowest version
+/// that can hold it, so older versions of the app open what they can show
+/// and refuse the rest: 2 adds the orientation and output size, 3 the
+/// magnify, measure and text highlight shapes, curved arrows, hand-drawn
+/// shapes, image layer opacity, Balance and the newer background sizes.
+const VERSION: u32 = 3;
 
 #[derive(Serialize, Deserialize)]
 struct ProjectFile {
@@ -61,10 +63,27 @@ pub fn save(path: &Path, base: &BaseImage, doc: &Document) -> Result<(), String>
 }
 
 fn version_for(doc: &Document) -> u32 {
-    if doc.orientation == Default::default() && doc.output_scale.is_none() {
-        1
+    let uses_3 = doc.annotations.iter().any(|a| {
+        a.sketchy
+            || match &a.shape {
+                Shape::Magnify { .. } | Shape::Measure { .. } | Shape::TextHighlight { .. } => true,
+                Shape::Arrow { bend, .. } => bend.is_some(),
+                Shape::Image { opacity, .. } => *opacity < 1.0,
+                _ => false,
+            }
+    }) || doc.background.as_ref().is_some_and(|b| {
+        b.balance
+            || !matches!(
+                b.aspect,
+                Aspect::Auto | Aspect::Square | Aspect::Wide | Aspect::Standard
+            )
+    });
+    if uses_3 {
+        3
+    } else if doc.orientation != Default::default() || doc.output_scale.is_some() {
+        2
     } else {
-        VERSION
+        1
     }
 }
 
@@ -85,4 +104,42 @@ pub fn load(path: &Path) -> Result<(CFRetained<CGImage>, f64, Document), String>
         .map_err(|e| format!("damaged image data: {e}"))?;
     let image = image::decode(&png).ok_or("damaged image data")?;
     Ok((image, file.scale, file.document))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::capture::geometry::{Point, Rect};
+    use crate::editor::model::{Background, Color, Turn};
+
+    #[test]
+    fn writes_the_lowest_version_that_holds_the_document() {
+        let mut doc = Document::default();
+        doc.add(
+            Shape::Rectangle {
+                rect: Rect::new(0.0, 0.0, 10.0, 10.0),
+                filled: false,
+            },
+            Color::RED,
+            4.0,
+        );
+        assert_eq!(version_for(&doc), 1);
+        doc.turn(Turn::Right, 100.0, 50.0, |p| p.clone());
+        assert_eq!(version_for(&doc), 2);
+        doc.background = Some(Background {
+            aspect: Aspect::Story,
+            ..Background::default()
+        });
+        assert_eq!(version_for(&doc), 3);
+        let mut doc = Document::default();
+        doc.add(
+            Shape::Measure {
+                start: Point::new(0.0, 0.0),
+                end: Point::new(5.0, 0.0),
+            },
+            Color::RED,
+            4.0,
+        );
+        assert_eq!(version_for(&doc), 3);
+    }
 }

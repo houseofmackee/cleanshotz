@@ -9,7 +9,7 @@ all = { level = "warn", priority = -1 }
 
 [package]
 name = "cleanshotz"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2024"
 description = "A native macOS screenshot, screen recording and annotation tool"
 license = "MIT OR Apache-2.0"

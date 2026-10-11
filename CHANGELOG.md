@@ -6,6 +6,8 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-11
+
 ### Added
 
 - Editor: Magnify (M) and Measure (U) tools, curved arrows, a hand-drawn
@@ -19,6 +21,9 @@ All notable changes to CleanShotZ. The format follows
 
 - The tapered arrow (like CleanShot X's) is the default arrow.
 - The editor's menus and labels are translated.
+- Projects that use any of the new editor features are saved as format
+  version 3, which CleanShotZ 0.2 and earlier cannot open. Other projects
+  stay compatible.
 
 ## [0.2.0] - 2026-10-11
 
@@ -85,7 +90,8 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/houseofmackee/cleanshotz/releases/tag/v0.1.0
