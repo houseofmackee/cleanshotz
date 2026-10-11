@@ -6,6 +6,17 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-12
+
+### Changed
+
+- CleanShotZ is now signed with a Developer ID and notarized by Apple,
+  so it opens without the "Open Anyway" step.
+- Because the signature changed, macOS asks once more for Screen
+  Recording, Accessibility and the other permissions after updating from
+  0.5.0 or earlier. The old entries in System Settings > Privacy &
+  Security can be removed.
+
 ## [0.5.0] - 2026-10-11
 
 ### Added
@@ -135,7 +146,8 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.3.0...v0.4.0
