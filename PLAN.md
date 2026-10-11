@@ -615,9 +615,8 @@ Group 4 of the October 2026 comparison.
   plus a Settings checkbox. As a menu bar app it uses gentle reminders:
   scheduled finds go to the menu instead of taking focus. Tested end to
   end on a Mac (0.6.90 to 0.6.91 from a local signed feed, installed on
-  quit). The Homebrew cask should get `auto_updates true` once 0.7.0 is
-  out (with it, plain `brew upgrade` skips the cask, which would strand
-  0.6.0 users).
+  quit). The Homebrew cask has `auto_updates true` since 0.7.0 is out, so
+  plain `brew upgrade` leaves updating to the app.
 - **Homebrew (done):** the `cleanshotz` cask in
   [houseofmackee/homebrew-tap](https://github.com/houseofmackee/homebrew-tap)
   installs the notarized DMG and links the `cleanshotz` command; the
@@ -663,11 +662,10 @@ Group 4 of the October 2026 comparison.
 ## 6. Next steps
 
 1. **Captions** (see Future work); needs macOS 26 for SpeechAnalyzer.
-2. **Homebrew:** add `auto_updates true` to the cask after 0.7.0.
-3. **Needs the maintainer's account:** a Raycast username to publish the
+2. **Needs the maintainer's account:** a Raycast username to publish the
    extension to the Raycast Store.
-4. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
+3. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
    preview; translating the History window's context menu titles.
-5. **Not yet tested on real hardware:** Studio and the panel before
+4. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
    an M1, notch cropping on a notched display, and printing to a printer.

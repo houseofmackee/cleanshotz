@@ -37,8 +37,9 @@ Requires macOS 14 or later on an Apple Silicon Mac. With
 brew install --cask houseofmackee/tap/cleanshotz
 ```
 
-This also puts the `cleanshotz` command line tool on your `PATH`; update with
-`brew upgrade --cask cleanshotz`. Or download `CleanShotZ-<version>.dmg` (or
+This also puts the `cleanshotz` command line tool on your `PATH`. The app
+updates itself (see [Updates](#updates)), so `brew upgrade` leaves it alone
+unless you add `--greedy`. Or download `CleanShotZ-<version>.dmg` (or
 the zip) from
 [GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), open
 it and drag CleanShotZ into Applications. `SHA256SUMS.txt` has the checksums.
