@@ -585,8 +585,8 @@ Group 4 of the October 2026 comparison.
   to v0.5.0 were published as pre-releases with the self-signed
   certificate. Since 0.6.0 releases are signed with a Developer ID and
   notarized (the app and the DMG, both stapled), and the release workflow
-  updates the Homebrew cask. Open: automatic updates (Sparkle) and
-  publishing the Raycast extension.
+  updates the Homebrew cask. Sparkle updates are in (released with 0.7.0).
+  Open: publishing the Raycast extension.
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
@@ -603,13 +603,21 @@ Group 4 of the October 2026 comparison.
   System Settings > Privacy & Security > Open Anyway (on macOS 15 and later the
   Control-click > Open shortcut no longer works). Alternative for technical
   users: `xattr -dr com.apple.quarantine /Applications/CleanShotZ.app`.
-- **Updates (deferred for now; users download new releases by hand):**
-  Sparkle 2 (embedded framework, driven via objc2) with an
-  EdDSA-signed `appcast.xml` published to GitHub Pages by the release
-  workflow. Sparkle verifies the EdDSA signature and that the update is signed
-  by the same certificate; updates it installs do not hit Gatekeeper again.
-  The private EdDSA key is a CI secret. Automatic checks are opt-in on first
-  launch.
+- **Updates (done, from 0.7.0):** Sparkle 2.10, embedded by `cargo xtask
+  dist` only (dev and test builds never offer to replace themselves) and
+  loaded at runtime through the Objective-C runtime, so nothing links
+  against it. Its XPC services are left out (only sandboxed apps need
+  them). Each release attaches an `appcast.xml` signed with the EdDSA key
+  (`SURequireSignedFeed`), whose enclosure is the notarized zip, also
+  signed; the app reads `releases/latest/download/appcast.xml`, so
+  pre-releases are never offered and no separate hosting is needed.
+  Automatic checks are Sparkle's opt-in question on the second launch,
+  plus a Settings checkbox. As a menu bar app it uses gentle reminders:
+  scheduled finds go to the menu instead of taking focus. Tested end to
+  end on a Mac (0.6.90 to 0.6.91 from a local signed feed, installed on
+  quit). The Homebrew cask should get `auto_updates true` once 0.7.0 is
+  out (with it, plain `brew upgrade` skips the cask, which would strand
+  0.6.0 users).
 - **Homebrew (done):** the `cleanshotz` cask in
   [houseofmackee/homebrew-tap](https://github.com/houseofmackee/homebrew-tap)
   installs the notarized DMG and links the `cleanshotz` command; the
@@ -655,8 +663,7 @@ Group 4 of the October 2026 comparison.
 ## 6. Next steps
 
 1. **Captions** (see Future work); needs macOS 26 for SpeechAnalyzer.
-2. **Automatic updates with Sparkle** (see Distribution); can be done
-   without any account.
+2. **Homebrew:** add `auto_updates true` to the cask after 0.7.0.
 3. **Needs the maintainer's account:** a Raycast username to publish the
    extension to the Raycast Store.
 4. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the

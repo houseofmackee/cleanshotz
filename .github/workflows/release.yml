@@ -8,6 +8,7 @@ name: Release
 #   DEVELOPER_ID_P12_BASE64    the Developer ID Application certificate and key
 #   DEVELOPER_ID_P12_PASSWORD  its password
 #   NOTARY_API_KEY_BASE64      an App Store Connect API key (.p8, Developer role)
+#   SPARKLE_PRIVATE_KEY        the EdDSA key that signs updates and appcast.xml
 # and these variables: APPLE_TEAM_ID, NOTARY_KEY_ID, NOTARY_ISSUER_ID.
 # TAP_DEPLOY_KEY (a write deploy key of houseofmackee/homebrew-tap) lets it
 # update the Homebrew cask to the new version.
@@ -78,12 +79,24 @@ jobs:
           fi
           echo "$KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
 
+      - name: Write the update signing key
+        env:
+          SPARKLE_KEY: ${{ secrets.SPARKLE_PRIVATE_KEY }}
+        run: |
+          if [ -z "$SPARKLE_KEY" ]; then
+            echo "::error::SPARKLE_PRIVATE_KEY must be set"
+            exit 1
+          fi
+          printf '%s\n' "$SPARKLE_KEY" > "$RUNNER_TEMP/sparkle_key"
+          chmod 600 "$RUNNER_TEMP/sparkle_key"
+
       - name: Build, notarize and package
         env:
           CLEANSHOTZ_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
           CLEANSHOTZ_NOTARY_KEY: ${{ runner.temp }}/notary.p8
           CLEANSHOTZ_NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
           CLEANSHOTZ_NOTARY_ISSUER: ${{ vars.NOTARY_ISSUER_ID }}
+          CLEANSHOTZ_SPARKLE_KEY: ${{ runner.temp }}/sparkle_key
         run: |
           if [ -z "$CLEANSHOTZ_TEAM_ID" ] || [ -z "$CLEANSHOTZ_NOTARY_KEY_ID" ] || [ -z "$CLEANSHOTZ_NOTARY_ISSUER" ]; then
             echo "::error::the APPLE_TEAM_ID, NOTARY_KEY_ID and NOTARY_ISSUER_ID variables must be set"
@@ -92,6 +105,7 @@ jobs:
           cargo xtask dist
           # Fail rather than publish anything Gatekeeper would block.
           xcrun stapler validate "target/dist/CleanShotZ-${GITHUB_REF_NAME#v}.dmg"
+          test -s target/dist/appcast.xml
 
       - name: Publish the release
         env:
@@ -110,7 +124,8 @@ jobs:
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" $prerelease --generate-notes --notes-file "$notes" \
             --title "CleanShotZ $version" \
-            target/dist/CleanShotZ-$version.dmg target/dist/CleanShotZ-$version.zip target/dist/SHA256SUMS.txt
+            target/dist/CleanShotZ-$version.dmg target/dist/CleanShotZ-$version.zip target/dist/SHA256SUMS.txt \
+            target/dist/appcast.xml
 
       - name: Update the Homebrew cask
         env:
@@ -143,4 +158,4 @@ jobs:
         if: always()
         run: |
           security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
-          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/tap_key" "$RUNNER_TEMP/known_hosts"
+          rm -f "$RUNNER_TEMP/notary.p8" "$RUNNER_TEMP/sparkle_key" "$RUNNER_TEMP/tap_key" "$RUNNER_TEMP/known_hosts"

@@ -67,6 +67,7 @@ define_class!(
             self.configure_quick_access();
             crate::history::prune();
             self.install_status_item();
+            crate::updates::start(self.mtm());
             self.install_hotkeys();
             self.run_onboarding_if_needed();
             let delegate = self.retain();
@@ -376,6 +377,7 @@ impl AppDelegate {
             Action::PermissionMicrophone => Permission::Microphone.request(),
             Action::PermissionCamera => Permission::Camera.request(),
             Action::PermissionInputMonitoring => Permission::InputMonitoring.request(),
+            Action::CheckForUpdates => crate::updates::check(mtm),
             Action::About => {
                 let app = NSApplication::sharedApplication(mtm);
                 app.activate();
@@ -711,6 +713,16 @@ impl AppDelegate {
         menu.addItem(&self.menu_item(Action::OpenSettingsFile));
         menu.addItem(&self.menu_item(Action::ReloadSettings));
         menu.addItem(&NSMenuItem::separatorItem(mtm));
+        if crate::updates::available() {
+            let updates = self.menu_item(Action::CheckForUpdates);
+            if let Some(version) = crate::updates::found() {
+                updates.setTitle(&NSString::from_str(&t!(
+                    "Update to CleanShotZ {version}…",
+                    version
+                )));
+            }
+            menu.addItem(&updates);
+        }
         menu.addItem(&self.menu_item(Action::About));
         let quit = self.menu_item(Action::Quit);
         quit.setKeyEquivalent(ns_string!("q"));

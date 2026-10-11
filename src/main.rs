@@ -25,6 +25,7 @@ mod state;
 mod steps;
 mod studio;
 mod ui;
+mod updates;
 mod upload;
 mod video_editor;
 

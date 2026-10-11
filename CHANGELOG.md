@@ -10,6 +10,10 @@ All notable changes to CleanShotZ. The format follows
 
 - Homebrew: `brew install --cask houseofmackee/tap/cleanshotz` installs
   the app and the `cleanshotz` command; releases update the cask.
+- Updates through Sparkle: Check for Updates… in the menu, and optional
+  daily checks (asked on the second launch; Settings > General). Updates
+  are verified with an EdDSA signature before installing. Updating to
+  this version is manual; later ones install from the app.
 
 ## [0.6.0] - 2026-10-12
 

@@ -24,6 +24,7 @@ pub enum Action {
     OpenSettings,
     OpenSettingsFile,
     ReloadSettings,
+    CheckForUpdates,
     ToggleLaunchAtLogin,
     PermissionScreenRecording,
     PermissionAccessibility,
@@ -35,7 +36,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 29] = [
+    pub const ALL: [Action; 30] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -57,6 +58,7 @@ impl Action {
         Action::OpenSettings,
         Action::OpenSettingsFile,
         Action::ReloadSettings,
+        Action::CheckForUpdates,
         Action::ToggleLaunchAtLogin,
         Action::PermissionScreenRecording,
         Action::PermissionAccessibility,
@@ -102,6 +104,7 @@ impl Action {
             Action::OpenSettings => "Settings…",
             Action::OpenSettingsFile => "Open Settings File…",
             Action::ReloadSettings => "Reload Settings",
+            Action::CheckForUpdates => "Check for Updates…",
             Action::ToggleLaunchAtLogin => "Launch at Login",
             Action::PermissionScreenRecording => "Screen Recording",
             Action::PermissionAccessibility => "Accessibility",

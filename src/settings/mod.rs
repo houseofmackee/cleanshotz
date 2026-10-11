@@ -138,6 +138,8 @@ enum Bind {
     },
     Folder(Get<String>, Set<String>),
     LoginItem,
+    /// Sparkle's automatic checks (kept by Sparkle, not in the file).
+    Updates,
     Shortcut(Action),
     ClearShortcut(Action),
 }
@@ -443,6 +445,9 @@ impl SettingsWindow {
             match &bound.bind {
                 Bind::Check(get, _) => button(view).setState(state(get(&config))),
                 Bind::LoginItem => button(view).setState(state(login_item::is_enabled())),
+                Bind::Updates => {
+                    button(view).setState(state(crate::updates::checks_automatically()))
+                }
                 Bind::Choice { get, .. } => popup(view).selectItemAtIndex(get(&config) as isize),
                 Bind::Text(get, _) => {
                     text_field(view).setStringValue(&NSString::from_str(&get(&config)))
@@ -496,6 +501,11 @@ impl SettingsWindow {
             Bind::Check(_, set) => {
                 let on = button(&view).state() == NSControlStateValueOn;
                 errors = (host.update)(&|c| set(c, on));
+            }
+            Bind::Updates => {
+                crate::updates::set_checks_automatically(
+                    button(&view).state() == NSControlStateValueOn,
+                );
             }
             Bind::LoginItem => {
                 let on = button(&view).state() == NSControlStateValueOn;
@@ -596,6 +606,7 @@ impl Bound {
             },
             Bind::Folder(g, s) => Bind::Folder(*g, *s),
             Bind::LoginItem => Bind::LoginItem,
+            Bind::Updates => Bind::Updates,
             Bind::Shortcut(a) => Bind::Shortcut(*a),
             Bind::ClearShortcut(a) => Bind::ClearShortcut(*a),
         }
@@ -716,6 +727,12 @@ impl<'a> Form<'a> {
     fn login_item(&mut self, label: &str) {
         let check = checkbox(self.mtm, "Launch CleanShotZ at login");
         self.bind(&check, Bind::LoginItem);
+        self.row(label, into_view(check));
+    }
+
+    fn updates(&mut self, label: &str) {
+        let check = checkbox(self.mtm, "Check for updates automatically");
+        self.bind(&check, Bind::Updates);
         self.row(label, into_view(check));
     }
 
@@ -921,6 +938,9 @@ fn hstack(views: &[Retained<NSView>]) -> Retained<NSView> {
 
 fn general(f: &mut Form, config: &Config) {
     f.login_item("Startup:");
+    if crate::updates::available() {
+        f.updates("Updates:");
+    }
     f.gap();
     f.check(
         "After capture:",

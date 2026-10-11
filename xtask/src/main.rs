@@ -9,7 +9,9 @@
 //!   `target/dist`: a zip, a DMG and `SHA256SUMS.txt`. Signed with a
 //!   Developer ID, the app and the DMG are notarized and stapled when the
 //!   App Store Connect API key is given: `CLEANSHOTZ_NOTARY_KEY` (path to
-//!   the `.p8`), `CLEANSHOTZ_NOTARY_KEY_ID` and `CLEANSHOTZ_NOTARY_ISSUER`
+//!   the `.p8`), `CLEANSHOTZ_NOTARY_KEY_ID` and `CLEANSHOTZ_NOTARY_ISSUER`.
+//!   The bundle embeds Sparkle for updates; with `CLEANSHOTZ_SPARKLE_KEY`
+//!   (path to the EdDSA private key) it also writes a signed `appcast.xml`
 //! - `create-dev-cert`: create the self-signed "CleanShotZ Dev" signing
 //!   identity in the login keychain
 //! - `create-release-cert`: create the self-signed "CleanShotZ Release"
@@ -35,17 +37,25 @@ const BINARY: &str = "cleanshotz";
 const DEV_IDENTITY: &str = "CleanShotZ Dev";
 const RELEASE_IDENTITY: &str = "CleanShotZ Release";
 
+/// Sparkle, embedded in distributed builds for updates.
+const SPARKLE_VERSION: &str = "2.10.0";
+const SPARKLE_SHA256: &str = "c2bf58aa8387266ac179357b1415d6f2635f044da8be41042af32425dae6da0c";
+/// The EdDSA public key updates are checked against; its private key is
+/// the release workflow's `SPARKLE_PRIVATE_KEY` secret.
+const SPARKLE_PUBLIC_KEY: &str = "sruPPN9EqYJmKX8u1KMWHrKUrZo2v93zq3CqDsgtPlI=";
+const REPOSITORY: &str = "houseofmackee/cleanshotz";
+
 fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let release = args.iter().any(|a| a == "--release");
     let test = args.iter().any(|a| a == "--test");
     match args.first().map(String::as_str) {
         Some("bundle") => {
-            let app = bundle(release, test)?;
+            let app = bundle(release, test, false)?;
             println!("{}", app.display());
         }
         Some("run") => {
-            let app = bundle(release, false)?;
+            let app = bundle(release, false, false)?;
             // Quit a running copy first so the new build is the one launched.
             let _ = Command::new("/usr/bin/osascript")
                 .args(["-e", &format!("quit app \"{APP_NAME}\"")])
@@ -63,7 +73,9 @@ fn main() -> Result<()> {
     Ok(())
 }
 
-fn bundle(release: bool, test: bool) -> Result<PathBuf> {
+/// `updates`: embed Sparkle and point it at the release feed (only for
+/// distributed builds, so dev builds never offer to replace themselves).
+fn bundle(release: bool, test: bool, updates: bool) -> Result<PathBuf> {
     let root = workspace_root();
     let mut build = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
     build
@@ -119,6 +131,10 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
         if !plist.contains("cleanshotz-test") || !plist.contains(".cleanshotz.test") {
             bail!("Info.plist changed shape; update the test variant replacements in xtask");
         }
+    }
+    if updates {
+        plist = with_update_keys(&plist)?;
+        embed_sparkle(&contents)?;
     }
     fs::write(contents.join("Info.plist"), plist)?;
     fs::write(contents.join("PkgInfo"), "APPL????")?;
@@ -188,6 +204,22 @@ fn signing_identity(release: bool) -> Result<String> {
 fn sign(app: &Path, entitlements: &Path, release: bool) -> Result<()> {
     let identity = signing_identity(release)?;
     println!("signing with {identity}");
+    // Sparkle's executables first, inside out, with the same identity.
+    let sparkle = app.join("Contents/Frameworks/Sparkle.framework");
+    if sparkle.exists() {
+        for part in [
+            sparkle.join("Versions/B/Autoupdate"),
+            sparkle.join("Versions/B/Updater.app"),
+            sparkle.clone(),
+        ] {
+            let mut codesign = Command::new("/usr/bin/codesign");
+            codesign.args(["--force", "--sign", &identity, "--options", "runtime"]);
+            if identity.starts_with("Developer ID") {
+                codesign.arg("--timestamp");
+            }
+            run(codesign.arg(&part))?;
+        }
+    }
     let mut codesign = Command::new("/usr/bin/codesign");
     codesign
         .args(["--force", "--sign", &identity, "--entitlements"])
@@ -305,6 +337,242 @@ fn staple(file: &Path) -> Result<()> {
         .args(["stapler", "staple"])
         .arg(file))
     .with_context(|| format!("stapling {}", file.display()))
+}
+
+/// Info.plist with Sparkle's settings: the feed (the latest release's
+/// `appcast.xml`), the key updates are signed with, and requiring the
+/// feed and the archive to be signed before anything is used.
+fn with_update_keys(plist: &str) -> Result<String> {
+    let keys = format!(
+        "\t<key>SUFeedURL</key>\n\t<string>https://github.com/{REPOSITORY}/releases/latest/download/appcast.xml</string>\n\
+         \t<key>SUPublicEDKey</key>\n\t<string>{SPARKLE_PUBLIC_KEY}</string>\n\
+         \t<key>SURequireSignedFeed</key>\n\t<true/>\n\
+         \t<key>SUVerifyUpdateBeforeExtraction</key>\n\t<true/>\n"
+    );
+    let end = "</dict>\n</plist>";
+    let at = plist
+        .rfind(end)
+        .context("Info.plist does not end with </dict></plist>")?;
+    Ok(format!("{}{keys}{}", &plist[..at], &plist[at..]))
+}
+
+/// Sparkle's distribution, downloaded once into `target/sparkle` and
+/// checked against its pinned checksum.
+fn sparkle_dir() -> Result<PathBuf> {
+    let base = workspace_root().join("target/sparkle");
+    let dir = base.join(SPARKLE_VERSION);
+    if dir.join("Sparkle.framework").exists() {
+        return Ok(dir);
+    }
+    fs::create_dir_all(&base)?;
+    let archive = base.join(format!("Sparkle-{SPARKLE_VERSION}.tar.xz"));
+    run(Command::new("/usr/bin/curl")
+        .args(["-sSfL", "-o"])
+        .arg(&archive)
+        .arg(format!(
+            "https://github.com/sparkle-project/Sparkle/releases/download/{SPARKLE_VERSION}/Sparkle-{SPARKLE_VERSION}.tar.xz"
+        )))?;
+    let sum = Command::new("/usr/bin/shasum")
+        .args(["-a", "256"])
+        .arg(&archive)
+        .output()
+        .context("running shasum")?;
+    let sum = String::from_utf8_lossy(&sum.stdout);
+    if sum.split_whitespace().next() != Some(SPARKLE_SHA256) {
+        fs::remove_file(&archive)?;
+        bail!("Sparkle {SPARKLE_VERSION} does not match its pinned checksum");
+    }
+    let staging = base.join(format!("{SPARKLE_VERSION}.partial"));
+    let _ = fs::remove_dir_all(&staging);
+    fs::create_dir_all(&staging)?;
+    run(Command::new("/usr/bin/tar")
+        .arg("-xf")
+        .arg(&archive)
+        .arg("-C")
+        .arg(&staging))?;
+    fs::rename(&staging, &dir)?;
+    Ok(dir)
+}
+
+/// Copies Sparkle.framework into the bundle, without the XPC services
+/// (only sandboxed apps use them), and its license into Resources.
+fn embed_sparkle(contents: &Path) -> Result<()> {
+    let source = sparkle_dir()?;
+    let frameworks = contents.join("Frameworks");
+    fs::create_dir_all(&frameworks)?;
+    let framework = frameworks.join("Sparkle.framework");
+    run(Command::new("/usr/bin/ditto")
+        .arg(source.join("Sparkle.framework"))
+        .arg(&framework))?;
+    fs::remove_dir_all(framework.join("Versions/B/XPCServices"))?;
+    fs::remove_file(framework.join("XPCServices"))?;
+    fs::copy(
+        source.join("LICENSE"),
+        contents.join("Resources/Sparkle-LICENSE.txt"),
+    )?;
+    Ok(())
+}
+
+/// Signs the update archive and writes `appcast.xml` next to it, itself
+/// signed (the app requires a signed feed).
+fn write_appcast(dist: &Path, zip: &str, version: &str, key: &Path) -> Result<()> {
+    let sign_update = sparkle_dir()?.join("bin/sign_update");
+    let output = Command::new(&sign_update)
+        .arg("--ed-key-file")
+        .arg(key)
+        .arg("-p")
+        .arg(dist.join(zip))
+        .output()
+        .context("running sign_update")?;
+    if !output.status.success() {
+        bail!(
+            "sign_update failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    let signature = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let length = fs::metadata(dist.join(zip))?.len();
+    let changelog = fs::read_to_string(workspace_root().join("CHANGELOG.md"))?;
+    let notes = changelog_section(&changelog, version)
+        .map(|section| markdown_to_html(&section))
+        .unwrap_or_default();
+    let date = Command::new("/bin/date")
+        .env("LC_ALL", "C")
+        .args(["-u", "+%a, %d %b %Y %H:%M:%S +0000"])
+        .output()
+        .context("running date")?;
+    let date = String::from_utf8_lossy(&date.stdout).trim().to_string();
+    // `CLEANSHOTZ_UPDATE_BASE_URL` serves a test update from elsewhere.
+    let base = std::env::var("CLEANSHOTZ_UPDATE_BASE_URL")
+        .ok()
+        .filter(|b| !b.is_empty())
+        .unwrap_or_else(|| format!("https://github.com/{REPOSITORY}/releases/download/v{version}"));
+    let item = AppcastItem {
+        version,
+        url: &format!("{base}/{zip}"),
+        length,
+        signature: &signature,
+        notes: &notes,
+        date: &date,
+    };
+    let appcast = dist.join("appcast.xml");
+    fs::write(&appcast, appcast_xml(&item))?;
+    run(Command::new(&sign_update)
+        .arg("--ed-key-file")
+        .arg(key)
+        .arg(&appcast))
+    .context("signing the appcast")?;
+    println!("{}", appcast.display());
+    Ok(())
+}
+
+struct AppcastItem<'a> {
+    version: &'a str,
+    url: &'a str,
+    length: u64,
+    signature: &'a str,
+    notes: &'a str,
+    date: &'a str,
+}
+
+fn appcast_xml(item: &AppcastItem) -> String {
+    format!(
+        r#"<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
+  <channel>
+    <title>{APP_NAME}</title>
+    <link>https://github.com/{REPOSITORY}</link>
+    <item>
+      <title>{APP_NAME} {version}</title>
+      <pubDate>{date}</pubDate>
+      <sparkle:version>{version}</sparkle:version>
+      <sparkle:shortVersionString>{version}</sparkle:shortVersionString>
+      <sparkle:minimumSystemVersion>14.0</sparkle:minimumSystemVersion>
+      <sparkle:fullReleaseNotesLink>https://github.com/{REPOSITORY}/releases/tag/v{version}</sparkle:fullReleaseNotesLink>
+      <description><![CDATA[{notes}]]></description>
+      <enclosure url="{url}" length="{length}" type="application/octet-stream" sparkle:edSignature="{signature}"/>
+    </item>
+  </channel>
+</rss>
+"#,
+        version = item.version,
+        date = item.date,
+        notes = item.notes.replace("]]>", "]]]]><![CDATA[>"),
+        url = item.url,
+        length = item.length,
+        signature = item.signature,
+    )
+}
+
+/// The body of `## [version]` in the changelog, up to the next version.
+fn changelog_section(changelog: &str, version: &str) -> Option<String> {
+    let heading = format!("## [{version}]");
+    let start = changelog.find(&heading)?;
+    let body = &changelog[start..];
+    let body = &body[body.find('\n')? + 1..];
+    let end = body.find("\n## ").unwrap_or(body.len());
+    Some(body[..end].trim().to_string())
+}
+
+/// The changelog's small Markdown subset as HTML: `###` headings, `- `
+/// bullets (with wrapped continuation lines), paragraphs and `code`.
+fn markdown_to_html(markdown: &str) -> String {
+    let escape = |s: &str| {
+        let s = s
+            .replace('&', "&amp;")
+            .replace('<', "&lt;")
+            .replace('>', "&gt;");
+        // `code` spans.
+        let mut out = String::new();
+        for (i, part) in s.split('`').enumerate() {
+            if i % 2 == 1 {
+                out.push_str(&format!("<code>{part}</code>"));
+            } else {
+                out.push_str(part);
+            }
+        }
+        out
+    };
+    let mut html = String::new();
+    let mut item: Option<String> = None;
+    let mut in_list = false;
+    let flush = |html: &mut String, item: &mut Option<String>| {
+        if let Some(text) = item.take() {
+            html.push_str(&format!("<li>{}</li>\n", escape(&text)));
+        }
+    };
+    for line in markdown.lines() {
+        let trimmed = line.trim();
+        if let Some(text) = trimmed.strip_prefix("- ") {
+            flush(&mut html, &mut item);
+            if !in_list {
+                html.push_str("<ul>\n");
+                in_list = true;
+            }
+            item = Some(text.to_string());
+        } else if !trimmed.is_empty() && item.is_some() && line.starts_with("  ") {
+            if let Some(text) = item.as_mut() {
+                text.push(' ');
+                text.push_str(trimmed);
+            }
+        } else {
+            flush(&mut html, &mut item);
+            if in_list {
+                html.push_str("</ul>\n");
+                in_list = false;
+            }
+            if let Some(heading) = trimmed.strip_prefix("### ") {
+                html.push_str(&format!("<h3>{}</h3>\n", escape(heading)));
+            } else if !trimmed.is_empty() {
+                html.push_str(&format!("<p>{}</p>\n", escape(trimmed)));
+            }
+        }
+    }
+    flush(&mut html, &mut item);
+    if in_list {
+        html.push_str("</ul>\n");
+    }
+    html
 }
 
 /// Creates the self-signed "CleanShotZ Dev" identity for local builds.
@@ -433,7 +701,7 @@ fn create_cert(name: &str, days: u32, export: Option<&Path>) -> Result<()> {
 fn dist() -> Result<()> {
     let root = workspace_root();
     let version = package_version(&root.join("Cargo.toml"))?;
-    let app = bundle(true, false)?;
+    let app = bundle(true, false, true)?;
     run(Command::new("/usr/bin/codesign")
         .args(["--verify", "--deep", "--strict"])
         .arg(&app))
@@ -506,6 +774,11 @@ fn dist() -> Result<()> {
             .args(["--assess", "--type", "execute", "--verbose"])
             .arg(&app))
         .context("Gatekeeper does not accept the app")?;
+    }
+
+    match std::env::var("CLEANSHOTZ_SPARKLE_KEY") {
+        Ok(key) if !key.is_empty() => write_appcast(&dist, &zip, &version, Path::new(&key))?,
+        _ => eprintln!("note: no CLEANSHOTZ_SPARKLE_KEY; no appcast.xml for updates"),
     }
 
     let sums = Command::new("/usr/bin/shasum")
@@ -816,6 +1089,46 @@ fn run(command: &mut Command) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn writes_release_notes_from_the_changelog() {
+        let changelog = "# Changelog\n\n## [Unreleased]\n\n## [0.7.0] - 2026-10-12\n\n### Added\n\n- Updates with\n  Sparkle; `cleanshotz` <ok>.\n- Two\n\n## [0.6.0] - 2026-10-12\n\n- Old\n";
+        let section = changelog_section(changelog, "0.7.0").unwrap();
+        assert_eq!(
+            section,
+            "### Added\n\n- Updates with\n  Sparkle; `cleanshotz` <ok>.\n- Two"
+        );
+        assert_eq!(
+            markdown_to_html(&section),
+            "<h3>Added</h3>\n<ul>\n<li>Updates with Sparkle; <code>cleanshotz</code> &lt;ok&gt;.</li>\n<li>Two</li>\n</ul>\n"
+        );
+        assert_eq!(changelog_section(changelog, "9.9.9"), None);
+    }
+
+    #[test]
+    fn writes_an_appcast_item() {
+        let xml = appcast_xml(&AppcastItem {
+            version: "0.7.0",
+            url: "https://example.com/CleanShotZ-0.7.0.zip",
+            length: 1234,
+            signature: "c2ln",
+            notes: "<p>a]]>b</p>",
+            date: "Mon, 12 Oct 2026 00:00:00 +0000",
+        });
+        assert!(xml.contains("<sparkle:version>0.7.0</sparkle:version>"));
+        assert!(xml.contains(
+            r#"<enclosure url="https://example.com/CleanShotZ-0.7.0.zip" length="1234" type="application/octet-stream" sparkle:edSignature="c2ln"/>"#
+        ));
+        assert!(xml.contains("<![CDATA[<p>a]]]]><![CDATA[>b</p>]]>"));
+    }
+
+    #[test]
+    fn adds_update_keys_to_info_plist() {
+        let plist =
+            with_update_keys("<plist>\n<dict>\n\t<key>A</key>\n</dict>\n</plist>\n").unwrap();
+        assert!(plist.contains("<key>SUPublicEDKey</key>"));
+        assert!(plist.ends_with("<true/>\n</dict>\n</plist>\n"));
+    }
 
     #[test]
     fn reads_notarytool_json() {

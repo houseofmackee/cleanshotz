@@ -173,6 +173,12 @@
 /* src/settings/mod.rs */
 "Capture:" = "Capture:";
 
+/* src/action.rs */
+"Check for Updates…" = "Check for Updates…";
+
+/* src/settings/mod.rs */
+"Check for updates automatically" = "Check for updates automatically";
+
 /* src/settings/mod.rs */
 "Choose the camera and microphone before recording" = "Choose the camera and microphone before recording";
 
@@ -1048,6 +1054,9 @@
 
 /* src/action.rs */
 "Unlock Pinned Screenshots" = "Unlock Pinned Screenshots";
+
+/* src/app/mod.rs */
+"Update to CleanShotZ {version}…" = "Update to CleanShotZ {version}…";
 
 /* src/settings/mod.rs */
 "Upload every capture automatically" = "Upload every capture automatically";

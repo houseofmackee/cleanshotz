@@ -46,8 +46,19 @@ it and drag CleanShotZ into Applications. `SHA256SUMS.txt` has the checksums.
 CleanShotZ is signed with a Developer ID and notarized by Apple (since
 0.6.0), so it opens like any other downloaded app.
 
-To update without Homebrew, download the new release and replace the app
-(quit it first).
+### Updates
+
+From 0.7.0 on, CleanShotZ updates itself with
+[Sparkle](https://sparkle-project.org). On the second launch it asks whether
+to check for updates automatically (once a day); change that later in
+Settings > General, or choose Check for Updates… in the menu at any time.
+When a scheduled check finds an update, the menu shows Update to CleanShotZ
+<version>…, and the update window waits in the background instead of
+interrupting. Updates are only installed after their EdDSA signature and
+Apple's notarization check out. Pre-releases are not offered.
+
+Updating from 0.6.0 or earlier is manual once: download the new release and
+replace the app (quit it first), or `brew upgrade --cask cleanshotz`.
 Every release is signed by the same developer, so macOS keeps the Screen
 Recording and other permissions you gave it.
 
@@ -58,8 +69,10 @@ The old entries in System Settings > Privacy & Security can be removed.
 
 ## Privacy
 
-No account, no telemetry, no crash reporting, no update checks. CleanShotZ
-only uses the network for uploads you configure.
+No account, no telemetry, no crash reporting. CleanShotZ only uses the
+network for uploads you configure and, if you allow it, update checks: they
+fetch `appcast.xml` from GitHub Releases and send nothing about your Mac
+(Sparkle's system profiling is off).
 
 ## Development
 
@@ -115,8 +128,15 @@ used a self-signed "CleanShotZ Release" certificate
 (`cargo xtask create-release-cert`), which still works for builds without
 an Apple developer account.
 
-`cargo xtask dist` builds the signed release bundle and packages it in
-`target/dist` (zip, DMG, `SHA256SUMS.txt`). With a Developer ID in the
+`cargo xtask dist` builds the signed release bundle, with Sparkle
+(downloaded at a pinned version and checksum) inside, and packages it in
+`target/dist` (zip, DMG, `SHA256SUMS.txt`). With `CLEANSHOTZ_SPARKLE_KEY`
+(the path to the EdDSA private key; the workflow uses the
+`SPARKLE_PRIVATE_KEY` secret) it also writes a signed `appcast.xml`, with
+the release notes from this version's CHANGELOG section; the release
+workflow attaches it to the release, and the app reads it from
+`releases/latest/download/appcast.xml`. Back the key up outside GitHub:
+without it, installed copies can't verify new updates. With a Developer ID in the
 keychain it signs with it (set `CLEANSHOTZ_TEAM_ID` to pick a team), and
 with `CLEANSHOTZ_NOTARY_KEY` (the `.p8` path), `CLEANSHOTZ_NOTARY_KEY_ID`
 and `CLEANSHOTZ_NOTARY_ISSUER` it also notarizes and staples the app and
@@ -758,6 +778,10 @@ Licensed under either of
 - MIT license ([LICENSE-MIT](LICENSE-MIT))
 
 at your option.
+
+Distributed builds include [Sparkle](https://sparkle-project.org) for
+updates, under its own MIT-style license; the notice ships in the app as
+`Contents/Resources/Sparkle-LICENSE.txt`.
 
 Unless you explicitly state otherwise, any contribution intentionally
 submitted for inclusion in the work by you, as defined in the Apache-2.0
