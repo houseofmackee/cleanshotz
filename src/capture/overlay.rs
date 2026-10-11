@@ -64,6 +64,9 @@ pub struct Options {
     pub freeze: bool,
     /// Pickable windows, front to back.
     pub windows: Vec<WindowInfo>,
+    /// Floating windows above them, front to back: not pickable, but
+    /// Command snaps to elements in them.
+    pub floating: Vec<WindowInfo>,
     /// A click without a drag selects the whole display it is on.
     pub click_selects_display: bool,
     /// Instructions shown at the top of the screen.
@@ -111,6 +114,7 @@ struct Session {
     magnifier: bool,
     freeze: bool,
     windows: Vec<WindowInfo>,
+    floating: Vec<WindowInfo>,
     click_selects_display: bool,
     hint: Option<String>,
     cursor: Option<(usize, Point)>,
@@ -168,6 +172,7 @@ pub fn begin(
         magnifier: options.magnifier,
         freeze: options.freeze,
         windows: options.windows,
+        floating: options.floating,
         click_selects_display: options.click_selects_display,
         hint: options.hint,
         cursor: None,
@@ -365,13 +370,20 @@ impl Session {
         let Some((surface, p)) = self.cursor else {
             return;
         };
-        let Some(window) = self.window_at(surface, p) else {
-            return;
-        };
         let o = self.surfaces[surface].display.cg_origin;
         let global = Point::new(o.x + p.x, o.y + p.y);
-        let window_rect = self.window_rect_on(window, surface);
-        self.snap = super::elements::at(self.windows[window].pid, self.windows[window].id, global)
+        // Floating windows are above the others.
+        let Some(window) = self
+            .floating
+            .iter()
+            .chain(self.windows.iter())
+            .find(|w| w.frame.contains(global))
+        else {
+            return;
+        };
+        let s = &self.surfaces[surface];
+        let window_rect = window.frame.offset(-o.x, -o.y).intersection(&s.bounds);
+        self.snap = super::elements::at(window.pid, window.id, global)
             .map(|r| r.offset(-o.x, -o.y).intersection(&window_rect))
             .filter(|r| r.is_usable())
             .map(|r| (surface, r));

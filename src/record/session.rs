@@ -189,6 +189,7 @@ pub fn toggle(
         magnifier: capture.show_magnifier,
         freeze: false,
         windows: content.pickable_windows(),
+        floating: content.floating_windows(),
         click_selects_display: true,
         hint: Some(t!(
             "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel"

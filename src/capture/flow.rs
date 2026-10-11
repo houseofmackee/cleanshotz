@@ -56,6 +56,11 @@ pub fn start(
         } else {
             content.pickable_windows()
         },
+        floating: if color {
+            Vec::new()
+        } else {
+            content.floating_windows()
+        },
         click_selects_display: false,
         hint: color.then(|| {
             t!("Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel")

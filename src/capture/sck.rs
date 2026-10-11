@@ -161,6 +161,13 @@ impl Content {
         self.windows_where(|own, layer| !own && (0..dock).contains(&layer))
     }
 
+    /// Other apps' floating windows (palettes, panels; above normal
+    /// windows, below the Dock), front to back.
+    pub fn floating_windows(&self) -> Vec<WindowInfo> {
+        let dock = CGWindowLevelForKey(CGWindowLevelKey::DockWindowLevelKey) as isize;
+        self.windows_where(|own, layer| !own && (1..dock).contains(&layer))
+    }
+
     /// Normal application windows that can be picked in window mode,
     /// front to back.
     pub fn pickable_windows(&self) -> Vec<WindowInfo> {

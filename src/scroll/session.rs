@@ -120,6 +120,7 @@ pub fn start(
         magnifier: settings.show_magnifier,
         freeze: false,
         windows: Vec::new(),
+        floating: Vec::new(),
         click_selects_display: false,
         hint: Some(t!("Select the area that scrolls · Esc to cancel")),
     };
