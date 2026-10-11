@@ -529,8 +529,9 @@ Group 4 of the October 2026 comparison.
   default). Only a band that is black edge to edge is removed, so normal
   captures keep the menu bar.
 - **Printing** (CleanShot X): Print… in the editor's ••• menu (Command-P)
-  and in History's context menu prints the image; scrolling captures (taller than a page) are
-  split across pages at full width instead of being shrunk onto one.
+  and in History's context menu prints the image; scrolling captures
+  (taller than a page) are split across pages at full width instead of
+  being shrunk onto one.
 - **Snap to UI elements** (Snipaste): while selecting an area, holding
   Command snaps the selection to the button, field or panel under the
   pointer (found through the accessibility API, with Accessibility
@@ -543,6 +544,21 @@ Group 4 of the October 2026 comparison.
   of the window under the pointer at every click, numbered and with the
   click marked, until stopped; then exports one guide as Markdown (with
   the images), HTML or PDF, with a title and an editable caption per step.
+- Status: done in 0.5.0. Notes:
+  - This app cannot answer accessibility requests about itself from its
+    main thread, so snapping inside CleanShotZ's own windows hit-tests
+    their views directly.
+  - Snapping and step capture also consider other apps' floating windows
+    (below the Dock's level); window mode still only picks normal ones,
+    since some utilities keep invisible floating overlays.
+  - Step captions read titles, descriptions and placeholders of controls
+    only, never values, so typed text stays out of guides. The window is
+    captured just after the click, so it shows the click's effect (a
+    checked box, a selected tab).
+  - Starred captures are exempt from history pruning.
+  - Not tested on real hardware: notch cropping (needs a full-screen app
+    on a notched display) and printing to a real printer (tested with
+    the print panel and PDF).
 
 ### Future work
 - **Captions** (from group 3, deferred): subtitles made on the Mac with

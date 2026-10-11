@@ -12,11 +12,15 @@ and milestones.
 
 CleanShotZ is in early development; see [CHANGELOG.md](CHANGELOG.md).
 
-<img src="docs/screenshots/editor.png" width="800" alt="The annotation editor with arrows, text and a gradient background">
+<img src="docs/screenshots/editor.png" width="800" alt="The annotation editor with a curved tapered arrow, a magnified detail, a measurement, highlighted text and numbered steps on a gradient background">
 
-| Quick Access Overlay | Capture history |
+| Studio editor | Step capture guide |
 | --- | --- |
-| <img src="docs/screenshots/quick-access.png" width="286" alt="A Quick Access card with its actions"> | <img src="docs/screenshots/history.png" width="460" alt="The capture history window"> |
+| <img src="docs/screenshots/studio-editor.png" width="460" alt="The Studio editor with a background, cursor and zoom settings and the zoom track"> | <img src="docs/screenshots/step-guide.png" width="340" alt="A step guide with three captured clicks and their captions"> |
+
+| Capture history | Quick Access Overlay |
+| --- | --- |
+| <img src="docs/screenshots/history.png" width="460" alt="The capture history window with star ratings, tags and notes"> | <img src="docs/screenshots/quick-access.png" width="286" alt="A Quick Access card with its actions"> |
 
 | Video editor | Recording controls |
 | --- | --- |
@@ -147,6 +151,7 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
 | Scrolling Capture | `alt+shift+s` |
 | Capture Text | `alt+shift+o` |
 | Pick Color | none |
+| Step Capture | none |
 | Record Screen | `alt+shift+5` |
 | Record Screen (Studio) | none |
 | Capture History | none |
@@ -157,10 +162,15 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
   square, Option to grow from the center, Space while dragging to move the
   selection. Arrow keys move the pointer by 1 point (10 with Shift). Press
   Space before dragging to switch to window mode. Escape or right click
-  cancels.
+  cancels. Hold Command to snap to the button, field or panel under the
+  pointer (it is outlined with its size); a click then captures exactly
+  that element. Elements in other apps are found through the
+  accessibility API, so this needs Accessibility permission.
 - **Capture Window:** hover a window and click. Saved on a transparent
   background, with the window shadow by default.
-- **Capture Fullscreen:** the display under the pointer.
+- **Capture Fullscreen:** the display under the pointer. On a display with
+  a camera housing, the black band a full-screen app leaves beside it is
+  cropped away (`crop_notch`).
 - **Capture Previous Area:** the last selected area again, without the overlay.
 - **Self-Timer:** select an area or window, then capture after a countdown.
 - **Scrolling Capture** (`alt+shift+s`): select the part of a window that
@@ -180,6 +190,13 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
   copy the average color of an area. Hold Shift to copy `rgb(r, g, b)`
   instead. Colors are converted to sRGB, so they match what browsers and
   design apps show. Escape cancels.
+- **Step Capture:** for step-by-step guides. While it runs, every click
+  in another app saves a screenshot of the window under the pointer with
+  the click ringed. Click Done in the bar at the bottom of the screen (or
+  run Step Capture again) to open the steps as a guide (see below).
+
+<img src="docs/screenshots/snap.png" width="500" alt="Holding Command while selecting an area outlines the Export PDF button, 132 by 34 points">
+<img src="docs/screenshots/pick-color.png" width="300" alt="Pick Color's magnifier over a chart bar, showing #544DF2">
 
 Captures are copied to the clipboard (as PNG) and saved to the Desktop by
 default. Options live in the `[capture]` section of the settings file:
@@ -199,6 +216,7 @@ default. Options live in the `[capture]` section of the settings file:
 | `freeze_screen` | `false` | Freeze the screen while selecting |
 | `hide_desktop_icons` | `false` | Leave desktop icons and widgets out of captures |
 | `window_shadow` | `true` | Keep the shadow in window captures |
+| `crop_notch` | `true` | Crop the black band beside the camera housing from full-screen captures of full-screen apps |
 | `show_magnifier` | `true` | Show the pixel magnifier while selecting |
 | `self_timer_seconds` | `5` | Countdown length, 1 to 60 |
 | `play_sound` | `true` | Play the macOS screenshot sound |
@@ -206,6 +224,28 @@ default. Options live in the `[capture]` section of the settings file:
 
 The clipboard always gets PNG. WebP files are written in sRGB; lossless
 WebP files are usually noticeably smaller than PNG for screenshots.
+
+### Step capture
+
+<img src="docs/screenshots/step-guide.png" width="560" alt="A step guide with three captured clicks and their captions">
+
+The guide window lists the steps in order, each with its screenshot and a
+caption. Captions start out naming what was clicked ("Click “Export
+PDF”.", "Choose “Save As…”.", "Click the “Email” field.") when the app
+exposes it through the accessibility API (with Accessibility
+permission), or the app otherwise; what is typed into fields is never
+read. Edit the title and captions, remove steps you don't want, then
+Export:
+
+- **Markdown…** writes `Guide.md` and the images in a `Guide` folder next
+  to it, linked relatively, ready for a repository or wiki.
+- **HTML…** writes one page with the images inside it, to send or host as
+  is.
+- **PDF…** lays the guide out on pages of your default paper size, keeping
+  each step on one page.
+
+Window shadows are left out. Double-clicks count as one step, and a guide
+holds up to 100 steps. Closing a guide that was not exported asks first.
 
 ### Pipelines
 
@@ -254,6 +294,7 @@ Options live in the `[text]` section of the settings file:
 
 ### Screen recording
 
+<img src="docs/screenshots/ready-panel.png" width="560" alt="The panel before recording with the camera and microphone menus, Cancel and Record">
 <img src="docs/screenshots/recording-bar.png" width="220" alt="The recording bar">
 
 Record Screen (`alt+shift+5`) shows the selection overlay: drag to record an
@@ -320,6 +361,8 @@ seconds (muted, or the wrong input chosen), a message says so.
 
 ### Studio recordings
 
+<img src="docs/screenshots/studio-editor.png" width="640" alt="The Studio editor">
+
 Record Screen (Studio), or Record Screen with Studio mode on in Settings >
 Recording, records the screen without the pointer and keeps the pointer's
 movements, clicks, pressed keys and the camera apart. The recording opens
@@ -371,12 +414,21 @@ smaller size or moving the Quality slider re-encode it.
 
 ### Capture history
 
+<img src="docs/screenshots/history.png" width="640" alt="The capture history window with star ratings, tags and notes">
+
 Capture History… in the menu shows every screenshot and recording, newest
 first. Search finds captures by the text in them (recognized on your Mac in
-the background) or by file name, and the filter switches between all,
-screenshots and recordings. Double-click to open; right-click to Annotate or
-Edit, Copy, Show in Finder, Pin or Delete. Delete and Cmd+C work from the
-keyboard too.
+the background), by file name, note or tag, and the filter switches between
+all, screenshots, recordings and starred ones. Double-click to open;
+right-click to Annotate or Edit, Copy, Show in Finder, Pin, Print, Upload or
+Delete. Delete and Cmd+C work from the keyboard too.
+
+To organize captures, press 1 to 5 to give the selected one stars (0
+removes them; or use Rating in the context menu), and choose Tags and
+Note… to tag it and add a note. Tags and the start of the note show under
+the thumbnail. Search for `#bug` to see only captures tagged bug (`#bug
+#ui` needs both), or pick a tag from the Tags menu. Starred captures are
+kept however old they get.
 
 Captures you don't save are kept in `~/Library/Application Support/CleanShotZ/History`
 for as long as history keeps them. Deleting such an entry deletes its file;
@@ -386,7 +438,7 @@ the `[history]` section of the settings file:
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `true` | Keep a history of captures |
-| `retention_days` | `30` | Remove entries older than this; `0` keeps them |
+| `retention_days` | `30` | Remove entries older than this (starred ones are kept); `0` keeps them |
 | `recognize_text` | `true` | Recognize text in screenshots for search |
 
 ### Uploads
@@ -497,7 +549,9 @@ redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
 for opened images, saves a new capture). The ••• menu has Save As…, Save
 Project…, Pin to Screen, Copy Text, Redact Sensitive Info, Add Image to the
 Right… / Below…, Rotate Right / Left, Flip Horizontally / Vertically,
-Resize… and Export Before/After GIF….
+Resize…, Export Before/After GIF… and Print… (Cmd+P). Printing scales the
+image to the page width; a scrolling capture taller than a page continues
+on the next pages instead of shrinking.
 
 **Hand-drawn:** with arrows (other than tapered), lines and outlined
 rectangles and ellipses, the Hand-drawn checkbox draws them as if sketched
@@ -587,6 +641,7 @@ into your `PATH` to use it.
 | `all-in-one` | `x`, `y`, `width`, `height`, `display` (same as `capture-area`) |
 | `capture-text` | `filepath`, `x`, `y`, `width`, `height`, `display`, `linebreaks` |
 | `pick-color` | none |
+| `step-capture` | none (starts a step capture, or finishes the running one) |
 | `record-screen` | `x`, `y`, `width`, `height`, `display`, `studio` |
 | `pin` | `filepath` (asks for a file without it) |
 | `open-annotate` | `filepath` (asks for a file without it) |
@@ -640,8 +695,8 @@ The first time a script controls CleanShotZ, macOS asks you to allow it.
 
 CleanShotZ also offers actions to the Shortcuts app (and Spotlight): Capture
 Area, Capture Fullscreen, Capture Window, Capture Previous Area (each with an
-optional "Then" action), Capture Text, Pick Color, Scrolling Capture, Record
-Screen, Open Capture History, Hide Desktop Icons and Run Pipeline. Search for
+optional "Then" action), Capture Text, Pick Color, Step Capture, Scrolling
+Capture, Record Screen, Open Capture History, Hide Desktop Icons and Run Pipeline. Search for
 CleanShotZ in the Shortcuts app's action list. Every command is also available through
 the Open URLs action (`cleanshotz://...`), Run AppleScript, or Run Shell
 Script with the command line.
@@ -652,7 +707,7 @@ only the Command Line Tools the app builds without them.
 ### Raycast
 
 The [`raycast`](raycast) folder holds a Raycast extension with commands for
-every capture mode, recording, Pick Color, Capture History, and annotating,
+every capture mode, recording, Pick Color, Step Capture, Capture History, and annotating,
 pinning or running a pipeline on the image selected in Finder. It uses the
 URL scheme, so it needs nothing beyond CleanShotZ. To try it: `cd raycast &&
 npm install && npm run dev`.

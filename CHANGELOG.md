@@ -6,8 +6,26 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-11
+
 ### Added
 
+- Step Capture: every click in another app saves a screenshot of the
+  window under the pointer with the click ringed; the steps open as a
+  guide with a title and captions that name the clicked control, and
+  export as Markdown (with an images folder), one HTML file or PDF. In
+  the menu, as a shortcut, `step-capture` command, AppleScript, Shortcuts
+  and Raycast.
+- History: star ratings (keys 1 to 5), tags and a note for each capture,
+  a Starred filter, a Tags menu, and searching by `#tag` and note text.
+  Starred captures are kept past the retention period.
+- Capture Area: hold Command to snap the selection to the button, field
+  or panel under the pointer, in other apps (with Accessibility
+  permission) and floating windows too.
+- Print… (Cmd+P) in the editor and in History; captures taller than a
+  page continue across pages at full width.
+- Full-screen captures of full-screen apps drop the black band beside the
+  camera housing (`crop_notch`, on by default).
 - Choose the camera and microphone (or none) before recording, in a panel
   like QuickTime Player's; a chosen camera shows its bubble right away and
   the choice is remembered.
@@ -117,7 +135,8 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.4.1...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.4.1...v0.5.0
 [0.4.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.2.0...v0.3.0

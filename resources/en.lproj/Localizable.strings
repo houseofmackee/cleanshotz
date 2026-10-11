@@ -12,6 +12,9 @@
 /* src/history/window.rs */
 "1 capture" = "1 capture";
 
+/* src/steps/session.rs */
+"1 step. Keep clicking, then click Done." = "1 step. Keep clicking, then click Done.";
+
 /* src/editor/model.rs */
 "1.91:1 Link Preview (X, LinkedIn)" = "1.91:1 Link Preview (X, LinkedIn)";
 
@@ -140,8 +143,11 @@
 /* src/settings/mod.rs */
 "Camera:" = "Camera:";
 
-/* src/app/mod.rs, src/editor/window.rs */
+/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs */
 "Cancel" = "Cancel";
+
+/* src/steps/window.rs */
+"Caption for {label}" = "Caption for {label}";
 
 /* src/action.rs */
 "Capture Area" = "Capture Area";
@@ -173,6 +179,9 @@
 /* src/record/ready.rs */
 "Choose the camera and microphone, then press Return to record or Escape to cancel." = "Choose the camera and microphone, then press Return to record or Escape to cancel.";
 
+/* src/steps/mod.rs */
+"Choose “{name}”." = "Choose “{name}”.";
+
 /* src/settings/mod.rs */
 "Choose…" = "Choose…";
 
@@ -197,8 +206,26 @@
 /* src/settings/mod.rs */
 "Click a shortcut, then press the new keys. Escape cancels; Delete removes it." = "Click a shortcut, then press the new keys. Escape cancels; Delete removes it.";
 
+/* src/steps/mod.rs */
+"Click in {app}." = "Click in {app}.";
+
+/* src/steps/mod.rs */
+"Click the “{name}” field." = "Click the “{name}” field.";
+
+/* src/steps/mod.rs */
+"Click the “{name}” tab." = "Click the “{name}” tab.";
+
+/* src/steps/session.rs */
+"Click through the task; each click is a step." = "Click through the task; each click is a step.";
+
 /* src/capture/flow.rs */
 "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel" = "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel";
+
+/* src/steps/mod.rs */
+"Click “{name}”." = "Click “{name}”.";
+
+/* src/steps/mod.rs */
+"Click." = "Click.";
 
 /* src/settings/mod.rs */
 "Clicks" = "Clicks";
@@ -254,6 +281,9 @@
 /* src/record/session.rs */
 "Could not create the GIF" = "Could not create the GIF";
 
+/* src/steps/export.rs */
+"Could not export the guide" = "Could not export the guide";
+
 /* src/studio/mod.rs */
 "Could not open the recording" = "Could not open the recording";
 
@@ -276,6 +306,9 @@
 "Crop" = "Crop";
 
 /* src/settings/mod.rs */
+"Crop the notch from full-screen apps" = "Crop the notch from full-screen apps";
+
+/* src/settings/mod.rs */
 "Cursor highlight" = "Cursor highlight";
 
 /* src/editor/window.rs */
@@ -283,6 +316,12 @@
 
 /* src/studio/window.rs */
 "Desktop Wallpaper" = "Desktop Wallpaper";
+
+/* src/steps/window.rs */
+"Discard" = "Discard";
+
+/* src/steps/window.rs */
+"Discard this guide?" = "Discard this guide?";
 
 /* src/editor/window.rs */
 "Double Arrow" = "Double Arrow";
@@ -297,10 +336,13 @@
 "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel" = "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel";
 
 /* src/capture/overlay.rs */
-"Drag to select an area. Space picks a window instead. Escape cancels." = "Drag to select an area. Space picks a window instead. Escape cancels.";
+"Drag to select an area. Space picks a window instead; hold Command to pick a button or panel. Escape cancels." = "Drag to select an area. Space picks a window instead; hold Command to pick a button or panel. Escape cancels.";
 
 /* src/studio/window.rs */
 "Drag zooms in the track under the video. Double-click it to add one." = "Drag zooms in the track under the video. Double-click it to add one.";
+
+/* src/history/window.rs */
+"Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating." = "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating.";
 
 /* src/editor/tools.rs */
 "Ellipse" = "Ellipse";
@@ -310,6 +352,9 @@
 
 /* src/settings/mod.rs */
 "Every setting is also in this file. After editing it, choose Reload Settings in the menu." = "Every setting is also in this file. After editing it, choose Reload Settings in the menu.";
+
+/* src/steps/window.rs */
+"Export" = "Export";
 
 /* src/editor/window.rs */
 "Export Before/After GIF…" = "Export Before/After GIF…";
@@ -392,11 +437,20 @@
 /* src/app/mod.rs */
 "Grant Access" = "Grant Access";
 
+/* src/steps/export.rs */
+"Guide" = "Guide";
+
+/* src/steps/export.rs */
+"Guide exported" = "Guide exported";
+
 /* src/settings/mod.rs */
 "H.264" = "H.264";
 
 /* src/settings/mod.rs */
 "HEVC" = "HEVC";
+
+/* src/steps/window.rs */
+"HTML…" = "HTML…";
 
 /* src/settings/mod.rs */
 "HTTP endpoint" = "HTTP endpoint";
@@ -419,6 +473,9 @@
 /* src/settings/mod.rs */
 "History" = "History";
 
+/* src/steps/window.rs */
+"How to …" = "How to …";
+
 /* src/editor/window.rs */
 "Image, {width} by {height} points, {annotations}. Tool: {tool}" = "Image, {width} by {height} points, {annotations}. Tool: {tool}";
 
@@ -439,6 +496,9 @@
 
 /* src/settings/recorder.rs */
 "Invalid: {shortcut}" = "Invalid: {shortcut}";
+
+/* src/steps/window.rs */
+"It has not been exported. Its steps are not saved anywhere else." = "It has not been exported. Its steps are not saved anywhere else.";
 
 /* src/settings/mod.rs */
 "JPEG" = "JPEG";
@@ -494,6 +554,9 @@
 /* src/editor/tools.rs */
 "Magnify" = "Magnify";
 
+/* src/steps/window.rs */
+"Markdown…" = "Markdown…";
+
 /* src/editor/tools.rs */
 "Measure" = "Measure";
 
@@ -530,14 +593,23 @@
 /* src/record/ready.rs */
 "No Microphone" = "No Microphone";
 
+/* src/history/window.rs */
+"No Rating" = "No Rating";
+
 /* src/editor/window.rs */
 "No sensitive info found" = "No sensitive info found";
+
+/* src/steps/session.rs */
+"No steps were captured" = "No steps were captured";
 
 /* src/ocr/mod.rs */
 "No text found" = "No text found";
 
 /* src/settings/mod.rs, src/studio/window.rs */
 "None" = "None";
+
+/* src/history/window.rs */
+"Note" = "Note";
 
 /* src/scroll/session.rs */
 "Nothing was captured" = "Nothing was captured";
@@ -548,7 +620,7 @@
 /* src/settings/mod.rs */
 "Nowhere (off)" = "Nowhere (off)";
 
-/* src/app/mod.rs, src/pipeline.rs, src/record/session.rs, src/settings/mod.rs, src/studio/mod.rs, src/studio/window.rs, src/upload/mod.rs */
+/* src/app/mod.rs, src/pipeline.rs, src/record/session.rs, src/settings/mod.rs, src/steps/export.rs, src/studio/mod.rs, src/studio/window.rs, src/upload/mod.rs */
 "OK" = "OK";
 
 /* src/settings/mod.rs */
@@ -586,6 +658,9 @@
 
 /* src/editor/window.rs */
 "Outline" = "Outline";
+
+/* src/steps/window.rs */
+"PDF…" = "PDF…";
 
 /* src/settings/mod.rs */
 "PNG" = "PNG";
@@ -635,6 +710,9 @@
 /* src/settings/mod.rs */
 "Position:" = "Position:";
 
+/* src/editor/window.rs */
+"Print…" = "Print…";
+
 /* src/settings/mod.rs */
 "Public URL:" = "Public URL:";
 
@@ -655,6 +733,15 @@
 
 /* src/app/mod.rs */
 "Quit and discard annotations?" = "Quit and discard annotations?";
+
+/* src/history/window.rs */
+"Rated {rating} of 5" = "Rated {rating} of 5";
+
+/* src/history/window.rs */
+"Rating" = "Rating";
+
+/* src/history/window.rs */
+"Rating removed" = "Rating removed";
 
 /* src/settings/mod.rs */
 "Recognize text so it can be searched" = "Recognize text so it can be searched";
@@ -701,6 +788,9 @@
 /* src/action.rs */
 "Reload Settings" = "Reload Settings";
 
+/* src/steps/window.rs */
+"Remove Step" = "Remove Step";
+
 /* src/settings/mod.rs */
 "Removed it from {action}." = "Removed it from {action}.";
 
@@ -737,6 +827,9 @@
 /* src/settings/mod.rs */
 "S3-compatible storage" = "S3-compatible storage";
 
+/* src/history/window.rs */
+"Save" = "Save";
+
 /* src/editor/window.rs */
 "Save As…" = "Save As…";
 
@@ -760,6 +853,9 @@
 
 /* src/app/mod.rs */
 "Screen Recording permission is needed" = "Screen Recording permission is needed";
+
+/* src/steps/window.rs */
+"Screenshot of {label}" = "Screenshot of {label}";
 
 /* src/history/window.rs, src/quick_access.rs */
 "Screenshot, {width} by {height} pixels" = "Screenshot, {width} by {height} pixels";
@@ -785,6 +881,9 @@
 /* src/scroll/session.rs */
 "Scrolling capture failed" = "Scrolling capture failed";
 
+/* src/history/window.rs */
+"Search text, file names, notes and #tags" = "Search text, file names, notes and #tags";
+
 /* src/settings/mod.rs */
 "Secret access key:" = "Secret access key:";
 
@@ -799,6 +898,9 @@
 
 /* src/settings/mod.rs */
 "Self-timer:" = "Self-timer:";
+
+/* src/history/window.rs */
+"Separate tags with commas or spaces. Search for #tag to find them." = "Separate tags with commas or spaces. Search for #tag to find them.";
 
 /* src/upload/mod.rs */
 "Set an upload destination in the settings file first" = "Set an upload destination in the settings file first";
@@ -851,6 +953,21 @@
 /* src/settings/mod.rs */
 "Startup:" = "Startup:";
 
+/* src/action.rs */
+"Step Capture" = "Step Capture";
+
+/* src/steps/window.rs */
+"Step Guide" = "Step Guide";
+
+/* src/steps/session.rs */
+"Step capture could not watch for clicks" = "Step capture could not watch for clicks";
+
+/* src/steps/session.rs */
+"Step capture started. Each click captures the window under the pointer." = "Step capture started. Each click captures the window under the pointer.";
+
+/* src/steps/export.rs, src/steps/mod.rs, src/steps/window.rs */
+"Step {n}" = "Step {n}";
+
 /* src/settings/mod.rs */
 "Studio:" = "Studio:";
 
@@ -859,6 +976,12 @@
 
 /* src/settings/mod.rs */
 "System languages" = "System languages";
+
+/* src/history/window.rs */
+"Tags" = "Tags";
+
+/* src/history/window.rs */
+"Tags and Note" = "Tags and Note";
 
 /* src/editor/window.rs */
 "Tapered Arrow" = "Tapered Arrow";
@@ -907,6 +1030,9 @@
 
 /* src/settings/mod.rs */
 "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file." = "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file.";
+
+/* src/steps/window.rs */
+"Title" = "Title";
 
 /* src/studio/window.rs */
 "Top" = "Top";
@@ -959,8 +1085,11 @@
 /* src/record/ready.rs */
 "Window recordings leave the camera out" = "Window recordings leave the camera out";
 
+/* src/history/window.rs */
+"bug, design" = "bug, design";
+
 /* src/settings/mod.rs */
-"days (0 keeps them)" = "days (0 keeps them)";
+"days (0 keeps them; starred ones are always kept)" = "days (0 keeps them; starred ones are always kept)";
 
 /* src/settings/mod.rs */
 "https://example.com/upload" = "https://example.com/upload";
@@ -1009,6 +1138,12 @@
 
 /* src/history/window.rs */
 "{n} captures" = "{n} captures";
+
+/* src/steps/session.rs */
+"{n} steps. Keep clicking, then click Done." = "{n} steps. Keep clicking, then click Done.";
+
+/* src/history/window.rs */
+"{rating} stars" = "{rating} stars";
 
 /* src/video_editor/window.rs */
 "{speed}× Speed" = "{speed}× Speed";
