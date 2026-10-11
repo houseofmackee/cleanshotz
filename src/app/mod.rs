@@ -310,6 +310,7 @@ impl AppDelegate {
             | Action::CaptureWindow
             | Action::CaptureText
             | Action::PickColor
+            | Action::StepCapture
             | Action::CaptureScrolling
             | Action::RecordScreen
             | Action::RecordStudio
@@ -333,6 +334,7 @@ impl AppDelegate {
                         autoscroll: false,
                     },
                     Action::PickColor => Request::PickColor,
+                    Action::StepCapture => Request::StepCapture,
                     Action::RecordStudio => Request::RecordScreen {
                         region: None,
                         studio: Some(true),
@@ -489,6 +491,13 @@ impl AppDelegate {
                 self.require_screen_recording()?;
                 interactive(flow::Kind::Color, settings)
             }
+            Request::StepCapture => {
+                if !crate::steps::is_running() {
+                    self.require_screen_recording()?;
+                }
+                crate::steps::toggle(mtm, settings);
+                Ok(())
+            }
             Request::ScrollingCapture { region, autoscroll } => {
                 self.require_screen_recording()?;
                 let area = region.map(|r| resolve_region(mtm, r)).transpose()?;
@@ -632,6 +641,7 @@ impl AppDelegate {
             Action::CaptureScrolling,
             Action::CaptureText,
             Action::PickColor,
+            Action::StepCapture,
         ] {
             menu.addItem(&self.menu_item(action));
         }

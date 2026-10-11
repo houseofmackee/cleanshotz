@@ -10,7 +10,7 @@ use crate::capture::naming::expand_home;
 use crate::pipeline::Step;
 
 /// Every command, in the order `--help` lists them.
-pub const NAMES: [&str; 22] = [
+pub const NAMES: [&str; 23] = [
     "capture-area",
     "capture-previous-area",
     "capture-fullscreen",
@@ -20,6 +20,7 @@ pub const NAMES: [&str; 22] = [
     "all-in-one",
     "capture-text",
     "pick-color",
+    "step-capture",
     "record-screen",
     "pin",
     "open-annotate",
@@ -128,6 +129,8 @@ pub enum Request {
         line_breaks: Option<bool>,
     },
     PickColor,
+    /// Starts a step capture, or finishes the running one.
+    StepCapture,
     RecordScreen {
         region: Option<Region>,
         /// Studio mode, overriding the setting.
@@ -228,6 +231,7 @@ pub fn parse(command: &str, params: &[(String, String)]) -> Result<Request, Stri
             line_breaks: p.bool("linebreaks")?,
         },
         "pick-color" => Request::PickColor,
+        "step-capture" => Request::StepCapture,
         "record-screen" => Request::RecordScreen {
             region: p.region()?,
             studio: p.bool("studio")?,

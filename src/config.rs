@@ -521,6 +521,7 @@ pub struct Hotkeys {
     pub capture_scrolling: String,
     pub capture_text: String,
     pub pick_color: String,
+    pub step_capture: String,
     pub record_screen: String,
     pub record_studio: String,
     pub open_history: String,
@@ -537,6 +538,7 @@ impl Default for Hotkeys {
             capture_scrolling: "alt+shift+s".into(),
             capture_text: "alt+shift+o".into(),
             pick_color: String::new(),
+            step_capture: String::new(),
             record_screen: "alt+shift+5".into(),
             record_studio: String::new(),
             open_history: String::new(),
@@ -546,7 +548,7 @@ impl Default for Hotkeys {
 
 impl Hotkeys {
     /// The actions that can have a global shortcut.
-    pub const ACTIONS: [Action; 11] = [
+    pub const ACTIONS: [Action; 12] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -555,6 +557,7 @@ impl Hotkeys {
         Action::CaptureScrolling,
         Action::CaptureText,
         Action::PickColor,
+        Action::StepCapture,
         Action::RecordScreen,
         Action::RecordStudio,
         Action::OpenHistory,
@@ -570,6 +573,7 @@ impl Hotkeys {
             Action::CaptureScrolling => &mut self.capture_scrolling,
             Action::CaptureText => &mut self.capture_text,
             Action::PickColor => &mut self.pick_color,
+            Action::StepCapture => &mut self.step_capture,
             Action::RecordScreen => &mut self.record_screen,
             Action::RecordStudio => &mut self.record_studio,
             Action::OpenHistory => &mut self.open_history,
@@ -600,6 +604,7 @@ impl Hotkeys {
             (Action::CaptureScrolling, &self.capture_scrolling),
             (Action::CaptureText, &self.capture_text),
             (Action::PickColor, &self.pick_color),
+            (Action::StepCapture, &self.step_capture),
             (Action::RecordScreen, &self.record_screen),
             (Action::RecordStudio, &self.record_studio),
             (Action::OpenHistory, &self.open_history),

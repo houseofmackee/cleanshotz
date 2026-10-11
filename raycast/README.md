@@ -15,6 +15,7 @@ needed.
 | Scrolling Capture | Capture content that scrolls |
 | Capture Text | Copy the text (or QR code) in an area |
 | Pick Color | Copy a color from the screen as hex |
+| Step Capture | Capture the window under the pointer at every click, for a step-by-step guide |
 | Record Screen | Start or stop a recording |
 | Open Capture History | Show recent captures |
 | Restore Recently Closed | Show the last closed Quick Access thumbnail |

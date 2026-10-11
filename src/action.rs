@@ -11,6 +11,7 @@ pub enum Action {
     CaptureScrolling,
     CaptureText,
     PickColor,
+    StepCapture,
     RecordScreen,
     RecordStudio,
     OpenHistory,
@@ -34,7 +35,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 28] = [
+    pub const ALL: [Action; 29] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -43,6 +44,7 @@ impl Action {
         Action::CaptureScrolling,
         Action::CaptureText,
         Action::PickColor,
+        Action::StepCapture,
         Action::RecordScreen,
         Action::RecordStudio,
         Action::OpenHistory,
@@ -87,6 +89,7 @@ impl Action {
             Action::CaptureScrolling => "Scrolling Capture",
             Action::CaptureText => "Capture Text",
             Action::PickColor => "Pick Color",
+            Action::StepCapture => "Step Capture",
             Action::RecordScreen => "Record Screen",
             Action::RecordStudio => "Record Screen (Studio)",
             Action::OpenHistory => "Capture History…",

@@ -154,9 +154,23 @@ impl Content {
         NSArray::from_retained_slice(&excluded)
     }
 
+    /// Other apps' windows that take clicks, front to back: normal and
+    /// floating ones (palettes, panels), below the Dock.
+    pub fn clickable_windows(&self) -> Vec<WindowInfo> {
+        let dock = CGWindowLevelForKey(CGWindowLevelKey::DockWindowLevelKey) as isize;
+        self.windows_where(|own, layer| !own && (0..dock).contains(&layer))
+    }
+
     /// Normal application windows that can be picked in window mode,
     /// front to back.
     pub fn pickable_windows(&self) -> Vec<WindowInfo> {
+        // Normal windows, plus our own editor windows and floating pins.
+        self.windows_where(|own, layer| layer == 0 || own && layer < OWN_UI_LEVEL)
+    }
+
+    /// On-screen windows of at least 40 points each way for which `keep`
+    /// (is it ours, its layer) holds, front to back.
+    fn windows_where(&self, keep: impl Fn(bool, isize) -> bool) -> Vec<WindowInfo> {
         let own_pid = std::process::id() as i32;
         let order = window_z_order();
         // SAFETY: plain property reads.
@@ -167,11 +181,8 @@ impl Content {
                 .filter(|w| w.isOnScreen())
                 .filter_map(|w| {
                     let app = w.owningApplication()?;
-                    // Normal windows, plus our own editor windows and
-                    // floating pins.
                     let own = app.processID() == own_pid;
-                    let layer = w.windowLayer();
-                    if !(layer == 0 || own && layer < OWN_UI_LEVEL) {
+                    if !keep(own, w.windowLayer()) {
                         return None;
                     }
                     let f = w.frame();

@@ -26,6 +26,8 @@ Commands (sent to the running app, which is started if needed):
   capture-text [--filepath FILE | --x X --y Y --width W --height H]
                [--display N] [--linebreaks true|false]
   pick-color              Pick a color on the screen and copy it
+  step-capture            Capture the window under the pointer at every
+                          click; run again (or click Done) to finish
   record-screen [--x X --y Y --width W --height H] [--display N]
                           Start (or stop) a recording
   pin [--filepath FILE]   Pin an image (asks for one without --filepath)

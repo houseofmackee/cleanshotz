@@ -22,6 +22,7 @@ mod scroll;
 mod settings;
 mod shortcut;
 mod state;
+mod steps;
 mod studio;
 mod ui;
 mod upload;

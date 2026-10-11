@@ -68,6 +68,13 @@
       "mode": "no-view"
     },
     {
+      "name": "step-capture",
+      "title": "Step Capture",
+      "subtitle": "CleanShotZ",
+      "description": "Capture the window under the pointer at every click, for a step-by-step guide. Run again to finish.",
+      "mode": "no-view"
+    },
+    {
       "name": "record-screen",
       "title": "Record Screen",
       "subtitle": "CleanShotZ",

@@ -118,6 +118,103 @@ pub fn at(pid: i32, window: u32, at: Point) -> Option<Rect> {
     (rect.width >= 4.0 && rect.height >= 4.0).then_some(rect)
 }
 
+/// What was clicked, for a step's caption.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Control {
+    Button,
+    MenuItem,
+    Field,
+    Tab,
+    Link,
+}
+
+impl Control {
+    fn from_role(role: &str) -> Option<Control> {
+        Some(match role {
+            "AXButton"
+            | "AXCheckBox"
+            | "AXPopUpButton"
+            | "AXMenuButton"
+            | "AXDisclosureTriangle" => Control::Button,
+            "AXMenuItem" | "AXMenuBarItem" => Control::MenuItem,
+            "AXTextField" | "AXTextArea" | "AXComboBox" | "AXSearchField" => Control::Field,
+            "AXRadioButton" | "AXTab" => Control::Tab,
+            "AXLink" => Control::Link,
+            _ => return None,
+        })
+    }
+}
+
+/// The control of app `pid` at `at` (global points) and its name: its
+/// title or description, from the element hit or, when that is a button's
+/// text or icon, the element holding it. Values are never read, so text
+/// typed into fields stays out of captions. `None` for this app, without
+/// Accessibility permission, or when no named control was clicked.
+pub fn control_at(pid: i32, at: Point) -> Option<(Control, String)> {
+    if u32::try_from(pid).ok() == Some(std::process::id()) {
+        return None;
+    }
+    // SAFETY: as in `at`.
+    let app = Owned(unsafe { AXUIElementCreateApplication(pid) });
+    if app.0.is_null() {
+        return None;
+    }
+    // SAFETY: a valid element.
+    unsafe { AXUIElementSetMessagingTimeout(app.0, 0.1) };
+    let mut hit: Element = ptr::null_mut();
+    // SAFETY: as in `at`.
+    let error =
+        unsafe { AXUIElementCopyElementAtPosition(app.0, at.x as f32, at.y as f32, &mut hit) };
+    if error != 0 || hit.is_null() {
+        return None;
+    }
+    let mut element = Owned(hit);
+    for _ in 0..3 {
+        let role = attribute(element.0, "AXRole").and_then(|v| string(&v))?;
+        if let Some(control) = Control::from_role(&role) {
+            let names: &[&str] = if control == Control::Field {
+                &["AXTitle", "AXDescription", "AXPlaceholderValue"]
+            } else {
+                &["AXTitle", "AXDescription"]
+            };
+            return names
+                .iter()
+                .find_map(|n| attribute(element.0, n).and_then(|v| string(&v)))
+                .and_then(|text| usable_name(&text))
+                .map(|name| (control, name));
+        }
+        // Only a control's parts lead up to it.
+        if !matches!(role.as_str(), "AXStaticText" | "AXImage" | "AXUnknown") {
+            return None;
+        }
+        element = attribute(element.0, "AXParent")?;
+    }
+    None
+}
+
+/// A CFString's contents; `None` for other types.
+fn string(value: &Owned) -> Option<String> {
+    #[link(name = "CoreFoundation", kind = "framework")]
+    unsafe extern "C" {
+        fn CFGetTypeID(cf: *const c_void) -> usize;
+        fn CFStringGetTypeID() -> usize;
+    }
+    // SAFETY: a valid CoreFoundation object.
+    if unsafe { CFGetTypeID(value.0) != CFStringGetTypeID() } {
+        return None;
+    }
+    // SAFETY: checked to be a CFString, which `Owned` keeps alive.
+    let s: &CFString = unsafe { &*(value.0 as *const CFString) };
+    Some(s.to_string())
+}
+
+/// A name worth putting in a caption: one line, not too long.
+fn usable_name(text: &str) -> Option<String> {
+    let text = text.trim();
+    (!text.is_empty() && text.chars().count() <= 60 && !text.contains('\n'))
+        .then(|| text.to_string())
+}
+
 /// The view of this app's window `window` at `at` (global points,
 /// top-left origin), widened to its parent when too small like [`at`].
 fn own(window: u32, at: Point) -> Option<Rect> {
