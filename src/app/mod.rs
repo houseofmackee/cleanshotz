@@ -501,7 +501,18 @@ impl AppDelegate {
                 if let Some(studio) = studio {
                     recording.studio = studio;
                 }
-                crate::record::toggle(mtm, settings, recording, area).map_err(error)
+                // Remember the camera and microphone chosen before recording.
+                let app = self.retain();
+                let remember: crate::record::Remember = std::rc::Rc::new(move |chosen| {
+                    app.update_config(|config| {
+                        let r = &mut config.recording;
+                        r.camera = chosen.camera;
+                        r.camera_device = chosen.camera_device.clone();
+                        r.microphone = chosen.microphone;
+                        r.microphone_device = chosen.microphone_device.clone();
+                    });
+                });
+                crate::record::toggle(mtm, settings, recording, area, remember).map_err(error)
             }
             Request::Pin { file } => {
                 let Some(file) = file.or_else(|| choose_image(mtm)) else {

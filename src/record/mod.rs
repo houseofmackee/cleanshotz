@@ -1,12 +1,14 @@
 //! Screen recording.
 
+pub mod devices;
 pub mod engine;
 pub mod keys;
 pub mod media;
 pub mod overlays;
+mod ready;
 mod session;
 
-pub use session::{is_recording, toggle};
+pub use session::{Remember, is_recording, toggle};
 
 /// Called on the main thread when the system stops a recording (for
 /// example from the screen sharing menu).
@@ -43,6 +45,7 @@ pub fn record_sample(output: &std::path::Path, seconds: f64, audio: bool) -> Res
         ignore_shadows: false,
         system_audio: audio,
         microphone: false,
+        microphone_device: String::new(),
         output: output.to_path_buf(),
     };
     let recorder = engine::Recorder::start(options)?;

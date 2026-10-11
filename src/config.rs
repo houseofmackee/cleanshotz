@@ -305,6 +305,13 @@ pub struct RecordingSettings {
     /// Record in Studio mode: the cursor, clicks, keys and camera are kept
     /// apart from the screen video, to be styled afterwards.
     pub studio: bool,
+    /// The camera to show (its unique id); empty for the system default.
+    pub camera_device: String,
+    /// The microphone to record; empty for the system default.
+    pub microphone_device: String,
+    /// After choosing what to record, choose the camera and microphone in a
+    /// panel before recording starts (like QuickTime Player).
+    pub choose_devices: bool,
 }
 
 impl Default for RecordingSettings {
@@ -330,6 +337,9 @@ impl Default for RecordingSettings {
             camera_shape: CameraShape::Circle,
             keystrokes: KeystrokeMode::Off,
             studio: false,
+            camera_device: String::new(),
+            microphone_device: String::new(),
+            choose_devices: true,
         }
     }
 }

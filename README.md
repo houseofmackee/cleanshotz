@@ -258,6 +258,13 @@ Options live in the `[text]` section of the settings file:
 
 Record Screen (`alt+shift+5`) shows the selection overlay: drag to record an
 area, click to record the whole screen, or press Space and click a window.
+Then, as in QuickTime Player, a panel below it lets you choose the camera
+(or none) and the microphone (or none); choosing a camera shows its bubble
+right away. Record (Return, or Record Screen again) starts recording and
+Cancel (Escape) stops there. The choice is remembered for next time. Turn
+the panel off in Settings > Recording to record with the last choice right
+away; recordings started with an area from a script or the command line
+skip it.
 After a short countdown a control bar appears below the area with the
 elapsed time and Pause, Stop and Discard; a red border marks the recorded
 area. Neither shows up in the recording. Press the shortcut again (or
@@ -289,6 +296,8 @@ Options live in the `[recording]` section of the settings file:
 | `camera_shape` | `"circle"` | `"circle"` or `"rounded"` |
 | `keystrokes` | `"off"` | Show pressed keys: `"off"`, `"shortcuts"` or `"all"` |
 | `studio` | `false` | Record in Studio mode (see below) |
+| `choose_devices` | `true` | Choose the camera and microphone in a panel before recording |
+| `camera_device`, `microphone_device` | `""` | The camera and microphone to use (set by the panel); empty for the system default |
 
 The camera needs camera access and the keystroke display needs Input
 Monitoring; macOS asks the first time. `"shortcuts"` only shows presses with

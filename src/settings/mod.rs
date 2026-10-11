@@ -1177,6 +1177,12 @@ fn recording(f: &mut Form) {
         |c, v| c.recording.countdown_seconds = (v as u32).min(10),
     );
     f.check(
+        "",
+        "Choose the camera and microphone before recording",
+        |c| c.recording.choose_devices,
+        |c, v| c.recording.choose_devices = v,
+    );
+    f.check(
         "Studio:",
         "Record in Studio mode",
         |c| c.recording.studio,

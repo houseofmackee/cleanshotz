@@ -144,17 +144,27 @@ pub fn is_recording() -> bool {
     STATE.with(|s| matches!(*s.borrow(), State::Recording(_)))
 }
 
-/// Starts a recording, or stops the one in progress.
+/// Saves the camera and microphone chosen before recording.
+pub type Remember = std::rc::Rc<dyn Fn(&RecordingSettings)>;
+
 /// Starts or stops a recording. With `area` (a display id and a
-/// display-local rect) recording starts there without asking.
+/// display-local rect) recording starts there without asking. Otherwise,
+/// once the area or window is chosen, the camera and microphone can be
+/// chosen (see [`super::ready`]); `remember` saves that choice.
 pub fn toggle(
     mtm: MainThreadMarker,
     capture: CaptureSettings,
     recording: RecordingSettings,
     area: Option<(u32, Rect)>,
+    remember: Remember,
 ) -> Result<(), CaptureError> {
     if is_recording() {
         stop(mtm, false);
+        return Ok(());
+    }
+    // Record Screen again while choosing the camera and microphone: go.
+    if super::ready::is_showing() {
+        super::ready::record_now();
         return Ok(());
     }
     if is_busy() {
@@ -162,10 +172,17 @@ pub fn toggle(
     }
     if let Some((display_id, rect)) = area {
         STATE.with(|s| *s.borrow_mut() = State::Preparing);
-        start_target(mtm, Target::Area { display_id, rect }, capture, recording);
+        start_target(
+            mtm,
+            Target::Area { display_id, rect },
+            capture,
+            recording,
+            None,
+        );
         return Ok(());
     }
     let content = Content::fetch()?;
+    let windows = content.pickable_windows();
     let displays = overlay_displays(mtm, &content, &capture, capture.show_magnifier)?;
     let options = overlay::Options {
         mode: Mode::Area,
@@ -189,21 +206,113 @@ pub fn toggle(
                 return;
             }
         };
-        start_target(mtm, target, capture, recording);
+        choose_devices(mtm, target, &windows, capture, recording, remember);
     });
     Ok(())
 }
 
+/// Shows the camera and microphone panel for `target`, then records with
+/// the choice (or, with the panel turned off, records right away).
+fn choose_devices(
+    mtm: MainThreadMarker,
+    target: Target,
+    windows: &[sck::WindowInfo],
+    capture: CaptureSettings,
+    mut recording: RecordingSettings,
+    remember: Remember,
+) {
+    let area = match target {
+        Target::Area { display_id, rect } => screen_for(mtm, display_id).map(|screen| {
+            let f = screen.frame();
+            NSRect::new(
+                NSPoint::new(
+                    f.origin.x + rect.x,
+                    f.origin.y + f.size.height - rect.y - rect.height,
+                ),
+                NSSize::new(rect.width, rect.height),
+            )
+        }),
+        Target::Window { window_id } => windows.iter().find(|w| w.id == window_id).map(|w| {
+            let primary_height = NSScreen::screens(mtm)
+                .firstObject()
+                .map_or(0.0, |s| s.frame().size.height);
+            NSRect::new(
+                NSPoint::new(w.frame.x, primary_height - w.frame.y - w.frame.height),
+                NSSize::new(w.frame.width, w.frame.height),
+            )
+        }),
+    };
+    let Some(area) = area.filter(|_| recording.choose_devices) else {
+        start_target(mtm, target, capture, recording, None);
+        return;
+    };
+    let camera_allowed = matches!(target, Target::Area { .. });
+    let pick = |on: bool, id: &str, default: Option<String>| {
+        on.then(|| {
+            if id.is_empty() {
+                default
+            } else {
+                Some(id.to_string())
+            }
+        })
+        .flatten()
+    };
+    let initial = super::ready::Choice {
+        camera: pick(
+            recording.camera,
+            &recording.camera_device,
+            super::devices::default_camera(),
+        ),
+        microphone: pick(
+            recording.microphone,
+            &recording.microphone_device,
+            super::devices::default_microphone(),
+        ),
+    };
+    let bubble = super::ready::Bubble {
+        size: recording.camera_size as f64,
+        shape: recording.camera_shape,
+    };
+    super::ready::show(
+        mtm,
+        area,
+        camera_allowed,
+        &initial,
+        bubble,
+        Box::new(move |result| {
+            let Some((choice, preview)) = result else {
+                tracing::info!("recording cancelled");
+                STATE.with(|s| *s.borrow_mut() = State::Idle);
+                return;
+            };
+            if camera_allowed {
+                recording.camera = choice.camera.is_some();
+                if let Some(id) = choice.camera {
+                    recording.camera_device = id;
+                }
+            }
+            recording.microphone = choice.microphone.is_some();
+            if let Some(id) = choice.microphone {
+                recording.microphone_device = id;
+            }
+            remember(&recording);
+            start_target(mtm, target, capture, recording, preview);
+        }),
+    );
+}
+
 /// Counts down if set to, then starts recording `target`.
+/// `camera`: the bubble already showing from the device panel.
 fn start_target(
     mtm: MainThreadMarker,
     target: Target,
     capture: CaptureSettings,
     recording: RecordingSettings,
+    camera: Option<Camera>,
 ) {
     let seconds = recording.countdown_seconds.min(10);
     let begin_now = move || {
-        if let Err(e) = begin(mtm, target, &capture, &recording) {
+        if let Err(e) = begin(mtm, target, &capture, &recording, camera) {
             STATE.with(|s| *s.borrow_mut() = State::Idle);
             tracing::error!(error = %e, "could not start recording");
             crate::app::alert::show(mtm, "Could not start recording", &e, &["OK"]);
@@ -236,6 +345,7 @@ fn begin(
     target: Target,
     capture: &CaptureSettings,
     settings: &RecordingSettings,
+    camera: Option<Camera>,
 ) -> Result<(), String> {
     // The overlays must exist before the content is fetched, so the
     // recording filter can include them.
@@ -250,9 +360,12 @@ fn begin(
                 ),
                 NSSize::new(rect.width, rect.height),
             );
-            start_overlays(mtm, area, settings)
+            start_overlays(mtm, area, settings, camera)
         }
         Target::Window { .. } => {
+            if let Some(camera) = camera {
+                camera.stop();
+            }
             if settings.camera
                 || settings.keystrokes != KeystrokeMode::Off
                 || settings.highlight_cursor
@@ -272,19 +385,35 @@ fn begin(
 /// Starts the camera and keystroke overlays the settings ask for. Problems
 /// (such as missing permissions) are shown and the recording goes ahead
 /// without that overlay.
-fn start_overlays(mtm: MainThreadMarker, area: NSRect, settings: &RecordingSettings) -> Overlays {
-    let camera = settings.camera.then(|| {
-        Camera::start(
-            mtm,
-            area,
-            settings.camera_size as f64,
-            settings.camera_shape,
-        )
-        .inspect_err(|e| {
-            tracing::warn!(error = %e, "camera not shown");
-            toast::show(mtm, e);
+fn start_overlays(
+    mtm: MainThreadMarker,
+    area: NSRect,
+    settings: &RecordingSettings,
+    preview: Option<Camera>,
+) -> Overlays {
+    let camera = match preview {
+        Some(camera) if settings.camera => Some(Some(camera)),
+        Some(camera) => {
+            camera.stop();
+            None
+        }
+        None => None,
+    };
+    let camera = camera.or_else(|| {
+        settings.camera.then(|| {
+            Camera::start(
+                mtm,
+                area,
+                settings.camera_size as f64,
+                settings.camera_shape,
+                &settings.camera_device,
+            )
+            .inspect_err(|e| {
+                tracing::warn!(error = %e, "camera not shown");
+                toast::show(mtm, e);
+            })
+            .ok()
         })
-        .ok()
     });
     let keys = (settings.keystrokes != KeystrokeMode::Off).then(|| {
         KeyDisplay::start(mtm, area, settings.keystrokes)
@@ -441,6 +570,7 @@ fn begin_recording(
         ignore_shadows,
         system_audio: settings.system_audio,
         microphone,
+        microphone_device: settings.microphone_device.clone(),
         output: video.clone(),
     }) {
         Ok(recorder) => recorder,

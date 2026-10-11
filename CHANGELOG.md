@@ -6,6 +6,12 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Choose the camera and microphone (or none) before recording, in a panel
+  like QuickTime Player's; a chosen camera shows its bubble right away and
+  the choice is remembered.
+
 ## [0.4.1] - 2026-10-11
 
 ### Fixed

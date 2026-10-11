@@ -21,7 +21,7 @@ use objc2_app_kit::{
     NSWindowStyleMask,
 };
 use objc2_av_foundation::{
-    AVCaptureConnection, AVCaptureDevice, AVCaptureDeviceInput, AVCaptureFileOutput,
+    AVCaptureConnection, AVCaptureDeviceInput, AVCaptureFileOutput,
     AVCaptureFileOutputRecordingDelegate, AVCaptureMovieFileOutput, AVCaptureSession,
     AVCaptureVideoPreviewLayer, AVLayerVideoGravityResizeAspectFill, AVMediaTypeVideo,
 };
@@ -172,17 +172,23 @@ impl CameraRecording {
 impl Camera {
     /// Shows the camera bubble in the bottom-right corner of `area`
     /// (Cocoa screen coordinates). It can be dragged during the recording.
+    /// `device`: the camera's unique id; empty for the system default.
     pub fn start(
         mtm: MainThreadMarker,
         area: NSRect,
         size: f64,
         shape: CameraShape,
+        device: &str,
     ) -> Result<Camera, String> {
         // Debug builds: CLEANSHOTZ_FAKE_CAMERA=1 shows the bubble with a
         // placeholder instead of the camera (no permission, no camera use).
         let fake = cfg!(debug_assertions)
             && std::env::var_os("CLEANSHOTZ_FAKE_CAMERA").is_some_and(|v| !v.is_empty());
-        let session = if fake { None } else { Some(Self::session()?) };
+        let session = if fake {
+            None
+        } else {
+            Some(Self::session(device)?)
+        };
         let panel = Self::bubble(mtm, area, size, shape, session.as_deref());
         if let Some(session) = &session {
             // Starting a capture session blocks; keep it off the main thread.
@@ -291,7 +297,7 @@ impl Camera {
         }
     }
 
-    fn session() -> Result<Retained<AVCaptureSession>, String> {
+    fn session(device: &str) -> Result<Retained<AVCaptureSession>, String> {
         match Permission::Camera.status() {
             Status::Granted => {}
             Status::NotDetermined => {
@@ -309,8 +315,7 @@ impl Camera {
         // SAFETY: reading AVFoundation constants and creating capture objects.
         let session = unsafe {
             let media = AVMediaTypeVideo.ok_or("no video media type")?;
-            let device =
-                AVCaptureDevice::defaultDeviceWithMediaType(media).ok_or("no camera found")?;
+            let device = super::devices::device(device, media).ok_or("no camera found")?;
             let input = AVCaptureDeviceInput::deviceInputWithDevice_error(&device)
                 .map_err(|e| e.localizedDescription().to_string())?;
             let session = AVCaptureSession::new();

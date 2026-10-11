@@ -168,6 +168,12 @@
 "Capture:" = "Capture:";
 
 /* src/settings/mod.rs */
+"Choose the camera and microphone before recording" = "Choose the camera and microphone before recording";
+
+/* src/record/ready.rs */
+"Choose the camera and microphone, then press Return to record or Escape to cancel." = "Choose the camera and microphone, then press Return to record or Escape to cancel.";
+
+/* src/settings/mod.rs */
 "Choose…" = "Choose…";
 
 /* src/settings/mod.rs, src/studio/window.rs */
@@ -517,6 +523,12 @@
 
 /* src/studio/window.rs */
 "No Background" = "No Background";
+
+/* src/record/ready.rs */
+"No Camera" = "No Camera";
+
+/* src/record/ready.rs */
+"No Microphone" = "No Microphone";
 
 /* src/editor/window.rs */
 "No sensitive info found" = "No sensitive info found";
@@ -943,6 +955,9 @@
 
 /* src/app/mod.rs */
 "Welcome to CleanShotZ" = "Welcome to CleanShotZ";
+
+/* src/record/ready.rs */
+"Window recordings leave the camera out" = "Window recordings leave the camera out";
 
 /* src/settings/mod.rs */
 "days (0 keeps them)" = "days (0 keeps them)";

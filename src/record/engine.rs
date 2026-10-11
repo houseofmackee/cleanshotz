@@ -18,11 +18,11 @@ use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{AllocAnyThread, DefinedClass, define_class, msg_send};
 use objc2_av_foundation::{
     AVAssetWriter, AVAssetWriterInput, AVAssetWriterStatus, AVCaptureAudioDataOutput,
-    AVCaptureAudioDataOutputSampleBufferDelegate, AVCaptureConnection, AVCaptureDevice,
-    AVCaptureDeviceInput, AVCaptureOutput, AVCaptureSession, AVFileTypeMPEG4, AVMediaTypeAudio,
-    AVMediaTypeVideo, AVVideoAverageBitRateKey, AVVideoCodecKey, AVVideoCodecTypeH264,
-    AVVideoCodecTypeHEVC, AVVideoCompressionPropertiesKey, AVVideoExpectedSourceFrameRateKey,
-    AVVideoHeightKey, AVVideoMaxKeyFrameIntervalKey, AVVideoWidthKey,
+    AVCaptureAudioDataOutputSampleBufferDelegate, AVCaptureConnection, AVCaptureDeviceInput,
+    AVCaptureOutput, AVCaptureSession, AVFileTypeMPEG4, AVMediaTypeAudio, AVMediaTypeVideo,
+    AVVideoAverageBitRateKey, AVVideoCodecKey, AVVideoCodecTypeH264, AVVideoCodecTypeHEVC,
+    AVVideoCompressionPropertiesKey, AVVideoExpectedSourceFrameRateKey, AVVideoHeightKey,
+    AVVideoMaxKeyFrameIntervalKey, AVVideoWidthKey,
 };
 use objc2_core_foundation::{CFRetained, CGPoint, CGRect, CGSize};
 use objc2_core_media::{CMSampleBuffer, CMSampleTimingInfo, CMTime, CMTimeFlags};
@@ -52,6 +52,8 @@ pub struct Options {
     pub ignore_shadows: bool,
     pub system_audio: bool,
     pub microphone: bool,
+    /// The microphone's unique id; empty for the system default.
+    pub microphone_device: String,
     pub output: PathBuf,
 }
 
@@ -379,13 +381,17 @@ struct Microphone {
 }
 
 impl Microphone {
-    fn start(output: &Retained<StreamOutput>, queue: &DispatchQueue) -> Result<Microphone, String> {
+    fn start(
+        output: &Retained<StreamOutput>,
+        queue: &DispatchQueue,
+        device: &str,
+    ) -> Result<Microphone, String> {
         // SAFETY: standard capture session setup with the default
         // microphone; the delegate and queue outlive the session's use.
         unsafe {
             let audio = AVMediaTypeAudio.ok_or("no audio media type")?;
-            let device = AVCaptureDevice::defaultDeviceWithMediaType(audio)
-                .ok_or("no microphone is connected")?;
+            let device =
+                super::devices::device(device, audio).ok_or("no microphone is connected")?;
             let input = AVCaptureDeviceInput::deviceInputWithDevice_error(&device)
                 .map_err(|e| e.localizedDescription().to_string())?;
             let session = AVCaptureSession::new();
@@ -547,6 +553,11 @@ impl Recorder {
             if macos_at_least(15) {
                 config.setShowMouseClicks(options.show_clicks);
                 config.setCaptureMicrophone(options.microphone);
+                if options.microphone && !options.microphone_device.is_empty() {
+                    config.setMicrophoneCaptureDeviceID(Some(&NSString::from_str(
+                        &options.microphone_device,
+                    )));
+                }
             }
             if options.system_audio {
                 config.setCapturesAudio(true);
@@ -593,7 +604,7 @@ impl Recorder {
             unsafe { stream.startCaptureWithCompletionHandler(Some(&done)) }
         })?;
         let microphone = if options.microphone && !macos_at_least(15) {
-            match Microphone::start(&output, &queue) {
+            match Microphone::start(&output, &queue, &options.microphone_device) {
                 Ok(m) => Some(m),
                 Err(e) => {
                     // SAFETY: the completion block has the expected signature.
