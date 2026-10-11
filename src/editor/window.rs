@@ -8,12 +8,12 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSAlert, NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSBezelStyle, NSButton,
-    NSColor, NSColorSpace, NSColorWell, NSColorWellStyle, NSControlStateValueOff,
-    NSControlStateValueOn, NSControlTextEditingDelegate, NSCursor, NSDraggingInfo, NSEvent,
-    NSEventModifierFlags, NSFocusRingType, NSGraphicsContext, NSImage, NSModalResponseOK,
-    NSPopUpButton, NSResponder, NSSavePanel, NSSegmentedControl, NSSlider, NSTextField,
-    NSTextFieldDelegate, NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask,
+    NSAlert, NSAutoresizingMaskOptions, NSBackingStoreType, NSBezelStyle, NSButton, NSColor,
+    NSColorSpace, NSColorWell, NSColorWellStyle, NSControlStateValueOff, NSControlStateValueOn,
+    NSControlTextEditingDelegate, NSCursor, NSDraggingInfo, NSEvent, NSEventModifierFlags,
+    NSFocusRingType, NSGraphicsContext, NSImage, NSModalResponseOK, NSPopUpButton, NSResponder,
+    NSSavePanel, NSSegmentedControl, NSSlider, NSTextField, NSTextFieldDelegate, NSView, NSWindow,
+    NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_foundation::{
     NSAffineTransform, NSArray, NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize,
@@ -429,11 +429,7 @@ impl EditorController {
         self.sync_controls();
 
         window.center();
-        NSApplication::sharedApplication(mtm).activate();
-        window.makeKeyAndOrderFront(None);
-        // Front even when macOS declines to activate the app (opened from
-        // the command line while the terminal is active).
-        window.orderFrontRegardless();
+        crate::ui::bring_forward(mtm, &window);
         window.makeFirstResponder(Some(&canvas));
     }
 

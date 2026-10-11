@@ -10,9 +10,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSBezelStyle, NSButton,
-    NSControlStateValueOff, NSControlStateValueOn, NSFont, NSPopUpButton, NSSlider, NSTextField,
-    NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSBezelStyle, NSButton, NSControlStateValueOff,
+    NSControlStateValueOn, NSFont, NSPopUpButton, NSSlider, NSTextField, NSView, NSWindow,
+    NSWindowDelegate, NSWindowStyleMask,
 };
 use objc2_av_foundation::{AVPlayer, AVPlayerItem, AVVideoComposition};
 use objc2_av_kit::{AVPlayerView, AVPlayerViewControlsStyle};
@@ -317,8 +317,7 @@ impl StudioEditor {
         self.sync_controls();
 
         window.center();
-        NSApplication::sharedApplication(mtm).activate();
-        window.makeKeyAndOrderFront(None);
+        crate::ui::bring_forward(mtm, &window);
         Ok(())
     }
 

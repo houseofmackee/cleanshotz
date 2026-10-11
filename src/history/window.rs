@@ -10,10 +10,10 @@ use objc2::{
     AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel,
 };
 use objc2_app_kit::{
-    NSApplication, NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSCompositingOperation,
-    NSEvent, NSEventModifierFlags, NSGraphicsContext, NSImage, NSImageInterpolation, NSMenu,
-    NSMenuItem, NSResponder, NSScrollView, NSSearchField, NSSegmentedControl, NSTextField, NSView,
-    NSWindow, NSWindowDelegate, NSWindowStyleMask, NSWorkspace,
+    NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSCompositingOperation, NSEvent,
+    NSEventModifierFlags, NSGraphicsContext, NSImage, NSImageInterpolation, NSMenu, NSMenuItem,
+    NSResponder, NSScrollView, NSSearchField, NSSegmentedControl, NSTextField, NSView, NSWindow,
+    NSWindowDelegate, NSWindowStyleMask, NSWorkspace,
 };
 use objc2_foundation::{
     NSArray, NSData, NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL,
@@ -80,12 +80,8 @@ pub fn open(mtm: MainThreadMarker) {
         c
     });
     controller.reload();
-    NSApplication::sharedApplication(mtm).activate();
     if let Some(window) = controller.ivars().window.get() {
-        window.makeKeyAndOrderFront(None);
-        // Front even when macOS declines to activate the app (when opened
-        // from the command line, the terminal stays active).
-        window.orderFrontRegardless();
+        crate::ui::bring_forward(mtm, window);
     }
 }
 

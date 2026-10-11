@@ -10,11 +10,11 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSApplication, NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff,
-    NSControlStateValueOn, NSFont, NSGridCell, NSGridCellPlacement, NSGridRowAlignment, NSGridView,
-    NSImage, NSLayoutConstraintOrientation, NSOpenPanel, NSPopUpButton, NSSecureTextField,
-    NSStackView, NSTextField, NSToolbar, NSToolbarDelegate, NSToolbarItem, NSView, NSWindow,
-    NSWindowStyleMask, NSWindowToolbarStyle,
+    NSBackingStoreType, NSButton, NSColor, NSControlStateValueOff, NSControlStateValueOn, NSFont,
+    NSGridCell, NSGridCellPlacement, NSGridRowAlignment, NSGridView, NSImage,
+    NSLayoutConstraintOrientation, NSOpenPanel, NSPopUpButton, NSSecureTextField, NSStackView,
+    NSTextField, NSToolbar, NSToolbarDelegate, NSToolbarItem, NSView, NSWindow, NSWindowStyleMask,
+    NSWindowToolbarStyle,
 };
 use objc2_foundation::{NSArray, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, ns_string};
 
@@ -171,12 +171,8 @@ pub fn open(mtm: MainThreadMarker, tab: Tab, host: impl FnOnce() -> Host) {
         c
     });
     controller.show_tab(tab);
-    NSApplication::sharedApplication(mtm).activate();
     if let Some(window) = controller.ivars().window.get() {
-        window.makeKeyAndOrderFront(None);
-        // Front even when macOS declines to activate the app (when opened
-        // from the command line, the terminal stays active).
-        window.orderFrontRegardless();
+        crate::ui::bring_forward(mtm, window);
     }
 }
 
