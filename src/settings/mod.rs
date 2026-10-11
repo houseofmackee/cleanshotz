@@ -1308,7 +1308,7 @@ fn history(f: &mut Form) {
     );
     f.number(
         "Keep for:",
-        "days (0 keeps them)",
+        "days (0 keeps them; starred ones are always kept)",
         |c| c.history.retention_days as f64,
         |c, v| c.history.retention_days = v as u32,
     );

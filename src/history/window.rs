@@ -1,4 +1,6 @@
 //! The History window: a searchable grid of past captures and recordings.
+//! Captures can be rated (0 to 5 stars; the digit keys), tagged and given
+//! a note; `#tag` in the search keeps only captures with that tag.
 
 use std::cell::{Cell, OnceCell, RefCell};
 use std::collections::HashMap;
@@ -12,8 +14,8 @@ use objc2::{
 use objc2_app_kit::{
     NSAutoresizingMaskOptions, NSBackingStoreType, NSColor, NSCompositingOperation, NSEvent,
     NSEventModifierFlags, NSGraphicsContext, NSImage, NSImageInterpolation, NSMenu, NSMenuItem,
-    NSResponder, NSScrollView, NSSearchField, NSSegmentedControl, NSTextField, NSView, NSWindow,
-    NSWindowDelegate, NSWindowStyleMask, NSWorkspace,
+    NSPopUpButton, NSResponder, NSScrollView, NSSearchField, NSSegmentedControl, NSTextField,
+    NSView, NSWindow, NSWindowDelegate, NSWindowStyleMask, NSWorkspace,
 };
 use objc2_foundation::{
     NSArray, NSData, NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL,
@@ -27,7 +29,7 @@ use crate::ui::draw::{self, Weight};
 
 const CELL: NSSize = NSSize {
     width: 216.0,
-    height: 184.0,
+    height: 200.0,
 };
 const THUMB: NSSize = NSSize {
     width: 196.0,
@@ -47,6 +49,9 @@ mod tag {
     pub const UPLOAD: isize = 7;
     pub const COPY_LINK: isize = 8;
     pub const PRINT: isize = 9;
+    pub const TAGS: isize = 10;
+    /// `RATE + n` sets an n-star rating (0 removes it).
+    pub const RATE: isize = 20;
 }
 
 struct Item {
@@ -60,6 +65,9 @@ pub struct Ivars {
     scroll: OnceCell<Retained<NSScrollView>>,
     search: OnceCell<Retained<NSSearchField>>,
     count: OnceCell<Retained<NSTextField>>,
+    /// Lists the tags in use; choosing one searches for it.
+    tags: OnceCell<Retained<NSPopUpButton>>,
+    tag_names: RefCell<Vec<String>>,
     items: RefCell<Vec<Item>>,
     thumbnails: RefCell<HashMap<i64, Retained<NSImage>>>,
     selected: Cell<Option<usize>>,
@@ -121,9 +129,22 @@ define_class!(
             self.ivars().show.set(match sender.selectedSegment() {
                 1 => Show::Screenshots,
                 2 => Show::Recordings,
+                3 => Show::Starred,
                 _ => Show::All,
             });
             self.reload();
+        }
+
+        #[unsafe(method(tagChosen:))]
+        fn tag_chosen(&self, sender: &NSPopUpButton) {
+            let index = sender.indexOfSelectedItem();
+            let tag = usize::try_from(index - 1)
+                .ok()
+                .and_then(|i| self.ivars().tag_names.borrow().get(i).cloned());
+            if let (Some(tag), Some(search)) = (tag, self.ivars().search.get()) {
+                search.setStringValue(&NSString::from_str(&format!("#{tag}")));
+                self.reload();
+            }
         }
 
         #[unsafe(method(menuAction:))]
@@ -143,6 +164,8 @@ impl HistoryWindow {
             scroll: OnceCell::new(),
             search: OnceCell::new(),
             count: OnceCell::new(),
+            tags: OnceCell::new(),
+            tag_names: RefCell::new(Vec::new()),
             items: RefCell::new(Vec::new()),
             thumbnails: RefCell::new(HashMap::new()),
             selected: Cell::new(None),
@@ -180,7 +203,9 @@ impl HistoryWindow {
         let top = NSAutoresizingMaskOptions::ViewMinYMargin;
 
         let search = NSSearchField::new(mtm);
-        search.setPlaceholderString(Some(ns_string!("Search text in captures and file names")));
+        search.setPlaceholderString(Some(&NSString::from_str(&t!(
+            "Search text, file names, notes and #tags"
+        ))));
         // SAFETY: the action exists on HistoryWindow, which outlives the field.
         unsafe {
             search.setTarget(Some(target));
@@ -194,9 +219,12 @@ impl HistoryWindow {
         content.addSubview(&search);
 
         let show = NSSegmentedControl::new(mtm);
-        show.setSegmentCount(3);
-        for (i, label) in ["All", "Screenshots", "Recordings"].iter().enumerate() {
-            show.setLabel_forSegment(&NSString::from_str(label), i as isize);
+        show.setSegmentCount(4);
+        for (i, label) in ["All", "Screenshots", "Recordings", "Starred"]
+            .iter()
+            .enumerate()
+        {
+            show.setLabel_forSegment(&NSString::from_str(&crate::i18n::tr(label)), i as isize);
         }
         show.setSelectedSegment(0);
         // SAFETY: the action exists on HistoryWindow.
@@ -206,16 +234,32 @@ impl HistoryWindow {
         }
         show.setFrame(NSRect::new(
             NSPoint::new(PADDING + 312.0, height - 38.0),
-            NSSize::new(270.0, 26.0),
+            NSSize::new(350.0, 26.0),
         ));
         show.setAutoresizingMask(top);
         content.addSubview(&show);
 
+        let tags = NSPopUpButton::initWithFrame_pullsDown(
+            NSPopUpButton::alloc(mtm),
+            NSRect::new(
+                NSPoint::new(PADDING + 672.0, height - 38.0),
+                NSSize::new(100.0, 26.0),
+            ),
+            true,
+        );
+        // SAFETY: the action exists on HistoryWindow.
+        unsafe {
+            tags.setTarget(Some(target));
+            tags.setAction(Some(sel!(tagChosen:)));
+        }
+        tags.setAutoresizingMask(top);
+        content.addSubview(&tags);
+
         let count = NSTextField::labelWithString(ns_string!(""), mtm);
         count.setTextColor(Some(&NSColor::secondaryLabelColor()));
         count.setFrame(NSRect::new(
-            NSPoint::new(width - 190.0, height - 34.0),
-            NSSize::new(176.0, 18.0),
+            NSPoint::new(width - 118.0, height - 34.0),
+            NSSize::new(104.0, 18.0),
         ));
         count.setAlignment(objc2_app_kit::NSTextAlignment::Right);
         count.setAutoresizingMask(top | NSAutoresizingMaskOptions::ViewMinXMargin);
@@ -241,6 +285,7 @@ impl HistoryWindow {
 
         let _ = self.ivars().search.set(search);
         let _ = self.ivars().count.set(count);
+        let _ = self.ivars().tags.set(tags);
         let _ = self.ivars().scroll.set(scroll);
         let _ = self.ivars().grid.set(grid.clone());
         let _ = self.ivars().window.set(window.clone());
@@ -255,9 +300,16 @@ impl HistoryWindow {
             .get()
             .map(|s| s.stringValue().to_string())
             .unwrap_or_default();
-        let entries = super::open_store()
+        let store = super::open_store();
+        let entries = store
+            .as_ref()
             .and_then(|store| store.list(&query, ivars.show.get(), LIMIT).ok())
             .unwrap_or_default();
+        let tags = store
+            .as_ref()
+            .and_then(|store| store.all_tags().ok())
+            .unwrap_or_default();
+        self.show_tags(tags);
         let items: Vec<Item> = entries
             .into_iter()
             .map(|entry| Item {
@@ -320,10 +372,16 @@ impl HistoryWindow {
                 if item.entry.link.is_some() {
                     commands.push(("Copy Link", tag::COPY_LINK));
                 }
+                commands.push(("Tags and Note…", tag::TAGS));
+                commands.push(if item.entry.rating > 0 {
+                    ("Remove Rating", tag::RATE)
+                } else {
+                    ("Star", tag::RATE + 1)
+                });
                 commands.push(("Delete", tag::DELETE));
                 let actions: Vec<Retained<NSAccessibilityCustomAction>> = commands
                     .into_iter()
-                    .filter(|(_, t)| item.exists || matches!(*t, tag::DELETE | tag::COPY_LINK))
+                    .filter(|(_, t)| item.exists || !needs_file(*t))
                     .map(|(name, t)| {
                         let block = block2::RcBlock::new(move || {
                             if let Some(c) = controller() {
@@ -333,7 +391,7 @@ impl HistoryWindow {
                         });
                         NSAccessibilityCustomAction::initWithName_handler(
                             NSAccessibilityCustomAction::alloc(),
-                            &NSString::from_str(name),
+                            &NSString::from_str(&crate::i18n::tr(name)),
                             Some(&block),
                         )
                     })
@@ -352,7 +410,9 @@ impl HistoryWindow {
             // SAFETY: reading an AppKit constant.
             unsafe { objc2_app_kit::NSAccessibilityListRole },
             "Captures",
-            Some("Each capture has actions to open, copy, show in Finder and more."),
+            Some(&t!(
+                "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating."
+            )),
         );
         // SAFETY: an array of accessibility elements.
         unsafe { grid.setAccessibilityChildren(Some(&NSArray::from_retained_slice(&children))) };
@@ -532,6 +592,28 @@ impl HistoryWindow {
                 Weight::Medium,
                 &NSColor::tertiaryLabelColor(),
             );
+            if item.entry.rating > 0 {
+                let stars = "★".repeat(item.entry.rating as usize);
+                let width = draw::text_size(&stars, 11.0, Weight::Medium).width;
+                draw::draw_text(
+                    &stars,
+                    Point::new(thumb_box.max_x() - width, thumb_box.max_y() + 22.0),
+                    11.0,
+                    Weight::Medium,
+                    &NSColor::systemYellowColor(),
+                );
+            }
+            let details = details_line(&item.entry);
+            if !details.is_empty() {
+                let text = fit(&details, THUMB.width, 10.0);
+                draw::draw_text(
+                    &text,
+                    Point::new(cell.x + 12.0, thumb_box.max_y() + 39.0),
+                    10.0,
+                    Weight::Medium,
+                    &NSColor::controlAccentColor(),
+                );
+            }
         }
     }
 
@@ -592,6 +674,40 @@ impl HistoryWindow {
             add("Copy Link", tag::COPY_LINK, true);
         }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
+        add("Tags and Note…", tag::TAGS, true);
+        let rating = NSMenu::new(mtm);
+        for stars in 0..=5u8 {
+            let title = if stars == 0 {
+                t!("No Rating")
+            } else {
+                "★".repeat(stars as usize)
+            };
+            // SAFETY: `menuAction:` exists on HistoryWindow, which outlives
+            // the menu.
+            let menu_item = unsafe {
+                let i = NSMenuItem::initWithTitle_action_keyEquivalent(
+                    NSMenuItem::alloc(mtm),
+                    &NSString::from_str(&title),
+                    Some(sel!(menuAction:)),
+                    &NSString::from_str(&stars.to_string()),
+                );
+                i.setTarget(Some(target));
+                i
+            };
+            menu_item.setKeyEquivalentModifierMask(NSEventModifierFlags::empty());
+            menu_item.setTag(tag::RATE + stars as isize);
+            menu_item.setState(if stars == item.entry.rating {
+                objc2_app_kit::NSControlStateValueOn
+            } else {
+                objc2_app_kit::NSControlStateValueOff
+            });
+            rating.addItem(&menu_item);
+        }
+        let rating_item = NSMenuItem::new(mtm);
+        rating_item.setTitle(&NSString::from_str(&t!("Rating")));
+        rating_item.setSubmenu(Some(&rating));
+        menu.addItem(&rating_item);
+        menu.addItem(&NSMenuItem::separatorItem(mtm));
         add("Delete", tag::DELETE, true);
         menu
     }
@@ -607,7 +723,7 @@ impl HistoryWindow {
         else {
             return;
         };
-        if !exists && tag != tag::DELETE && tag != tag::COPY_LINK {
+        if !exists && needs_file(tag) {
             crate::ui::toast::show(mtm, "The file is no longer there");
             return;
         }
@@ -652,6 +768,24 @@ impl HistoryWindow {
                     crate::pin::pin(mtm, &item);
                 }
             }
+            tag::TAGS => self.edit_tags(entry, index),
+            t if (tag::RATE..=tag::RATE + 5).contains(&t) => {
+                let rating = (t - tag::RATE) as u8;
+                if let Some(store) = super::open_store()
+                    && let Err(e) = store.set_rating(entry.id, rating)
+                {
+                    tracing::warn!(error = %e, "could not rate the capture");
+                }
+                self.reload_keeping(index);
+                crate::ui::access::announce(
+                    mtm,
+                    &if rating == 0 {
+                        t!("Rating removed")
+                    } else {
+                        t!("Rated {rating} of 5", rating)
+                    },
+                );
+            }
             tag::DELETE => {
                 if let Some(store) = super::open_store()
                     && let Ok(Some(path)) = store.delete(entry.id)
@@ -671,7 +805,140 @@ impl HistoryWindow {
     }
 }
 
-/// What VoiceOver says for a history item: kind, size or length, date.
+impl HistoryWindow {
+    /// Fills the Tags menu; its first item is the button's title.
+    fn show_tags(&self, tags: Vec<(String, usize)>) {
+        let Some(button) = self.ivars().tags.get() else {
+            return;
+        };
+        button.removeAllItems();
+        button.addItemWithTitle(&NSString::from_str(&t!("Tags")));
+        for (tag, count) in &tags {
+            button.addItemWithTitle(&NSString::from_str(&format!("#{tag} ({count})")));
+        }
+        button.setEnabled(!tags.is_empty());
+        *self.ivars().tag_names.borrow_mut() = tags.into_iter().map(|(t, _)| t).collect();
+    }
+
+    /// Reloads (after an edit) and selects the same capture again, if it
+    /// is still listed.
+    fn reload_keeping(&self, index: usize) {
+        let id = self.ivars().items.borrow().get(index).map(|i| i.entry.id);
+        self.reload();
+        let position = self
+            .ivars()
+            .items
+            .borrow()
+            .iter()
+            .position(|i| Some(i.entry.id) == id);
+        self.select(position);
+    }
+
+    /// Asks for a capture's tags and note in a sheet.
+    fn edit_tags(&self, entry: Entry, index: usize) {
+        use objc2_app_kit::{NSAlert, NSAlertFirstButtonReturn};
+        let mtm = self.mtm();
+        let Some(window) = self.ivars().window.get() else {
+            return;
+        };
+        let alert = NSAlert::new(mtm);
+        alert.setMessageText(&NSString::from_str(&t!("Tags and Note")));
+        alert.setInformativeText(&NSString::from_str(&t!(
+            "Separate tags with commas or spaces. Search for #tag to find them."
+        )));
+        alert.addButtonWithTitle(&NSString::from_str(&t!("Save")));
+        alert.addButtonWithTitle(&NSString::from_str(&t!("Cancel")));
+        let accessory = NSView::initWithFrame(
+            NSView::alloc(mtm),
+            NSRect::new(NSPoint::ZERO, NSSize::new(300.0, 112.0)),
+        );
+        let label = |text: &str, y: f64| {
+            let l = NSTextField::labelWithString(&NSString::from_str(text), mtm);
+            l.setFrame(NSRect::new(NSPoint::new(0.0, y), NSSize::new(300.0, 16.0)));
+            accessory.addSubview(&l);
+        };
+        let field = |value: &str, y: f64, height: f64, name: &str| {
+            let f = NSTextField::new(mtm);
+            f.setStringValue(&NSString::from_str(value));
+            f.setFrame(NSRect::new(
+                NSPoint::new(0.0, y),
+                NSSize::new(300.0, height),
+            ));
+            use objc2_app_kit::NSAccessibility;
+            f.setAccessibilityLabel(Some(&NSString::from_str(name)));
+            accessory.addSubview(&f);
+            f
+        };
+        let tags_name = t!("Tags");
+        let note_name = t!("Note");
+        label(&tags_name, 94.0);
+        let tags = field(&entry.tags.join(", "), 68.0, 24.0, &tags_name);
+        label(&note_name, 48.0);
+        let note = field(&entry.note, 0.0, 46.0, &note_name);
+        tags.setPlaceholderString(Some(&NSString::from_str(&t!("bug, design"))));
+        alert.setAccessoryView(Some(&accessory));
+        alert.window().setInitialFirstResponder(Some(&tags));
+        let handler = block2::RcBlock::new(move |response: objc2_app_kit::NSModalResponse| {
+            if response != NSAlertFirstButtonReturn {
+                return;
+            }
+            let new_tags = super::store::parse_tags(&tags.stringValue().to_string());
+            if let Some(store) = super::open_store()
+                && let Err(e) =
+                    store.set_tags_and_note(entry.id, &new_tags, &note.stringValue().to_string())
+            {
+                tracing::warn!(error = %e, "could not save the tags");
+            }
+            if let Some(c) = controller() {
+                c.reload_keeping(index);
+            }
+        });
+        alert.beginSheetModalForWindow_completionHandler(window, Some(&handler));
+    }
+}
+
+/// Whether a command needs the capture's file to exist.
+fn needs_file(tag: isize) -> bool {
+    !matches!(tag, tag::DELETE | tag::COPY_LINK | tag::TAGS)
+        && !(tag::RATE..=tag::RATE + 5).contains(&tag)
+}
+
+/// The tags and note under a capture: `#bug #ui · Login fails`.
+fn details_line(entry: &Entry) -> String {
+    let tags = entry
+        .tags
+        .iter()
+        .map(|t| format!("#{t}"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let note = entry.note.lines().next().unwrap_or("").trim();
+    match (tags.is_empty(), note.is_empty()) {
+        (false, false) => format!("{tags} · {note}"),
+        (false, true) => tags,
+        (true, false) => note.to_string(),
+        (true, true) => String::new(),
+    }
+}
+
+/// `text`, cut with an ellipsis to fit `width` points.
+fn fit(text: &str, width: f64, size: f64) -> String {
+    if draw::text_size(text, size, Weight::Medium).width <= width {
+        return text.to_string();
+    }
+    let chars: Vec<char> = text.chars().collect();
+    let mut n = chars.len();
+    while n > 0 {
+        n -= 1;
+        let cut: String = chars[..n].iter().collect::<String>() + "…";
+        if draw::text_size(&cut, size, Weight::Medium).width <= width {
+            return cut;
+        }
+    }
+    String::new()
+}
+
+/// What VoiceOver says for a history item: kind, size or length, date,
+/// rating, tags and note.
 fn item_label(item: &Item) -> String {
     let e = &item.entry;
     let when = crate::i18n::date(e.created, false);
@@ -687,11 +954,20 @@ fn item_label(item: &Item) -> String {
         (Kind::Video, Some(length)) => t!("Recording, {length}", length),
         (Kind::Video, None) => t!("Recording"),
     };
-    if item.exists {
+    let mut label = if item.exists {
         t!("{what}, {when}", what, when)
     } else {
         t!("{what}, {when}, file missing", what, when)
+    };
+    if e.rating > 0 {
+        let rating = e.rating;
+        label.push_str(&format!(", {}", t!("{rating} stars", rating)));
     }
+    let details = details_line(e);
+    if !details.is_empty() {
+        label.push_str(&format!(", {details}"));
+    }
+    label
 }
 
 fn copy(entry: &Entry) {
@@ -804,6 +1080,12 @@ define_class!(
                 (false, RIGHT) if count > 0 => c.select(moved(1)),
                 (false, UP) if count > 0 => c.select(moved(-(columns as isize))),
                 (false, DOWN) if count > 0 => c.select(moved(columns as isize)),
+                (false, _)
+                    if let Some(i) = selected
+                        && let Some(stars) = digit(event) =>
+                {
+                    c.perform(tag::RATE + stars, i);
+                }
                 _ => {
                     // SAFETY: forwarding the event to the superclass.
                     unsafe {
@@ -834,6 +1116,16 @@ impl HistoryGrid {
     fn point(&self, event: &NSEvent) -> Point {
         let p = self.convertPoint_fromView(event.locationInWindow(), None);
         Point::new(p.x, p.y)
+    }
+}
+
+/// 0 to 5 typed on the keyboard, for rating.
+fn digit(event: &NSEvent) -> Option<isize> {
+    let typed = event.charactersIgnoringModifiers()?.to_string();
+    let mut chars = typed.chars();
+    match (chars.next()?.to_digit(10), chars.next()) {
+        (Some(d), None) if d <= 5 => Some(d as isize),
+        _ => None,
     }
 }
 
