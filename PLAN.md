@@ -32,16 +32,19 @@ preference keys).
 ## 2. Improvements over CleanShot X
 
 1. **CLI and scripting first:** a `cleanshotz` CLI (same binary) that talks to the
-   running app over a local socket: `cleanshotz capture area -o shot.png --copy`,
-   `cleanshotz record window --gif`. Exit codes and JSON output for pipelines.
+   running app over a local socket, with CleanShot X's command and parameter
+   names (`cleanshotz capture-area --x 0 --y 0 --width 800 --height 600`);
+   errors exit with status 1.
 2. **Pluggable upload backends:** S3/R2/MinIO, any HTTP endpoint (multipart or
-   PUT), Imgur, SFTP, or a user script. No mandatory vendor cloud.
+   PUT), Imgur, or a user script (which covers SFTP and anything else). No
+   mandatory vendor cloud.
 3. **Automatic redaction:** OCR + regex/entropy detection to suggest blurs for
    emails, API keys, tokens, credit cards and IPs before sharing.
 4. **Searchable history:** OCR text of every capture indexed in SQLite FTS5, so
    history can be searched by on-screen text.
-5. **Open, documented project format:** `.cszdoc` as a zip of JSON (annotation
-   layers) + original PNG, so edits stay non-destructive and diffable.
+5. **Open, documented project format:** `.cszdoc` is one JSON file holding the
+   annotations and the original PNG (base64), so edits stay non-destructive
+   and readable by other tools.
 6. **Config as a file:** settings in `~/Library/Application Support/CleanShotZ/config.toml`
    (also editable in the GUI) for dotfile sync.
 7. **Shortcuts / App Intents and AppleScript** support in addition to the URL scheme.
@@ -50,8 +53,8 @@ preference keys).
 9. **Lower footprint:** no Electron/web views, minimal idle CPU and memory.
 10. **Free, open source and private:** no account, no license key, no telemetry
     or crash reporting that phones home (CleanShot ships Sentry and analytics).
-    Network access happens only for uploads the user configures and for the
-    update check, which can be turned off.
+    Network access happens only for uploads the user configures; there is no
+    update check.
 
 ## 3. Technical architecture
 
@@ -89,33 +92,42 @@ preference keys).
 - **Logging/errors:** `tracing`, `thiserror`, `anyhow` at the edges.
 - **Bundling:** a small `xtask` (`cargo xtask bundle`) produces `CleanShotZ.app`,
   then `codesign` with a stable identity so the Screen Recording (TCC)
-  permission survives rebuilds. Notarize for release.
+  permission survives rebuilds. Releases are signed with a self-signed
+  certificate and not notarized yet (see Distribution).
 
 ### Module layout
 
 ```
 src/
   main.rs              entry: GUI app or CLI depending on args
-  app/                 NSApplication delegate, status item menu, lifecycle
-  platform/            thin safe wrappers: permissions (TCC), displays, windows list,
-                       hotkeys, event tap, desktop icon hiding, DND
-  capture/             ScreenCaptureKit stills: area, window, fullscreen, freeze
-    selection/         overlay panel, crosshair, magnifier, window snapping
-    scrolling/         frame stitching (feature matching on row hashes)
-  record/              SCStream -> AVAssetWriter, audio mixing, webcam, clicks/keys
-  ocr/                 Vision VNRecognizeTextRequest, redaction detectors
-  overlay/             Quick Access Overlay and pinned screenshots
-  editor/              annotation document model, tools, renderer, undo/redo
-    tools/             arrow, shape, text, pixelate, blur, counter, spotlight, ...
-    background/        padding, gradients, presets
-  video_editor/        trim, export presets, GIF conversion
-  history/             SQLite store, FTS index, thumbnails
-  upload/              trait UploadBackend + s3, http, imgur, sftp, script
-  actions/             post-capture action pipeline
-  automation/          URL scheme router, socket server, App Intents bridge
-  cli/                 clap-based CLI client
-  settings/            config.toml model + settings window
-  export/              PNG/JPG/WebP/GIF/MP4 writers, file naming templates
+  cli.rs, command.rs   CLI client; commands shared by the CLI, URLs and scripts
+  action.rs            menu and hotkey actions
+  app/                 NSApplication delegate, status item menu, socket server,
+                       AppleScript, App Intents bridge, alerts
+  platform/            permissions (TCC), hotkeys, login item
+  capture/             ScreenCaptureKit stills: area, window, fullscreen; the
+                       selection overlay, magnifier, color picking, UI
+                       elements (accessibility), file naming, output
+  scroll/              scrolling capture and stitching
+  steps/               step capture and guide export
+  record/              SCStream -> AVAssetWriter, devices, camera bubble,
+                       keystrokes, the panel before recording
+  studio/              Studio recordings: events, zooms, compositor, editor
+  video_editor/        trim, crop, speed, export, GIF conversion
+  editor/              annotation document model, tools, renderer, projects
+  ocr/                 Vision text recognition, sensitive-info detection
+  quick_access.rs      Quick Access Overlay
+  pin.rs               pinned screenshots
+  history/             SQLite store (FTS5), the History window
+  upload/              HTTP, S3 (SigV4), Imgur, script; Keychain secrets
+  pipeline.rs          post-capture pipelines
+  settings/            settings window and shortcut recorder
+  config.rs, state.rs  config.toml model; remembered state
+  ui/                  shared drawing, panels, toasts, printing, VoiceOver
+  i18n.rs              Localizable.strings lookup
+swift/                 App Intents (Shortcuts) shim
+xtask/                 bundle, sign, dist, certificates, strings
+raycast/               Raycast extension
 ```
 
 Core logic (editor model, stitching, file naming, action pipeline, redaction
@@ -202,7 +214,7 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
 - Webcam overlay (draggable bubble), click visualization, keystroke HUD,
   cursor highlight, countdown, pause/resume, DND toggle.
 - GIF output via ImageIO with a permissive quantizer (see Encoding above).
-- Status: core done. Area, window and whole-display recording to MP4
+- Status: done. Area, window and whole-display recording to MP4
   (H.264, HEVC above 4096 x 2304) or GIF; fps, quality and Retina
   settings; cursor and click highlights (macOS 15); system audio and
   microphone (macOS 15) as separate AAC tracks; countdown, pause/resume
@@ -565,13 +577,14 @@ Group 4 of the October 2026 comparison.
   Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor and
   burned in or exported as SRT.
 
-### Distribution (before the first public release, targeted after M3)
+### Distribution
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
   xtask dist` (zip, DMG, checksums), `cargo xtask create-release-cert`, the
   app icon (`resources/icon/make-icon.swift`), the release certificate and
   its secrets, README screenshots and repository hygiene are done; v0.1.0
-  was published as a pre-release. Automatic updates are deferred (see
-  Updates).
+  to v0.5.0 were published as pre-releases. Open: automatic updates
+  (Sparkle), notarization with a Developer ID, Homebrew, and publishing the
+  Raycast extension.
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
@@ -632,8 +645,16 @@ Group 4 of the October 2026 comparison.
   users and draws "is this malware?" questions. Mitigations: reproducible CI
   builds from tagged source, published checksums, clear instructions.
 
-## 6. Immediate next steps
+## 6. Next steps
 
-1. Add `cargo deny` license checks to CI (done alongside this plan update).
-2. Implement fullscreen capture to clipboard as the first end-to-end slice (M2).
-3. Area selection overlay and window capture (M2).
+1. **Captions** (see Future work); needs macOS 26 for SpeechAnalyzer.
+2. **Automatic updates with Sparkle** (see Distribution); can be done
+   without any account.
+3. **Needs the maintainer's accounts:** a Developer ID for notarization
+   (then Homebrew), and a Raycast username to publish the extension to the
+   Raycast Store.
+4. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
+   preview; translating the History window's context menu titles.
+5. **Not yet tested on real hardware:** Studio and the panel before
+   recording with a real camera and microphone, the 1440p Studio preview on
+   an M1, notch cropping on a notched display, and printing to a printer.
