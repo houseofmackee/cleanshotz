@@ -6,6 +6,11 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Homebrew: `brew install --cask houseofmackee/tap/cleanshotz` installs
+  the app and the `cleanshotz` command; releases update the cask.
+
 ## [0.6.0] - 2026-10-12
 
 ### Changed

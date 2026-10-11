@@ -30,15 +30,24 @@ CleanShotZ is in early development; see [CHANGELOG.md](CHANGELOG.md).
 
 ## Install
 
-Requires macOS 14 or later on an Apple Silicon Mac. Download
-`CleanShotZ-<version>.dmg` (or the zip) from
+Requires macOS 14 or later on an Apple Silicon Mac. With
+[Homebrew](https://brew.sh):
+
+```sh
+brew install --cask houseofmackee/tap/cleanshotz
+```
+
+This also puts the `cleanshotz` command line tool on your `PATH`; update with
+`brew upgrade --cask cleanshotz`. Or download `CleanShotZ-<version>.dmg` (or
+the zip) from
 [GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), open
 it and drag CleanShotZ into Applications. `SHA256SUMS.txt` has the checksums.
 
 CleanShotZ is signed with a Developer ID and notarized by Apple (since
 0.6.0), so it opens like any other downloaded app.
 
-To update, download the new release and replace the app (quit it first).
+To update without Homebrew, download the new release and replace the app
+(quit it first).
 Every release is signed by the same developer, so macOS keeps the Screen
 Recording and other permissions you gave it.
 
@@ -119,7 +128,11 @@ a GitHub release; the tag must match the version in `Cargo.toml`:
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-A hyphenated tag (`v0.2.0-beta.1`) makes a pre-release.
+A hyphenated tag (`v0.2.0-beta.1`) makes a pre-release. The workflow then
+updates the cask in
+[houseofmackee/homebrew-tap](https://github.com/houseofmackee/homebrew-tap)
+to the new version, with the `TAP_DEPLOY_KEY` secret (a deploy key with
+write access to that repository).
 
 ### Files
 
