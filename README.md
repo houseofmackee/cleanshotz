@@ -148,6 +148,7 @@ modifiers (`cmd`, `shift`, `alt`/`opt`, `ctrl`) and one key, joined with
 | Capture Text | `alt+shift+o` |
 | Pick Color | none |
 | Record Screen | `alt+shift+5` |
+| Record Screen (Studio) | none |
 | Capture History | none |
 
 ## Capturing
@@ -287,6 +288,7 @@ Options live in the `[recording]` section of the settings file:
 | `camera_size` | `180` | Bubble size in points |
 | `camera_shape` | `"circle"` | `"circle"` or `"rounded"` |
 | `keystrokes` | `"off"` | Show pressed keys: `"off"`, `"shortcuts"` or `"all"` |
+| `studio` | `false` | Record in Studio mode (see below) |
 
 The camera needs camera access and the keystroke display needs Input
 Monitoring; macOS asks the first time. `"shortcuts"` only shows presses with
@@ -306,6 +308,37 @@ cursor overlay, since ScreenCaptureKit can do neither there.
 While the microphone records, a level meter sits next to the timer in the
 recording bar. If the microphone picks up nothing at all in the first few
 seconds (muted, or the wrong input chosen), a message says so.
+
+### Studio recordings
+
+Record Screen (Studio), or Record Screen with Studio mode on in Settings >
+Recording, records the screen without the pointer and keeps the pointer's
+movements, clicks, pressed keys and the camera apart. The recording opens
+in the Studio editor, where all of them can be changed afterwards:
+
+- **Background:** the image editor's fills, saved presets and the desktop
+  picture, with padding, rounded corners, a shadow and sizes for social
+  media.
+- **Cursor:** shown or hidden, 0.5 to 3 times its size, smoothed (it still
+  lands exactly where you clicked), hidden when it rests, and a ripple or
+  ring on clicks.
+- **Zoom:** zooms are made automatically where you click and type, and
+  follow the pointer (looking a little ahead, so they arrive in time).
+  The track under the video shows them: drag one to move it or its edges
+  to resize it, double-click to add one, Delete to remove it. Each has a
+  level (1.25 to 4 times) and follows the pointer or stays put. Motion blur
+  is optional.
+- **Camera** (when it was on): its corner, size and shape, or hidden.
+- **Keys** (when shown while recording): at the bottom or top, any size,
+  or hidden.
+
+Export MP4 renders the result at 1080p, 1440p, 4K or the original size,
+at 60 frames per second and faster than real time, and shows it in Quick
+Access. A Studio recording is a `.cszrec` file (a folder that macOS shows
+as one file) holding the screen video, the camera, the events and your
+edits; it is listed in Capture History and opens from there or from
+Finder. AppleScript (`record screen with studio`), Shortcuts (Record
+Screen's Studio option) and the URL scheme (`studio=true`) can start one.
 
 ### Video editor
 
@@ -545,7 +578,7 @@ into your `PATH` to use it.
 | `all-in-one` | `x`, `y`, `width`, `height`, `display` (same as `capture-area`) |
 | `capture-text` | `filepath`, `x`, `y`, `width`, `height`, `display`, `linebreaks` |
 | `pick-color` | none |
-| `record-screen` | `x`, `y`, `width`, `height`, `display` |
+| `record-screen` | `x`, `y`, `width`, `height`, `display`, `studio` |
 | `pin` | `filepath` (asks for a file without it) |
 | `open-annotate` | `filepath` (asks for a file without it) |
 | `open-from-clipboard` | none |

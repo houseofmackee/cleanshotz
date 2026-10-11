@@ -186,6 +186,10 @@
 				<type type="integer"/>
 				<cocoa key="display"/>
 			</parameter>
+			<parameter name="studio" code="Stdo" optional="yes" description="Record in Studio mode (the cursor, clicks, keys and camera kept apart, to style afterwards). Default: the setting.">
+				<type type="boolean"/>
+				<cocoa key="studio"/>
+			</parameter>
 		</command>
 		<command name="pin" code="CszZPinn" description="Pin an image file to the screen (asks for one without a file).">
 			<cocoa class="CSZScriptCommand"/>

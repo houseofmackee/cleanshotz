@@ -414,7 +414,7 @@ is independent; the order is a suggestion (quick ones first).
   opaque window body is shown on a background). The editor's style menu,
   ••• menu and background labels are now translated too.
 
-### M13: Studio recordings
+### M13: Studio recordings (done)
 Group 3 of the October 2026 comparison (CleanShot X 5.0's Studio Mode,
 Screen Studio, Cap): record the screen once, then decide afterwards how it
 looks: zooms that follow the action, a smooth cursor of any size, a
@@ -496,6 +496,23 @@ video, and a renderer draws them at export (and in the preview).
   recording; (e) polish: performance (60 fps preview of a 1440p canvas on
   an M1; export faster than real time), VoiceOver for the timeline,
   translations, README.
+- Status: done. Notes:
+  - The cursor spring is reset at each click (and blended in over 0.15 s
+    before it), so it lands exactly on clicks without overshooting or
+    drifting away after them; a press and its release count once.
+  - The view looks 0.4 s ahead of the cursor, since the whole recording
+    is known when rendering, so zooms arrive as clicks happen.
+  - The canvas comes from the image editor's renderer (background, its
+    shadow and a dark spot for the video), drawn once per edit; frames
+    only composite the video, cursor, clicks, keys and camera with Core
+    Image, about 200 frames a second at 1424 × 1080 including encoding.
+  - Export reuses the video editor's reader-to-writer encoding (shared
+    `video_editor::export::encode`), which also mixes the audio tracks.
+  - A fixed zoom focus is taken from where the view is in the middle of
+    the zoom; picking it by clicking the preview is left for later.
+  - Not measured yet: a 1440p preview on an M1, and a camera recorded on
+    real hardware with the Studio offset (tested with a generated camera
+    file).
 - **Risks:** a custom video compositor written through objc2 (it is called
   on AVFoundation's own queues, so all state it reads must be immutable
   per render request or behind a lock); reading the system cursor image

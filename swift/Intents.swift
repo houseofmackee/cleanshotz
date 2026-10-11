@@ -155,9 +155,15 @@ struct RecordScreenIntent: AppIntent {
         "Start a screen recording, or stop the one in progress."
     }
 
+    @Parameter(
+        title: "Studio",
+        description: "Keep the cursor, clicks, keys and camera apart, to style them afterwards."
+    )
+    var studio: Bool?
+
     @MainActor
     func perform() async throws -> some IntentResult {
-        try run("record-screen")
+        try run("record-screen", [("studio", studio.map { $0 ? "true" : "false" })])
         return .result()
     }
 }

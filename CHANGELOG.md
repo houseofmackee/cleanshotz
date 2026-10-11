@@ -6,6 +6,17 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Studio recordings: Record Screen (Studio) keeps the cursor, clicks,
+  keys and camera apart from the screen video, and the Studio editor
+  styles them afterwards: backgrounds, a smoothed cursor of any size,
+  click effects, automatic and manual zooms that follow the cursor,
+  motion blur, the camera's corner, size and shape, and the keys' place
+  and size. Exports are 60 fps MP4s at 1080p, 1440p, 4K or the original
+  size.
+- `.cszrec` Studio recordings and `.cszdoc` projects open from Finder.
+
 ## [0.3.0] - 2026-10-11
 
 ### Added
