@@ -56,6 +56,9 @@ pub enum Shape {
         start: Point,
         end: Point,
         style: ArrowStyle,
+        /// The control point of a curved arrow (a quadratic curve).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        bend: Option<Point>,
     },
     Line {
         start: Point,
@@ -101,7 +104,34 @@ pub enum Shape {
     Image {
         rect: Rect,
         picture: Picture,
+        /// 0 to 1, for lining up captures (overlay compare).
+        #[serde(default = "opaque", skip_serializing_if = "is_opaque")]
+        opacity: f64,
     },
+    /// A zoomed copy of the circle in `source` shown in the circle in
+    /// `callout` (both squares), joined by two lines.
+    Magnify {
+        source: Rect,
+        callout: Rect,
+    },
+    /// A dimension line labeled with its length in image pixels.
+    Measure {
+        start: Point,
+        end: Point,
+    },
+    /// Translucent markers over parts of lines of text (the highlighter's
+    /// text mode).
+    TextHighlight {
+        rects: Vec<Rect>,
+    },
+}
+
+fn opaque() -> f64 {
+    1.0
+}
+
+fn is_opaque(opacity: &f64) -> bool {
+    *opacity >= 1.0
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -111,6 +141,9 @@ pub struct Annotation {
     pub color: Color,
     /// Stroke width in points.
     pub width: f64,
+    /// Drawn as if by hand (rectangles, ellipses, lines and arrows).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sketchy: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -136,19 +169,56 @@ pub enum Aspect {
     /// Padding only.
     Auto,
     Square,
+    /// 4:5
+    Portrait,
+    /// 9:16
+    Story,
     /// 16:9
     Wide,
     /// 4:3
     Standard,
+    /// 3:2
+    Photo,
+    /// 1.91:1, the size of link previews.
+    Link,
 }
 
 impl Aspect {
-    fn ratio(self) -> Option<f64> {
+    /// In menu order.
+    pub const ALL: [Aspect; 8] = [
+        Aspect::Auto,
+        Aspect::Square,
+        Aspect::Portrait,
+        Aspect::Story,
+        Aspect::Wide,
+        Aspect::Standard,
+        Aspect::Photo,
+        Aspect::Link,
+    ];
+
+    pub fn ratio(self) -> Option<f64> {
         match self {
             Aspect::Auto => None,
             Aspect::Square => Some(1.0),
+            Aspect::Portrait => Some(4.0 / 5.0),
+            Aspect::Story => Some(9.0 / 16.0),
             Aspect::Wide => Some(16.0 / 9.0),
             Aspect::Standard => Some(4.0 / 3.0),
+            Aspect::Photo => Some(3.0 / 2.0),
+            Aspect::Link => Some(1.91),
+        }
+    }
+
+    pub fn title(self) -> &'static str {
+        match self {
+            Aspect::Auto => "Auto",
+            Aspect::Square => "1:1 Square (Instagram)",
+            Aspect::Portrait => "4:5 Portrait (Instagram)",
+            Aspect::Story => "9:16 Story (Instagram, TikTok)",
+            Aspect::Wide => "16:9 Wide (YouTube)",
+            Aspect::Standard => "4:3 Standard",
+            Aspect::Photo => "3:2 Photo",
+            Aspect::Link => "1.91:1 Link Preview (X, LinkedIn)",
         }
     }
 }
@@ -161,6 +231,10 @@ pub struct Background {
     pub corner_radius: f64,
     pub shadow: bool,
     pub aspect: Aspect,
+    /// Trim margins of one plain color from the capture, so it sits in the
+    /// middle of the background (auto-balance).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub balance: bool,
 }
 
 impl Default for Background {
@@ -174,6 +248,7 @@ impl Default for Background {
             corner_radius: 12.0,
             shadow: true,
             aspect: Aspect::Auto,
+            balance: false,
         }
     }
 }
@@ -362,20 +437,29 @@ impl Document {
     /// Everything there is to show, in image points: the captured image
     /// plus any image layers placed beyond it.
     pub fn extent(&self, image_width: f64, image_height: f64) -> Rect {
+        self.extent_in(Rect::new(0.0, 0.0, image_width, image_height))
+    }
+
+    /// Like [`Document::extent`], with `image` the part of the captured
+    /// image that counts (trimmed margins left out).
+    pub fn extent_in(&self, image: Rect) -> Rect {
         self.annotations
             .iter()
             .filter_map(|a| match &a.shape {
                 Shape::Image { rect, .. } => Some(*rect),
                 _ => None,
             })
-            .fold(
-                Rect::new(0.0, 0.0, image_width, image_height),
-                |extent, rect| extent.union(&rect),
-            )
+            .fold(image, |extent, rect| extent.union(&rect))
     }
 
     pub fn layout(&self, image_width: f64, image_height: f64) -> CanvasLayout {
-        let full = self.extent(image_width, image_height);
+        self.layout_in(Rect::new(0.0, 0.0, image_width, image_height))
+    }
+
+    /// Like [`Document::layout`], showing only `image` of the captured
+    /// image (margins or a window shadow trimmed).
+    pub fn layout_in(&self, image: Rect) -> CanvasLayout {
+        let full = self.extent_in(image);
         let source = self
             .crop
             .map(|c| c.intersection(&full))
@@ -421,6 +505,7 @@ impl Document {
             shape,
             color,
             width,
+            sketchy: false,
         });
         id
     }
@@ -458,9 +543,25 @@ impl Document {
         };
         for a in &mut self.annotations {
             match &mut a.shape {
-                Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
+                Shape::Arrow {
+                    start, end, bend, ..
+                } => {
                     *start = point(*start);
                     *end = point(*end);
+                    *bend = bend.map(point);
+                }
+                Shape::Line { start, end } | Shape::Measure { start, end } => {
+                    *start = point(*start);
+                    *end = point(*end);
+                }
+                Shape::Magnify { source, callout } => {
+                    *source = rect(*source);
+                    *callout = rect(*callout);
+                }
+                Shape::TextHighlight { rects } => {
+                    for r in rects.iter_mut() {
+                        *r = rect(*r);
+                    }
                 }
                 Shape::Rectangle { rect: r, .. }
                 | Shape::Ellipse { rect: r, .. }
@@ -479,7 +580,9 @@ impl Document {
                     *bounds = moved;
                 }
                 Shape::Counter { center, .. } => *center = point(*center),
-                Shape::Image { rect: r, picture } => {
+                Shape::Image {
+                    rect: r, picture, ..
+                } => {
                     let (width, height) = if turn.is_quarter() {
                         (r.height, r.width)
                     } else {
@@ -513,6 +616,8 @@ impl Document {
 pub enum Handle {
     Start,
     End,
+    /// The middle of an arrow, dragged to bend it.
+    Middle,
     TopLeft,
     TopRight,
     BottomLeft,
@@ -532,6 +637,19 @@ impl Annotation {
     pub fn bounds(&self) -> Rect {
         let pad = self.width / 2.0;
         match &self.shape {
+            Shape::Arrow {
+                start,
+                end,
+                bend: Some(bend),
+                ..
+            } => expand(points_bounds(&curve_points(*start, *bend, *end)), pad),
+            Shape::Magnify { source, callout } => source.union(callout),
+            Shape::Measure { start, end } => expand(Rect::from_corners(*start, *end), MEASURE_TICK),
+            Shape::TextHighlight { rects } => rects
+                .iter()
+                .copied()
+                .reduce(|a, b| a.union(&b))
+                .unwrap_or_default(),
             Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
                 let r = Rect::from_corners(*start, *end);
                 Rect::new(
@@ -559,8 +677,22 @@ impl Annotation {
     pub fn hit(&self, p: Point, tolerance: f64) -> bool {
         let near = tolerance + self.width / 2.0;
         match &self.shape {
+            Shape::Arrow {
+                start,
+                end,
+                bend: Some(bend),
+                ..
+            } => polyline_distance(p, &curve_points(*start, *bend, *end)) <= near,
             Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
                 segment_distance(p, *start, *end) <= near
+            }
+            Shape::Measure { start, end } => segment_distance(p, *start, *end) <= near + 2.0,
+            Shape::Magnify { source, callout } => [source, callout].iter().any(|r| {
+                let c = Point::new(r.x + r.width / 2.0, r.y + r.height / 2.0);
+                (p.x - c.x).hypot(p.y - c.y) <= r.width / 2.0 + tolerance
+            }),
+            Shape::TextHighlight { rects } => {
+                rects.iter().any(|r| expand(*r, tolerance).contains(p))
             }
             Shape::Rectangle { rect, filled } => {
                 if *filled {
@@ -605,9 +737,25 @@ impl Annotation {
             p.y += dy;
         };
         match &mut self.shape {
-            Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
+            Shape::Arrow {
+                start, end, bend, ..
+            } => {
                 mv(start);
                 mv(end);
+                if let Some(bend) = bend {
+                    mv(bend);
+                }
+            }
+            Shape::Line { start, end } | Shape::Measure { start, end } => {
+                mv(start);
+                mv(end);
+            }
+            // The magnified spot stays put; its handle moves it.
+            Shape::Magnify { callout, .. } => *callout = callout.offset(dx, dy),
+            Shape::TextHighlight { rects } => {
+                for r in rects.iter_mut() {
+                    *r = r.offset(dx, dy);
+                }
             }
             Shape::Rectangle { rect, .. }
             | Shape::Ellipse { rect, .. }
@@ -628,8 +776,30 @@ impl Annotation {
     /// rectangular shapes, none for the rest.
     pub fn handles(&self) -> Vec<(Handle, Point)> {
         match &self.shape {
-            Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
+            Shape::Arrow {
+                start, end, bend, ..
+            } => vec![
+                (Handle::Start, *start),
+                (Handle::End, *end),
+                (Handle::Middle, curve_middle(*start, *bend, *end)),
+            ],
+            Shape::Line { start, end } | Shape::Measure { start, end } => {
                 vec![(Handle::Start, *start), (Handle::End, *end)]
+            }
+            Shape::Magnify { source, callout } => {
+                let r = *callout;
+                vec![
+                    (Handle::TopLeft, Point::new(r.x, r.y)),
+                    (Handle::TopRight, Point::new(r.max_x(), r.y)),
+                    (Handle::BottomLeft, Point::new(r.x, r.max_y())),
+                    (Handle::BottomRight, Point::new(r.max_x(), r.max_y())),
+                    // Move the spot by its center, size it by its edge.
+                    (Handle::Start, rect_center(*source)),
+                    (
+                        Handle::End,
+                        Point::new(source.max_x(), source.y + source.height / 2.0),
+                    ),
+                ]
             }
             Shape::Rectangle { rect, .. }
             | Shape::Ellipse { rect, .. }
@@ -648,14 +818,46 @@ impl Annotation {
 
     /// Moves `handle` to `p`.
     pub fn drag_handle(&mut self, handle: Handle, p: Point) {
-        if let Shape::Image { rect, picture } = &mut self.shape {
+        if let Shape::Image { rect, picture, .. } = &mut self.shape {
             let (w, h) = picture.size();
             *rect = resize_keeping_ratio(*rect, handle, p, w / h);
             return;
         }
+        if let Shape::Magnify { source, callout } = &mut self.shape {
+            match handle {
+                Handle::Start => {
+                    let c = rect_center(*source);
+                    *source = source.offset(p.x - c.x, p.y - c.y);
+                }
+                Handle::End => {
+                    let c = rect_center(*source);
+                    let r = (p.x - c.x).hypot(p.y - c.y).max(4.0);
+                    *source = Rect::new(c.x - r, c.y - r, 2.0 * r, 2.0 * r);
+                }
+                Handle::Middle => {}
+                corner => *callout = resize_keeping_ratio(*callout, corner, p, 1.0),
+            }
+            return;
+        }
         match (&mut self.shape, handle) {
-            (Shape::Arrow { start, .. } | Shape::Line { start, .. }, Handle::Start) => *start = p,
-            (Shape::Arrow { end, .. } | Shape::Line { end, .. }, Handle::End) => *end = p,
+            (
+                Shape::Arrow {
+                    start, end, bend, ..
+                },
+                Handle::Middle,
+            ) => {
+                *bend = bend_for_handle(*start, *end, p);
+            }
+            (
+                Shape::Arrow { start, .. }
+                | Shape::Line { start, .. }
+                | Shape::Measure { start, .. },
+                Handle::Start,
+            ) => *start = p,
+            (
+                Shape::Arrow { end, .. } | Shape::Line { end, .. } | Shape::Measure { end, .. },
+                Handle::End,
+            ) => *end = p,
             (
                 Shape::Rectangle { rect, .. }
                 | Shape::Ellipse { rect, .. }
@@ -705,6 +907,49 @@ fn resize_keeping_ratio(rect: Rect, corner: Handle, p: Point, ratio: f64) -> Rec
         fixed.y
     };
     Rect::new(x, y, width, height)
+}
+
+/// How far a measurement's end ticks reach from the line.
+pub const MEASURE_TICK: f64 = 7.0;
+
+pub fn rect_center(r: Rect) -> Point {
+    Point::new(r.x + r.width / 2.0, r.y + r.height / 2.0)
+}
+
+/// The point at `t` (0 to 1) on the quadratic curve from `a` to `b` bent
+/// toward `c`.
+pub fn curve_point(a: Point, c: Point, b: Point, t: f64) -> Point {
+    let u = 1.0 - t;
+    Point::new(
+        u * u * a.x + 2.0 * u * t * c.x + t * t * b.x,
+        u * u * a.y + 2.0 * u * t * c.y + t * t * b.y,
+    )
+}
+
+/// Points along the curve, for hit-testing and bounds.
+pub fn curve_points(a: Point, c: Point, b: Point) -> Vec<Point> {
+    (0..=32)
+        .map(|i| curve_point(a, c, b, f64::from(i) / 32.0))
+        .collect()
+}
+
+/// Where the bend handle of an arrow sits: the middle of its curve.
+pub fn curve_middle(a: Point, bend: Option<Point>, b: Point) -> Point {
+    match bend {
+        Some(c) => curve_point(a, c, b, 0.5),
+        None => Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0),
+    }
+}
+
+/// The control point that puts the middle of the curve at `p`; `None`
+/// (straight) when `p` is close to the straight line's middle.
+pub fn bend_for_handle(a: Point, b: Point, p: Point) -> Option<Point> {
+    let mid = Point::new((a.x + b.x) / 2.0, (a.y + b.y) / 2.0);
+    if (p.x - mid.x).hypot(p.y - mid.y) < 4.0 {
+        return None;
+    }
+    // B(0.5) = a/4 + c/2 + b/4.
+    Some(Point::new(2.0 * p.x - mid.x, 2.0 * p.y - mid.y))
 }
 
 fn expand(r: Rect, by: f64) -> Rect {
@@ -901,6 +1146,7 @@ mod tests {
                 start: Point::new(0.0, 0.0),
                 end: Point::new(10.0, 5.0),
                 style: ArrowStyle::Filled,
+                bend: None,
             },
             Color::RED,
             4.0,
@@ -949,6 +1195,7 @@ mod tests {
             start: Point::new(0.0, 0.0),
             end: Point::new(100.0, 0.0),
             style: ArrowStyle::Filled,
+            bend: None,
         });
         assert_eq!(doc.hit(Point::new(50.0, 3.0), 2.0), Some(id));
         assert_eq!(doc.hit(Point::new(50.0, 10.0), 2.0), None);

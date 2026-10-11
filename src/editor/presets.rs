@@ -88,6 +88,8 @@ pub struct Preset {
     pub corner_radius: f64,
     pub shadow: bool,
     pub aspect: Aspect,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub balance: bool,
 }
 
 impl Preset {
@@ -115,6 +117,7 @@ impl Preset {
             corner_radius: self.corner_radius,
             shadow: self.shadow,
             aspect: self.aspect,
+            balance: self.balance,
         })
     }
 
@@ -137,6 +140,7 @@ impl Preset {
             && self.corner_radius == background.corner_radius
             && self.shadow == background.shadow
             && self.aspect == background.aspect
+            && self.balance == background.balance
     }
 }
 
@@ -211,6 +215,7 @@ pub fn add(name: &str, background: &Background) -> Result<(), String> {
         corner_radius: background.corner_radius,
         shadow: background.shadow,
         aspect: background.aspect,
+        balance: background.balance,
     };
     let mut presets = saved();
     match presets.iter_mut().find(|p| p.name == preset.name) {
@@ -286,6 +291,7 @@ mod tests {
             corner_radius: 8.0,
             shadow: true,
             aspect: Aspect::Auto,
+            balance: false,
         };
         let mut background = Background {
             fill: Fill::Solid {
@@ -295,6 +301,7 @@ mod tests {
             corner_radius: 8.0,
             shadow: true,
             aspect: Aspect::Auto,
+            balance: false,
         };
         assert!(preset.matches(&background));
         background.padding = 41.0;
@@ -315,6 +322,7 @@ mod tests {
             corner_radius: 12.0,
             shadow: false,
             aspect: Aspect::Wide,
+            balance: false,
         }];
         let json = serde_json::to_string(&presets).unwrap();
         assert_eq!(serde_json::from_str::<Vec<Preset>>(&json).unwrap(), presets);

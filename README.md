@@ -437,23 +437,60 @@ Image.
 | --- | --- | --- |
 | Select | V | Click to select, drag to move, drag handles to resize, Delete to remove |
 | Crop | C | Drag a region; Return applies, Escape resets |
-| Arrow | A | Filled, open, double-headed or tapered (a solid shape that widens into a swept-back head) |
+| Arrow | A | Tapered (a solid shape that widens into a swept-back head; the default), filled, open or double-headed; drag the middle handle to curve it |
 | Line | L | |
 | Rectangle, Ellipse | R, O | Outline or filled |
-| Pen, Highlighter | P, H | Freehand |
+| Pen, Highlighter | P, H | Freehand; the highlighter can snap to lines of text |
 | Text | T | Click to type, Return to finish; plain or on a colored background |
 | Counter | N | Numbered steps, counting up |
 | Pixelate, Blur | X, B | Hide sensitive content |
 | Spotlight | S | Dim everything else |
-| Background | G | Gradient, solid or image backdrop with padding, rounded corners, shadow and aspect ratio |
+| Magnify | M | Drag out a spot to show it zoomed in a circle beside it |
+| Measure | U | Drag to measure in pixels, or click to measure the run of one color |
+| Background | G | Gradient, solid or image backdrop with padding, rounded corners, shadow, aspect ratio and Balance |
 
 Hold Shift for squares, circles and 45-degree lines. Color, width and style
 changes apply to the selected annotation too. Cmd+Z and Shift+Cmd+Z undo and
 redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
 for opened images, saves a new capture). The ••• menu has Save As…, Save
 Project…, Pin to Screen, Copy Text, Redact Sensitive Info, Add Image to the
-Right… / Below…, Rotate Right / Left, Flip Horizontally / Vertically and
-Resize….
+Right… / Below…, Rotate Right / Left, Flip Horizontally / Vertically,
+Resize… and Export Before/After GIF….
+
+**Hand-drawn:** with arrows (other than tapered), lines and outlined
+rectangles and ellipses, the Hand-drawn checkbox draws them as if sketched
+by hand; they look the same every time they are drawn.
+
+**Curved arrows:** a selected arrow has a handle in its middle; drag it to
+bend the arrow. Drag it back to the middle to straighten it.
+
+**Magnify** (M): drag from the middle of the detail outward. The zoomed
+circle appears beside it (twice the size; resize it by its corners to zoom
+more or less), joined by two lines. Drag the zoomed circle to move it; the
+handle in the middle of the spot moves the spot, the one on its edge
+resizes it. Only the capture itself is magnified, not annotations.
+
+**Measure** (U): drag to measure; Shift keeps the line straight across or
+up and down. The label shows the length in image pixels (width × height
+for a slanted line). A click measures the run of one color through that
+point across (Shift-click: up and down), which measures a button, a bar or
+a gap in one click.
+
+**Snap to Text:** choose it in the Highlighter's menu, and a stroke over
+text becomes a marker over the words it crosses, at the height of the line.
+The text is recognized on your Mac the first time.
+
+**Overlay compare:** select a pasted or added image and set its opacity in
+the menu next to the width slider to line two captures up. Export
+Before/After GIF… saves a two-frame GIF: without and with the top image.
+
+**Backgrounds:** the aspect menu has sizes for social media (1:1, 4:5,
+9:16, 16:9, 4:3, 3:2, and 1.91:1 for link previews). Balance trims margins
+of one plain color, so the content sits in the middle. Window captures
+(with their transparent shadow) lose their own shadow on a background, and
+the background's shadow takes its place; a window capture's Quick Access
+thumbnail has an Add Background button that opens it in the editor with the
+last background you chose.
 
 **Rotate and flip** (Cmd+R and Shift+Cmd+R rotate) turn the image with
 everything on it; text stays upright. **Resize…** sets the size of the

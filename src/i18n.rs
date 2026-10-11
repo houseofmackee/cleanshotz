@@ -88,6 +88,12 @@ pub fn bytes(bytes: u64) -> String {
     .to_string()
 }
 
+/// Translates a list of titles (menu items, pop-up choices). `cargo xtask
+/// strings` collects the literals passed to it.
+pub fn labels(items: &[&str]) -> Vec<String> {
+    items.iter().map(|item| tr(item)).collect()
+}
+
 /// Marks a user-facing string literal for translation and translates it.
 /// Named placeholders take values after the template: `t!("{n} items", n)`
 /// uses the variable `n`, `t!("{n} items", n = list.len())` an expression.

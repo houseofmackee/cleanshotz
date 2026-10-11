@@ -1,7 +1,7 @@
 //! The editor window: a toolbar of tools and actions, a contextual options
 //! bar, and the canvas.
 
-use std::cell::{OnceCell, RefCell};
+use std::cell::{Cell, OnceCell, RefCell};
 use std::path::PathBuf;
 
 use objc2::rc::Retained;
@@ -21,7 +21,7 @@ use objc2_foundation::{
 };
 
 use super::model::{
-    Annotation, ArrowStyle, Aspect, Background, Color, Fill, Shape, TextStyle, Turn,
+    Annotation, ArrowStyle, Aspect, Background, Color, Fill, Orientation, Shape, TextStyle, Turn,
 };
 use super::picture::{Origin, Picture};
 use super::presets::{self, Preset};
@@ -38,13 +38,6 @@ const TOOLBAR_HEIGHT: f64 = 48.0;
 const OPTIONS_HEIGHT: f64 = 40.0;
 const CANVAS_MARGIN: f64 = 24.0;
 
-const ASPECTS: &[(&str, Aspect)] = &[
-    ("Auto", Aspect::Auto),
-    ("1:1", Aspect::Square),
-    ("16:9", Aspect::Wide),
-    ("4:3", Aspect::Standard),
-];
-
 const MORE_SAVE_AS: isize = 1;
 const MORE_SAVE_PROJECT: isize = 2;
 const MORE_PIN: isize = 3;
@@ -57,6 +50,9 @@ const MORE_ROTATE_LEFT: isize = 9;
 const MORE_FLIP_HORIZONTAL: isize = 10;
 const MORE_FLIP_VERTICAL: isize = 11;
 const MORE_RESIZE: isize = 12;
+const MORE_BEFORE_AFTER: isize = 13;
+/// Image layer opacities offered in the style menu.
+const OPACITIES: [f64; 4] = [1.0, 0.75, 0.5, 0.25];
 
 // Tags of the background menu's items.
 const BG_NONE: isize = 1;
@@ -79,11 +75,13 @@ struct Ui {
     color: Retained<NSColorWell>,
     width: Retained<NSSlider>,
     style: Retained<NSPopUpButton>,
+    sketchy: Retained<NSButton>,
     background: Retained<NSPopUpButton>,
     padding: Retained<NSSlider>,
     radius: Retained<NSSlider>,
     shadow: Retained<NSButton>,
     aspect: Retained<NSPopUpButton>,
+    balance: Retained<NSButton>,
     undo: Retained<NSButton>,
     redo: Retained<NSButton>,
     drawing_group: Vec<Retained<NSView>>,
@@ -107,6 +105,9 @@ pub struct EditorIvars {
     text: RefCell<Option<TextEdit>>,
     /// Saved background presets, read when the window opens.
     presets: RefCell<Vec<Preset>>,
+    /// Text recognition for the text highlighter has started for this
+    /// orientation of the image.
+    text_lines_for: Cell<Option<Orientation>>,
 }
 
 define_class!(
@@ -184,9 +185,18 @@ define_class!(
         #[unsafe(method(styleChanged:))]
         fn style_changed(&self, sender: &NSPopUpButton) {
             let index = sender.indexOfSelectedItem();
+            let mut wants_text = false;
             {
                 let mut session = self.ivars().session.borrow_mut();
                 match session.tool {
+                    _ if session.selected_opacity().is_some() => {
+                        let opacity = OPACITIES.get(index.max(0) as usize).copied().unwrap_or(1.0);
+                        session.set_opacity(opacity);
+                    }
+                    Tool::Highlighter => {
+                        session.highlight_text = index == 1;
+                        wants_text = session.highlight_text;
+                    }
                     Tool::Arrow => session.set_arrow_style(match index {
                         1 => ArrowStyle::Open,
                         2 => ArrowStyle::Double,
@@ -208,6 +218,18 @@ define_class!(
                     _ => {}
                 }
             }
+            if wants_text {
+                self.recognize_text_lines();
+            }
+            self.refresh();
+        }
+
+        #[unsafe(method(sketchyChanged:))]
+        fn sketchy_changed(&self, sender: &NSButton) {
+            self.ivars()
+                .session
+                .borrow_mut()
+                .set_sketchy(sender.state() == NSControlStateValueOn);
             self.refresh();
         }
 
@@ -251,6 +273,7 @@ define_class!(
                 MORE_FLIP_HORIZONTAL => self.turn(Turn::FlipHorizontal),
                 MORE_FLIP_VERTICAL => self.turn(Turn::FlipVertical),
                 MORE_RESIZE => self.resize(),
+                MORE_BEFORE_AFTER => self.export_before_after(),
                 _ => {}
             }
         }
@@ -284,6 +307,7 @@ impl EditorController {
             ui: OnceCell::new(),
             text: RefCell::new(None),
             presets: RefCell::new(presets::saved()),
+            text_lines_for: Cell::new(None),
         });
         // SAFETY: NSObject's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -511,7 +535,7 @@ impl EditorController {
             NSRect::new(NSPoint::ZERO, NSSize::new(54.0, 28.0)),
             true,
         );
-        for title in [
+        for title in crate::i18n::labels(&[
             "•••",
             "Save As…",
             "Save Project…",
@@ -525,8 +549,9 @@ impl EditorController {
             "Flip Horizontally",
             "Flip Vertically",
             "Resize…",
-        ] {
-            more.addItemWithTitle(&NSString::from_str(title));
+            "Export Before/After GIF…",
+        ]) {
+            more.addItemWithTitle(&NSString::from_str(&title));
         }
         // SAFETY: the action exists on the controller.
         unsafe {
@@ -608,6 +633,20 @@ impl EditorController {
             NSRect::new(NSPoint::new(240.0, row2 - 1.0), NSSize::new(150.0, 26.0)),
             top,
         );
+        // SAFETY: the action exists on the controller.
+        let sketchy = unsafe {
+            NSButton::checkboxWithTitle_target_action(
+                &NSString::from_str(&t!("Hand-drawn")),
+                Some(target),
+                Some(sel!(sketchyChanged:)),
+                mtm,
+            )
+        };
+        add(
+            &sketchy,
+            NSRect::new(NSPoint::new(398.0, row2 + 2.0), NSSize::new(110.0, 20.0)),
+            top,
+        );
 
         // Background options.
         let popup = |items: &[&str], x: f64, w: f64| {
@@ -617,7 +656,7 @@ impl EditorController {
                 false,
             );
             for item in items {
-                p.addItemWithTitle(&NSString::from_str(item));
+                p.addItemWithTitle(&NSString::from_str(&crate::i18n::tr(item)));
             }
             // SAFETY: the action exists on the controller.
             unsafe {
@@ -662,14 +701,14 @@ impl EditorController {
             );
             s
         };
-        let padding_label = label("Padding", 172.0);
+        let padding_label = label(&t!("Padding"), 172.0);
         let padding = slider(64.0, 200.0, 228.0);
-        let radius_label = label("Corners", 350.0);
+        let radius_label = label(&t!("Corners"), 350.0);
         let radius = slider(12.0, 40.0, 410.0);
         // SAFETY: the action exists on the controller.
         let shadow = unsafe {
             NSButton::checkboxWithTitle_target_action(
-                ns_string!("Shadow"),
+                &NSString::from_str(&t!("Shadow")),
                 Some(target),
                 Some(sel!(backgroundChanged:)),
                 mtm,
@@ -681,14 +720,36 @@ impl EditorController {
             top,
         );
         let aspect = popup(
-            &ASPECTS.iter().map(|(n, _)| *n).collect::<Vec<_>>(),
+            &Aspect::ALL.iter().map(|a| a.title()).collect::<Vec<_>>(),
             614.0,
-            90.0,
+            150.0,
+        );
+        // SAFETY: the action exists on the controller.
+        let balance = unsafe {
+            NSButton::checkboxWithTitle_target_action(
+                &NSString::from_str(&t!("Balance")),
+                Some(target),
+                Some(sel!(backgroundChanged:)),
+                mtm,
+            )
+        };
+        balance.setToolTip(Some(&NSString::from_str(&t!(
+            "Trim plain margins so the capture sits in the middle"
+        ))));
+        add(
+            &balance,
+            NSRect::new(NSPoint::new(772.0, row2 + 2.0), NSSize::new(84.0, 20.0)),
+            top,
         );
 
         let as_view = |v: &NSView| v.retain();
         Ui {
-            drawing_group: vec![as_view(&color), as_view(&width_slider), as_view(&style)],
+            drawing_group: vec![
+                as_view(&color),
+                as_view(&width_slider),
+                as_view(&style),
+                as_view(&sketchy),
+            ],
             background_group: vec![
                 as_view(&background),
                 as_view(&padding_label),
@@ -697,16 +758,19 @@ impl EditorController {
                 as_view(&radius),
                 as_view(&shadow),
                 as_view(&aspect),
+                as_view(&balance),
             ],
             tools,
             color,
             width: width_slider,
             style,
+            sketchy,
             background,
             padding,
             radius,
             shadow,
             aspect,
+            balance,
             undo,
             redo,
         }
@@ -766,14 +830,33 @@ impl EditorController {
         }
 
         let tool = session.tool;
-        let (items, index): (&[&str], isize) = match tool {
+        let selected_opacity = session.selected_opacity();
+        let (items, index): (Vec<String>, isize) = match tool {
+            _ if selected_opacity.is_some() => {
+                let opacity = selected_opacity.unwrap_or(1.0);
+                (
+                    OPACITIES
+                        .iter()
+                        .map(|o| t!("Opacity {percent}%", percent = (o * 100.0).round()))
+                        .collect(),
+                    OPACITIES
+                        .iter()
+                        .enumerate()
+                        .min_by(|a, b| (a.1 - opacity).abs().total_cmp(&(b.1 - opacity).abs()))
+                        .map_or(0, |(i, _)| i as isize),
+                )
+            }
+            Tool::Highlighter => (
+                crate::i18n::labels(&["Freehand", "Snap to Text"]),
+                session.highlight_text as isize,
+            ),
             Tool::Arrow => (
-                &[
+                crate::i18n::labels(&[
                     "Filled Arrow",
                     "Open Arrow",
                     "Double Arrow",
                     "Tapered Arrow",
-                ],
+                ]),
                 match session.arrow_style {
                     ArrowStyle::Filled => 0,
                     ArrowStyle::Open => 1,
@@ -781,19 +864,48 @@ impl EditorController {
                     ArrowStyle::Tapered => 3,
                 },
             ),
-            Tool::Rectangle | Tool::Ellipse => (&["Outline", "Filled"], session.filled as isize),
+            Tool::Rectangle | Tool::Ellipse => (
+                crate::i18n::labels(&["Outline", "Filled"]),
+                session.filled as isize,
+            ),
             Tool::Text => (
-                &["Plain Text", "Text on Color"],
+                crate::i18n::labels(&["Plain Text", "Text on Color"]),
                 (session.text_style == TextStyle::Background) as isize,
             ),
-            _ => (&[], 0),
+            _ => (Vec::new(), 0),
         };
         ui.style.removeAllItems();
-        for item in items {
+        for item in &items {
             ui.style.addItemWithTitle(&NSString::from_str(item));
         }
         ui.style.selectItemAtIndex(index);
         ui.style.setHidden(items.is_empty() || background_tool);
+
+        // Hand-drawn: for the shapes that support it, unless tapered.
+        let sketchable = |shape: &Shape| match shape {
+            Shape::Arrow { style, .. } => *style != ArrowStyle::Tapered,
+            Shape::Line { .. } => true,
+            Shape::Rectangle { filled, .. } | Shape::Ellipse { filled, .. } => !*filled,
+            _ => false,
+        };
+        let (shows_sketchy, sketchy) = match selected {
+            Some(a) => (sketchable(&a.shape), a.sketchy),
+            None => (
+                match tool {
+                    Tool::Arrow => session.arrow_style != ArrowStyle::Tapered,
+                    Tool::Line => true,
+                    Tool::Rectangle | Tool::Ellipse => !session.filled,
+                    _ => false,
+                },
+                session.sketchy,
+            ),
+        };
+        ui.sketchy.setHidden(!shows_sketchy || background_tool);
+        ui.sketchy.setState(if sketchy {
+            NSControlStateValueOn
+        } else {
+            NSControlStateValueOff
+        });
 
         let defaults = session.doc.background.clone().unwrap_or_default();
         ui.padding.setDoubleValue(defaults.padding);
@@ -804,11 +916,16 @@ impl EditorController {
             NSControlStateValueOff
         });
         ui.aspect.selectItemAtIndex(
-            ASPECTS
+            Aspect::ALL
                 .iter()
-                .position(|(_, a)| *a == defaults.aspect)
+                .position(|a| *a == defaults.aspect)
                 .unwrap_or(0) as isize,
         );
+        ui.balance.setState(if defaults.balance {
+            NSControlStateValueOn
+        } else {
+            NSControlStateValueOff
+        });
         if background_tool {
             self.sync_background_menu(ui, session.doc.background.as_ref());
         }
@@ -893,9 +1010,11 @@ impl EditorController {
             padding: ui.padding.doubleValue().round(),
             corner_radius: ui.radius.doubleValue().round(),
             shadow: ui.shadow.state() == NSControlStateValueOn,
-            aspect: ASPECTS
+            aspect: Aspect::ALL
                 .get(ui.aspect.indexOfSelectedItem().max(0) as usize)
-                .map_or(Aspect::Auto, |(_, a)| *a),
+                .copied()
+                .unwrap_or(Aspect::Auto),
+            balance: ui.balance.state() == NSControlStateValueOn,
         };
         let menu: &AnyObject = ui.background.as_ref();
         let background = if !std::ptr::eq(sender, menu) {
@@ -969,6 +1088,9 @@ impl EditorController {
                 _ => current,
             }
         };
+        if let Some(background) = &background {
+            super::remember_background(background);
+        }
         self.ivars().session.borrow_mut().set_background(background);
         self.refresh();
     }
@@ -1033,6 +1155,139 @@ impl EditorController {
         }
         let turned = self.ivars().base.borrow().with_orientation(orientation);
         *self.ivars().base.borrow_mut() = turned;
+        // Recognized text belongs to the old orientation.
+        self.ivars().session.borrow_mut().text_lines.clear();
+        self.ivars().text_lines_for.set(None);
+        if self.ivars().session.borrow().highlight_text {
+            self.recognize_text_lines();
+        }
+    }
+
+    /// Recognizes the lines of text in the image in the background, for the
+    /// text highlighter. Once per orientation.
+    fn recognize_text_lines(&self) {
+        let orientation = self.ivars().session.borrow().doc.orientation;
+        if self.ivars().text_lines_for.get() == Some(orientation) {
+            return;
+        }
+        self.ivars().text_lines_for.set(Some(orientation));
+        let (image, size) = {
+            let base = self.ivars().base.borrow();
+            (base.cg.clone(), (base.width, base.height))
+        };
+        let id = self.ivars().id;
+        std::thread::spawn(move || {
+            let settings = crate::ocr::settings();
+            let lines = match crate::ocr::recognize(&image, &settings, |_| Vec::new()) {
+                Ok(lines) => lines,
+                Err(e) => {
+                    tracing::warn!(error = %e, "text recognition for the highlighter failed");
+                    return;
+                }
+            };
+            let rects: Vec<Rect> = lines
+                .iter()
+                .map(|l| {
+                    Rect::new(
+                        l.bounds.x * size.0,
+                        l.bounds.y * size.1,
+                        l.bounds.width * size.0,
+                        l.bounds.height * size.1,
+                    )
+                })
+                .collect();
+            dispatch2::DispatchQueue::main().exec_async(move || {
+                if let Some(editor) = registry::get(id)
+                    && editor.ivars().text_lines_for.get() == Some(orientation)
+                {
+                    editor.ivars().session.borrow_mut().text_lines = rects;
+                }
+            });
+        });
+    }
+
+    /// Measures the run of one color through `p` (image points), across
+    /// or up and down, and adds it as a measurement.
+    fn measure_automatically(&self, p: Point, vertical: bool) {
+        let found = {
+            let base = self.ivars().base.borrow();
+            let scale = base.scale;
+            let (x, y) = ((p.x * scale).floor(), (p.y * scale).floor());
+            if x < 0.0 || y < 0.0 {
+                None
+            } else {
+                crate::capture::image::to_pixels(&base.cg).and_then(|(w, h, pixels)| {
+                    super::trim::span(&pixels, w, h, (x as usize, y as usize), vertical, 12).map(
+                        |(lo, hi)| {
+                            let (lo, hi) = (lo as f64 / scale, (hi + 1) as f64 / scale);
+                            if vertical {
+                                (Point::new(p.x, lo), Point::new(p.x, hi))
+                            } else {
+                                (Point::new(lo, p.y), Point::new(hi, p.y))
+                            }
+                        },
+                    )
+                })
+            }
+        };
+        if let Some((start, end)) = found {
+            self.ivars().session.borrow_mut().add_measure(start, end);
+        }
+    }
+
+    /// Saves a two-frame GIF: the image without, then with, its top image
+    /// layer (overlay compare).
+    fn export_before_after(&self) {
+        let Some(after) = self.rendered() else {
+            return;
+        };
+        let before = {
+            let session = self.ivars().session.borrow();
+            let mut doc = session.doc.clone();
+            if let Some(draft) = session.crop_draft {
+                doc.crop = Some(draft);
+            }
+            let Some(top) = doc
+                .annotations
+                .iter()
+                .rposition(|a| matches!(a.shape, Shape::Image { .. }))
+            else {
+                drop(session);
+                crate::ui::toast::show(
+                    self.mtm(),
+                    "Paste or add a second image first, to compare with",
+                );
+                return;
+            };
+            doc.annotations.remove(top);
+            // Keep the size of the canvas the same in both frames.
+            let base = self.ivars().base.borrow();
+            let after_layout = base.layout(&session.doc);
+            doc.crop = Some(after_layout.source);
+            render::export(&doc, &base)
+        };
+        let Some(before) = before else {
+            return;
+        };
+        let panel = NSSavePanel::savePanel(self.mtm());
+        panel.setNameFieldStringValue(&NSString::from_str(&t!("Before and After.gif")));
+        if panel.runModal() != NSModalResponseOK {
+            return;
+        }
+        let Some(path) = panel.URL().and_then(|u| u.path()) else {
+            return;
+        };
+        let path = PathBuf::from(path.to_string());
+        match crate::record::media::write_gif(&path, 2, 1.0, [before, after].into_iter()) {
+            Ok(_) => {
+                tracing::info!(path = %path.display(), "before and after GIF saved");
+                crate::ui::toast::show(self.mtm(), "Saved");
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "could not save the before and after GIF");
+                crate::ui::toast::show(self.mtm(), "Could not save the GIF");
+            }
+        }
     }
 
     /// Asks for the exported size and sets it.
@@ -1719,6 +1974,12 @@ define_class!(
             self.ivars().frozen.set(None);
             if let Some(editor) = self.editor() {
                 editor.ivars().session.borrow_mut().mouse_up();
+                let pending = editor.ivars().session.borrow_mut().take_pending_measure();
+                if let Some(p) = pending {
+                    // Shift measures up and down instead of across.
+                    let vertical = NSEvent::modifierFlags_class().contains(NSEventModifierFlags::Shift);
+                    editor.measure_automatically(p, vertical);
+                }
                 editor.refresh();
             }
         }

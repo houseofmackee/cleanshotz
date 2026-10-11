@@ -18,7 +18,8 @@ use objc2_core_graphics::{CGBitmapContextCreateImage, CGContext, CGImage};
 use objc2_foundation::{NSAffineTransform, NSPoint, NSRect, NSSize};
 
 use super::model::{
-    Annotation, ArrowStyle, CanvasLayout, Color, Document, Fill, Orientation, Shape, TextStyle,
+    Annotation, ArrowStyle, CanvasLayout, Color, Document, Fill, MEASURE_TICK, Orientation, Shape,
+    TextStyle, curve_point, rect_center,
 };
 use crate::capture::geometry::{Point, Rect};
 use crate::capture::image;
@@ -37,6 +38,17 @@ pub struct BaseImage {
     /// The capture before any turn (what projects store).
     pub original: CFRetained<CGImage>,
     pub orientation: Orientation,
+    /// Margins found in the pixels, worked out when first needed.
+    trims: std::cell::OnceCell<Trims>,
+}
+
+/// Parts of the captured image (points) a background can leave out.
+#[derive(Clone, Copy, Debug)]
+struct Trims {
+    /// A window capture's window, inside its transparent shadow margin.
+    body: Option<Rect>,
+    /// What is left without margins of one plain color.
+    plain: Rect,
 }
 
 impl BaseImage {
@@ -61,6 +73,7 @@ impl BaseImage {
             height,
             original,
             orientation,
+            trims: std::cell::OnceCell::new(),
         }
     }
 
@@ -77,8 +90,46 @@ impl BaseImage {
         (w as f64 / self.scale, h as f64 / self.scale)
     }
 
+    /// Where everything goes. With a background, a window capture's
+    /// transparent shadow margin is left out (the background draws its own
+    /// shadow), and so are plain margins with auto-balance.
     pub fn layout(&self, doc: &Document) -> CanvasLayout {
-        doc.layout(self.width, self.height)
+        match &doc.background {
+            Some(background) => doc.layout_in(self.shown(background.balance)),
+            None => doc.layout(self.width, self.height),
+        }
+    }
+
+    /// The part of the image shown on a background.
+    fn shown(&self, balance: bool) -> Rect {
+        let trims = self.trims.get_or_init(|| self.find_trims());
+        match (trims.body, balance) {
+            (Some(body), _) => body,
+            (None, true) => trims.plain,
+            (None, false) => Rect::new(0.0, 0.0, self.width, self.height),
+        }
+    }
+
+    fn find_trims(&self) -> Trims {
+        let full = Rect::new(0.0, 0.0, self.width, self.height);
+        let Some((w, h, pixels)) = image::to_pixels(&self.cg) else {
+            return Trims {
+                body: None,
+                plain: full,
+            };
+        };
+        let rect = |(l, t, r, b): super::trim::Bounds| {
+            Rect::new(
+                l as f64 / self.scale,
+                t as f64 / self.scale,
+                (r + 1 - l) as f64 / self.scale,
+                (b + 1 - t) as f64 / self.scale,
+            )
+        };
+        Trims {
+            body: super::trim::opaque_body(&pixels, w, h).map(rect),
+            plain: rect(super::trim::plain_margins(&pixels, w, h, 6)),
+        }
     }
 }
 
@@ -121,7 +172,7 @@ pub fn render(doc: &Document, base: &BaseImage, skip: Option<u64>) {
             Fill::Image { picture } => {
                 context.saveGraphicsState();
                 NSBezierPath::clipRect(draw::ns_rect(canvas));
-                draw_picture(picture, cover(picture.size(), canvas));
+                draw_picture(picture, cover(picture.size(), canvas), 1.0);
                 context.restoreGraphicsState();
             }
             Fill::Gradient { from, to } => {
@@ -202,13 +253,48 @@ pub fn draw_annotation(
     context: &NSGraphicsContext,
 ) {
     let color = ns_color(a.color);
+    let sketch = a.sketchy.then_some(a.id);
     match &a.shape {
-        Shape::Arrow { start, end, style } => draw_arrow(*start, *end, *style, a.width, &color),
-        Shape::Line { start, end } => {
-            let path = NSBezierPath::bezierPath();
-            path.moveToPoint(np(*start));
-            path.lineToPoint(np(*end));
-            stroke(&path, a.width, &color);
+        Shape::Arrow {
+            start,
+            end,
+            style,
+            bend,
+        } => draw_arrow(*start, *end, *bend, *style, a.width, &color, sketch),
+        Shape::Line { start, end } => match sketch {
+            Some(seed) => draw_sketch(&[*start, *end], false, seed, a.width, &color),
+            None => stroke(&polyline(&[*start, *end]), a.width, &color),
+        },
+        Shape::Rectangle {
+            rect,
+            filled: false,
+        } if a.sketchy => {
+            let corners = [
+                Point::new(rect.x, rect.y),
+                Point::new(rect.max_x(), rect.y),
+                Point::new(rect.max_x(), rect.max_y()),
+                Point::new(rect.x, rect.max_y()),
+            ];
+            draw_sketch(&corners, true, a.id, a.width, &color);
+        }
+        Shape::Ellipse {
+            rect,
+            filled: false,
+        } if a.sketchy => {
+            // One pass around, with a little overlap where it closes.
+            let mut points = ellipse_points(*rect);
+            points.extend(points.clone().into_iter().take(3));
+            draw_sketch(&points, false, a.id, a.width, &color);
+        }
+        Shape::Magnify { source, callout } => {
+            draw_magnify(base, *source, *callout, a.width, &color)
+        }
+        Shape::Measure { start, end } => draw_measure(*start, *end, base, a.width, &color),
+        Shape::TextHighlight { rects } => {
+            let marker = ns_color(Color { a: 0.4, ..a.color });
+            for r in rects {
+                draw::fill_rounded(*r, (r.height * 0.15).min(4.0), &marker);
+            }
         }
         Shape::Rectangle { rect, filled } => {
             let path = NSBezierPath::bezierPathWithRect(draw::ns_rect(*rect));
@@ -268,7 +354,11 @@ pub fn draw_annotation(
         Shape::Blur { rect } => {
             draw_resampled(base, *rect, 14.0, NSImageInterpolation::High, context)
         }
-        Shape::Image { rect, picture } => draw_picture(picture, *rect),
+        Shape::Image {
+            rect,
+            picture,
+            opacity,
+        } => draw_picture(picture, *rect, *opacity),
         Shape::Spotlight { rect } => {
             // Dim everything visible except the spotlight.
             let path = NSBezierPath::bezierPathWithRect(draw::ns_rect(layout.source));
@@ -303,7 +393,7 @@ fn shown_pieces(doc: &Document, base: &BaseImage, layout: &CanvasLayout) -> Vec<
 }
 
 /// Draws `picture` scaled into `rect` (canvas points, flipped context).
-fn draw_picture(picture: &super::picture::Picture, rect: Rect) {
+fn draw_picture(picture: &super::picture::Picture, rect: Rect, opacity: f64) {
     let (w, h) = picture.size();
     let ns = NSImage::initWithCGImage_size(NSImage::alloc(), picture.cg(), NSSize::new(w, h));
     // SAFETY: drawing inside a current graphics context.
@@ -312,7 +402,7 @@ fn draw_picture(picture: &super::picture::Picture, rect: Rect) {
             draw::ns_rect(rect),
             NSRect::ZERO,
             NSCompositingOperation::SourceOver,
-            1.0,
+            opacity.clamp(0.0, 1.0),
             true,
             None,
         );
@@ -363,47 +453,117 @@ fn smooth_path(points: &[Point]) -> Retained<NSBezierPath> {
     path
 }
 
-/// The outline of a tapered arrow from `start` to `end` for stroke width
-/// `width`: the tail point, then one side of the shaft, barb, tip, the
-/// other barb and side. The head grows a little with the arrow's length,
-/// and the barbs reach back past the point where the shaft joins the head.
-pub fn tapered_outline(start: Point, end: Point, width: f64) -> [Point; 7] {
-    let (dx, dy) = (end.x - start.x, end.y - start.y);
-    let length = dx.hypot(dy).max(1.0);
-    let (ux, uy) = (dx / length, dy / length);
-    // Unit normal.
+/// The arrow's centerline: the straight segment, or points along its
+/// curve.
+fn arrow_path(start: Point, bend: Option<Point>, end: Point) -> Vec<Point> {
+    match bend {
+        Some(c) => (0..=48)
+            .map(|i| curve_point(start, c, end, f64::from(i) / 48.0))
+            .collect(),
+        None => vec![start, end],
+    }
+}
+
+/// The unit direction the arrow points in at its tip.
+fn tip_direction(start: Point, bend: Option<Point>, end: Point) -> (f64, f64) {
+    let from = bend.unwrap_or(start);
+    let (dx, dy) = (end.x - from.x, end.y - from.y);
+    let length = dx.hypot(dy).max(f64::MIN_POSITIVE);
+    (dx / length, dy / length)
+}
+
+/// The part of `path` at least `cut` away (along the path) from its end.
+fn trim_end(path: &[Point], cut: f64) -> Vec<Point> {
+    let mut out = path.to_vec();
+    let mut left = cut;
+    while out.len() >= 2 && left > 0.0 {
+        let n = out.len();
+        let (a, b) = (out[n - 2], out[n - 1]);
+        let seg = (b.x - a.x).hypot(b.y - a.y);
+        if seg > left {
+            let t = (seg - left) / seg;
+            out[n - 1] = Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
+            break;
+        }
+        left -= seg;
+        out.pop();
+    }
+    out
+}
+
+fn path_length(path: &[Point]) -> f64 {
+    path.windows(2)
+        .map(|w| (w[1].x - w[0].x).hypot(w[1].y - w[0].y))
+        .sum()
+}
+
+/// The outline of a tapered arrow for stroke width `width`: one side of
+/// the shaft from the tail, a barb, the tip, the other barb and the other
+/// side back to the tail. The shaft widens from a point; the head grows a
+/// little with the arrow's length and its barbs reach back past the point
+/// where the shaft joins it. Curved arrows follow their curve up to the
+/// head, which points along the curve's end.
+pub fn tapered_outline(start: Point, bend: Option<Point>, end: Point, width: f64) -> Vec<Point> {
+    let center = arrow_path(start, bend, end);
+    let length = path_length(&center).max(1.0);
+    let (ux, uy) = tip_direction(start, bend, end);
     let (nx, ny) = (-uy, ux);
     // Not `clamp`: half a very short arrow is less than the minimum.
     let head = (width * 6.0 + length * 0.1).max(12.0).min(length * 0.5);
     let barb = head * 0.55;
     let neck = (width * 1.2).max(head * 0.15);
     let tail = (width * 0.12).min(1.0);
-    let at = |along: f64, side: f64| {
-        Point::new(
-            start.x + ux * along + nx * side,
-            start.y + uy * along + ny * side,
-        )
-    };
-    let barb_at = length - head;
-    let neck_at = length - head * 0.7;
-    [
-        at(0.0, -tail),
-        at(neck_at, -neck),
-        at(barb_at, -barb),
-        end,
-        at(barb_at, barb),
-        at(neck_at, neck),
-        at(0.0, tail),
-    ]
+    let shaft = trim_end(&center, head * 0.7);
+    let shaft_length = path_length(&shaft).max(f64::MIN_POSITIVE);
+    // Each shaft point pushed out to `side`, widening toward the neck.
+    let mut walked = 0.0;
+    let mut sides: Vec<(Point, Point)> = Vec::with_capacity(shaft.len());
+    for (i, p) in shaft.iter().enumerate() {
+        if i > 0 {
+            walked += (p.x - shaft[i - 1].x).hypot(p.y - shaft[i - 1].y);
+        }
+        let (a, b) = (
+            shaft[i.saturating_sub(1)],
+            shaft[(i + 1).min(shaft.len() - 1)],
+        );
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let d = dx.hypot(dy).max(f64::MIN_POSITIVE);
+        let (px, py) = if i + 1 == shaft.len() {
+            (nx, ny)
+        } else {
+            (-dy / d, dx / d)
+        };
+        let half = tail + (neck - tail) * (walked / shaft_length);
+        sides.push((
+            Point::new(p.x - px * half, p.y - py * half),
+            Point::new(p.x + px * half, p.y + py * half),
+        ));
+    }
+    let barb_base = Point::new(end.x - ux * head, end.y - uy * head);
+    let mut outline: Vec<Point> = sides.iter().map(|s| s.0).collect();
+    outline.push(Point::new(barb_base.x - nx * barb, barb_base.y - ny * barb));
+    outline.push(end);
+    outline.push(Point::new(barb_base.x + nx * barb, barb_base.y + ny * barb));
+    outline.extend(sides.iter().rev().map(|s| s.1));
+    outline
 }
 
-fn draw_arrow(start: Point, end: Point, style: ArrowStyle, width: f64, color: &NSColor) {
-    let (dx, dy) = (end.x - start.x, end.y - start.y);
-    let length = dx.hypot(dy);
+#[allow(clippy::too_many_arguments)]
+fn draw_arrow(
+    start: Point,
+    end: Point,
+    bend: Option<Point>,
+    style: ArrowStyle,
+    width: f64,
+    color: &NSColor,
+    sketch: Option<u64>,
+) {
+    let center = arrow_path(start, bend, end);
+    let length = path_length(&center);
     if length < 1.0 {
         return;
     }
-    let (ux, uy) = (dx / length, dy / length);
+    let (ux, uy) = tip_direction(start, bend, end);
     let head = (width * 4.5).max(16.0).min(length * 0.6);
     let half = head * 0.55;
 
@@ -422,32 +582,30 @@ fn draw_arrow(start: Point, end: Point, style: ArrowStyle, width: f64, color: &N
         path.fill();
         path.stroke();
     };
+    let shaft = |points: &[Point]| match sketch {
+        Some(seed) => draw_sketch(points, false, seed, width, color),
+        None => stroke(&polyline(points), width, color),
+    };
 
     match style {
         ArrowStyle::Filled | ArrowStyle::Double => {
             // Stop the shaft inside the head so its round cap does not poke out.
-            let shaft_end = Point::new(end.x - ux * head * 0.6, end.y - uy * head * 0.6);
-            let shaft_start = if style == ArrowStyle::Double {
-                Point::new(start.x + ux * head * 0.6, start.y + uy * head * 0.6)
-            } else {
-                start
-            };
-            let path = NSBezierPath::bezierPath();
-            path.moveToPoint(np(shaft_start));
-            path.lineToPoint(np(shaft_end));
-            stroke(&path, width, color);
+            let mut points = trim_end(&center, head * 0.6);
+            if style == ArrowStyle::Double {
+                points.reverse();
+                points = trim_end(&points, head * 0.6);
+                points.reverse();
+            }
+            shaft(&points);
             filled_head(end, ux, uy);
             if style == ArrowStyle::Double {
-                filled_head(start, -ux, -uy);
+                let (sx, sy) = tip_direction(end, bend, start);
+                filled_head(start, sx, sy);
             }
         }
         ArrowStyle::Tapered => {
-            let outline = tapered_outline(start, end, width);
-            let path = NSBezierPath::bezierPath();
-            path.moveToPoint(np(outline[0]));
-            for p in &outline[1..] {
-                path.lineToPoint(np(*p));
-            }
+            let outline = tapered_outline(start, bend, end, width);
+            let path = polyline(&outline);
             path.closePath();
             color.setFill();
             path.fill();
@@ -458,9 +616,8 @@ fn draw_arrow(start: Point, end: Point, style: ArrowStyle, width: f64, color: &N
             path.stroke();
         }
         ArrowStyle::Open => {
+            shaft(&center);
             let path = NSBezierPath::bezierPath();
-            path.moveToPoint(np(start));
-            path.lineToPoint(np(end));
             let angle = uy.atan2(ux);
             for side in [-1.0, 1.0] {
                 let a = angle + PI + side * PI / 6.0;
@@ -469,6 +626,229 @@ fn draw_arrow(start: Point, end: Point, style: ArrowStyle, width: f64, color: &N
             }
             stroke(&path, width, color);
         }
+    }
+}
+
+fn polyline(points: &[Point]) -> Retained<NSBezierPath> {
+    let path = NSBezierPath::bezierPath();
+    if let Some(first) = points.first() {
+        path.moveToPoint(np(*first));
+        for p in &points[1..] {
+            path.lineToPoint(np(*p));
+        }
+    }
+    path
+}
+
+/// A small deterministic random number generator, so a hand-drawn shape
+/// looks the same on every redraw and export.
+struct Wobble(u64);
+
+impl Wobble {
+    fn new(seed: u64) -> Self {
+        Self(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) | 1)
+    }
+
+    /// A number from -1 to 1.
+    fn next(&mut self) -> f64 {
+        self.0 ^= self.0 << 13;
+        self.0 ^= self.0 >> 7;
+        self.0 ^= self.0 << 17;
+        (self.0 >> 11) as f64 / (1u64 << 52) as f64 - 1.0
+    }
+}
+
+/// Two slightly different hand-drawn passes over the polyline through
+/// `points` (closed: back to the first point), seeded by `seed`.
+pub fn sketch_passes(points: &[Point], closed: bool, seed: u64, width: f64) -> Vec<Vec<Point>> {
+    let mut rng = Wobble::new(seed);
+    let mut corners = points.to_vec();
+    if closed && let Some(first) = points.first() {
+        corners.push(*first);
+    }
+    let wobble = (width * 0.5).clamp(1.0, 3.0);
+    (0..2)
+        .map(|_| {
+            let mut out = Vec::new();
+            for w in corners.windows(2) {
+                let (a, b) = (w[0], w[1]);
+                let (dx, dy) = (b.x - a.x, b.y - a.y);
+                let len = dx.hypot(dy);
+                if len < f64::EPSILON {
+                    continue;
+                }
+                let (nx, ny) = (-dy / len, dx / len);
+                // A gentle bow plus jitter at the ends; corners overshoot a
+                // little, as a quick pen stroke does.
+                let bow = rng.next() * (len * 0.012 + wobble).min(6.0);
+                let over = wobble * 0.8 * rng.next().abs();
+                let steps = ((len / 12.0).ceil() as usize).clamp(2, 40);
+                for i in 0..=steps {
+                    let t = i as f64 / steps as f64;
+                    let along = -over + t * (len + 2.0 * over);
+                    let side = bow * (PI * t).sin() + rng.next() * wobble * 0.25;
+                    out.push(Point::new(
+                        a.x + dx / len * along + nx * side,
+                        a.y + dy / len * along + ny * side,
+                    ));
+                }
+            }
+            out
+        })
+        .collect()
+}
+
+fn draw_sketch(points: &[Point], closed: bool, seed: u64, width: f64, color: &NSColor) {
+    for pass in sketch_passes(points, closed, seed, width) {
+        stroke(&smooth_path(&pass), width * 0.85, color);
+    }
+}
+
+/// Points around the ellipse in `rect`.
+fn ellipse_points(rect: Rect) -> Vec<Point> {
+    let (cx, cy) = (rect.x + rect.width / 2.0, rect.y + rect.height / 2.0);
+    (0..36)
+        .map(|i| {
+            let a = f64::from(i) / 36.0 * 2.0 * PI;
+            Point::new(
+                cx + rect.width / 2.0 * a.cos(),
+                cy + rect.height / 2.0 * a.sin(),
+            )
+        })
+        .collect()
+}
+
+/// The two lines that touch both circles on the outside (`c1` with radius
+/// `r1`, `c2` with `r2`), as pairs of end points; none when one circle
+/// contains the other.
+pub fn outer_tangents(c1: Point, r1: f64, c2: Point, r2: f64) -> Vec<(Point, Point)> {
+    let (dx, dy) = (c2.x - c1.x, c2.y - c1.y);
+    let d = dx.hypot(dy);
+    if d <= (r1 - r2).abs() || d < f64::EPSILON {
+        return Vec::new();
+    }
+    let base = dy.atan2(dx);
+    let spread = ((r1 - r2) / d).acos();
+    [base + spread, base - spread]
+        .into_iter()
+        .map(|a| {
+            let (c, s) = (a.cos(), a.sin());
+            (
+                Point::new(c1.x + r1 * c, c1.y + r1 * s),
+                Point::new(c2.x + r2 * c, c2.y + r2 * s),
+            )
+        })
+        .collect()
+}
+
+fn draw_magnify(base: &BaseImage, source: Rect, callout: Rect, width: f64, color: &NSColor) {
+    let Some(context) = NSGraphicsContext::currentContext() else {
+        return;
+    };
+    let (sc, cc) = (rect_center(source), rect_center(callout));
+    let (sr, cr) = (source.width / 2.0, callout.width / 2.0);
+    let line = (width * 0.5).max(1.5);
+    let joins = NSBezierPath::bezierPath();
+    for (a, b) in outer_tangents(sc, sr, cc, cr) {
+        joins.moveToPoint(np(a));
+        joins.lineToPoint(np(b));
+    }
+    stroke(&joins, line, color);
+    let ring = NSBezierPath::bezierPathWithOvalInRect(draw::ns_rect(source));
+    stroke(&ring, line, color);
+
+    // The magnified pixels, clipped to the callout circle.
+    let circle = NSBezierPath::bezierPathWithOvalInRect(draw::ns_rect(callout));
+    context.saveGraphicsState();
+    circle.addClip();
+    NSColor::colorWithWhite_alpha(0.12, 1.0).setFill();
+    NSBezierPath::fillRect(draw::ns_rect(callout));
+    let area = source.intersection(&Rect::new(0.0, 0.0, base.width, base.height));
+    if area.width >= 0.5
+        && area.height >= 0.5
+        && let Some(region) = image::crop(&base.cg, area, base.scale)
+    {
+        let zoom = callout.width / source.width.max(f64::MIN_POSITIVE);
+        let dest = Rect::new(
+            callout.x + (area.x - source.x) * zoom,
+            callout.y + (area.y - source.y) * zoom,
+            area.width * zoom,
+            area.height * zoom,
+        );
+        let (pw, ph) = image::pixel_size(&region);
+        let ns = NSImage::initWithCGImage_size(
+            NSImage::alloc(),
+            &region,
+            NSSize::new(pw as f64, ph as f64),
+        );
+        context.setImageInterpolation(NSImageInterpolation::High);
+        // SAFETY: drawing inside a current graphics context.
+        unsafe {
+            ns.drawInRect_fromRect_operation_fraction_respectFlipped_hints(
+                draw::ns_rect(dest),
+                NSRect::ZERO,
+                NSCompositingOperation::SourceOver,
+                1.0,
+                true,
+                None,
+            );
+        }
+    }
+    context.restoreGraphicsState();
+    // A white ring keeps the edge visible on any picture.
+    stroke(&circle, width + 3.0, &NSColor::whiteColor());
+    stroke(&circle, width, color);
+}
+
+fn draw_measure(start: Point, end: Point, base: &BaseImage, width: f64, color: &NSColor) {
+    let (dx, dy) = (end.x - start.x, end.y - start.y);
+    let length = dx.hypot(dy);
+    if length < 1.0 {
+        return;
+    }
+    let (nx, ny) = (-dy / length, dx / length);
+    let line = (width * 0.5).max(1.5);
+    let path = NSBezierPath::bezierPath();
+    path.moveToPoint(np(start));
+    path.lineToPoint(np(end));
+    for p in [start, end] {
+        path.moveToPoint(NSPoint::new(
+            p.x - nx * MEASURE_TICK,
+            p.y - ny * MEASURE_TICK,
+        ));
+        path.lineToPoint(NSPoint::new(
+            p.x + nx * MEASURE_TICK,
+            p.y + ny * MEASURE_TICK,
+        ));
+    }
+    // A dark outline keeps the line readable on light and dark pictures.
+    stroke(&path, line + 2.0, &NSColor::colorWithWhite_alpha(0.0, 0.35));
+    stroke(&path, line, color);
+    let text = measure_label(dx, dy, base.scale);
+    let size = draw::text_size(&text, 12.0, Weight::Semibold);
+    let mid = Point::new((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
+    // Beside the line, on the side away from it.
+    let off = size.height.max(size.width * nx.abs()) / 2.0 + 10.0;
+    let (ox, oy) = if ny > 0.0 { (-nx, -ny) } else { (nx, ny) };
+    let center = Point::new(mid.x + ox * off, mid.y + oy * off);
+    let pill = Rect::new(
+        center.x - size.width / 2.0 - 6.0,
+        center.y - size.height / 2.0 - 3.0,
+        size.width + 12.0,
+        size.height + 6.0,
+    );
+    draw::fill_rounded(pill, pill.height / 2.0, color);
+    draw::draw_text_centered(&text, pill, 12.0, Weight::Semibold, &NSColor::whiteColor());
+}
+
+/// "120 px" for a straight measurement, "120 × 80 px" when it is
+/// diagonal (width and height in image pixels).
+pub fn measure_label(dx: f64, dy: f64, scale: f64) -> String {
+    let (w, h) = ((dx * scale).abs().round(), (dy * scale).abs().round());
+    if w < 1.0 || h < 1.0 {
+        format!("{} px", w.max(h))
+    } else {
+        format!("{w} × {h} px")
     }
 }
 
@@ -604,7 +984,11 @@ mod tests {
     #[test]
     fn tapered_arrows_widen_toward_a_swept_back_head() {
         let (start, end) = (Point::new(0.0, 0.0), Point::new(200.0, 0.0));
-        let [tail, neck, barb, tip, barb2, neck2, tail2] = tapered_outline(start, end, 4.0);
+        let outline = tapered_outline(start, None, end, 4.0);
+        // Tail, neck, barb, tip, barb, neck, tail.
+        let [tail, neck, barb, tip, barb2, neck2, tail2] = outline[..] else {
+            panic!("{outline:?}");
+        };
         assert_eq!(tip, end);
         // Symmetric about the shaft.
         for (a, b) in [(tail, tail2), (neck, neck2), (barb, barb2)] {
@@ -616,7 +1000,71 @@ mod tests {
         assert!(neck.y.abs() > tail.y.abs() && barb.y.abs() > neck.y.abs() * 2.0);
         assert!(barb.x < neck.x && neck.x < tip.x);
         // Short arrows keep a head no longer than half of them.
-        let [_, _, barb, ..] = tapered_outline(start, Point::new(20.0, 0.0), 8.0);
-        assert!(barb.x >= 10.0 - 1e-9);
+        let short = tapered_outline(start, None, Point::new(20.0, 0.0), 8.0);
+        assert!(short[2].x >= 10.0 - 1e-9);
+    }
+
+    #[test]
+    fn curved_tapered_arrows_point_along_the_curve() {
+        let (start, end) = (Point::new(0.0, 0.0), Point::new(200.0, 0.0));
+        let outline = tapered_outline(start, Some(Point::new(100.0, -100.0)), end, 4.0);
+        let tip = outline.iter().position(|p| *p == end).unwrap();
+        // The head points down and to the right (the curve's end tangent):
+        // both barbs are up and to the left of the tip.
+        for barb in [outline[tip - 1], outline[tip + 1]] {
+            assert!(barb.x < end.x);
+        }
+        let mid = (outline[tip - 1].y + outline[tip + 1].y) / 2.0;
+        assert!(mid < 0.0, "the head's base is above the tip: {mid}");
+        // The shaft follows the curve upward.
+        assert!(outline.iter().any(|p| p.y < -40.0));
+    }
+
+    #[test]
+    fn trims_paths_from_the_end() {
+        let path = [
+            Point::new(0.0, 0.0),
+            Point::new(10.0, 0.0),
+            Point::new(10.0, 10.0),
+        ];
+        assert_eq!(
+            trim_end(&path, 15.0),
+            vec![Point::new(0.0, 0.0), Point::new(5.0, 0.0)]
+        );
+        assert_eq!(path_length(&path), 20.0);
+    }
+
+    #[test]
+    fn sketches_are_repeatable_and_stay_close() {
+        let line = [Point::new(0.0, 0.0), Point::new(100.0, 0.0)];
+        let a = sketch_passes(&line, false, 7, 4.0);
+        assert_eq!(a, sketch_passes(&line, false, 7, 4.0));
+        assert_ne!(a, sketch_passes(&line, false, 8, 4.0));
+        assert_eq!(a.len(), 2);
+        for p in a.iter().flatten() {
+            assert!(p.y.abs() <= 6.0 && p.x >= -4.0 && p.x <= 104.0, "{p:?}");
+        }
+    }
+
+    #[test]
+    fn finds_outer_tangents() {
+        let lines = outer_tangents(Point::new(0.0, 0.0), 10.0, Point::new(100.0, 0.0), 30.0);
+        assert_eq!(lines.len(), 2);
+        for (a, b) in lines {
+            // Each end is on its circle and the line is perpendicular to
+            // both radii.
+            assert!((a.x.hypot(a.y) - 10.0).abs() < 1e-9);
+            assert!(((b.x - 100.0).hypot(b.y) - 30.0).abs() < 1e-9);
+            let (lx, ly) = (b.x - a.x, b.y - a.y);
+            assert!((lx * a.x + ly * a.y).abs() < 1e-6);
+        }
+        assert!(outer_tangents(Point::new(0.0, 0.0), 50.0, Point::new(5.0, 0.0), 10.0).is_empty());
+    }
+
+    #[test]
+    fn labels_measurements_in_pixels() {
+        assert_eq!(measure_label(120.0, 0.0, 2.0), "240 px");
+        assert_eq!(measure_label(0.0, -50.2, 1.0), "50 px");
+        assert_eq!(measure_label(30.0, 40.0, 2.0), "60 × 80 px");
     }
 }

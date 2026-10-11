@@ -15,11 +15,13 @@ pub enum Tool {
     Pixelate,
     Blur,
     Spotlight,
+    Magnify,
+    Measure,
     Background,
 }
 
 impl Tool {
-    pub const ALL: [Tool; 14] = [
+    pub const ALL: [Tool; 16] = [
         Tool::Select,
         Tool::Crop,
         Tool::Arrow,
@@ -33,6 +35,8 @@ impl Tool {
         Tool::Pixelate,
         Tool::Blur,
         Tool::Spotlight,
+        Tool::Magnify,
+        Tool::Measure,
         Tool::Background,
     ];
 
@@ -55,6 +59,8 @@ impl Tool {
             Tool::Pixelate => "Pixelate",
             Tool::Blur => "Blur",
             Tool::Spotlight => "Spotlight",
+            Tool::Magnify => "Magnify",
+            Tool::Measure => "Measure",
             Tool::Background => "Background",
         }
     }
@@ -75,6 +81,8 @@ impl Tool {
             Tool::Pixelate => "checkerboard.rectangle",
             Tool::Blur => "drop",
             Tool::Spotlight => "flashlight.on.fill",
+            Tool::Magnify => "plus.magnifyingglass",
+            Tool::Measure => "ruler",
             Tool::Background => "photo.on.rectangle",
         }
     }
@@ -95,6 +103,8 @@ impl Tool {
             Tool::Pixelate => 'x',
             Tool::Blur => 'b',
             Tool::Spotlight => 's',
+            Tool::Magnify => 'm',
+            Tool::Measure => 'u',
             Tool::Background => 'g',
         }
     }

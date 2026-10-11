@@ -39,6 +39,15 @@ pub struct Session {
     pub text_style: TextStyle,
     pub text_size: f64,
     pub filled: bool,
+    /// New rectangles, ellipses, lines and arrows look hand-drawn.
+    pub sketchy: bool,
+    /// The highlighter snaps to lines of text.
+    pub highlight_text: bool,
+    /// Lines of recognized text (image points), for the text highlighter.
+    pub text_lines: Vec<Rect>,
+    /// A click with the Measure tool, to measure automatically; the view
+    /// takes it with [`Session::take_pending_measure`].
+    pending_measure: Option<Point>,
     pub selection: Option<u64>,
     /// The crop being edited while the crop tool is active.
     pub crop_draft: Option<Rect>,
@@ -58,10 +67,14 @@ impl Session {
             tool: Tool::Arrow,
             color: Color::RED,
             width: 4.0,
-            arrow_style: ArrowStyle::Filled,
+            arrow_style: ArrowStyle::Tapered,
             text_style: TextStyle::Plain,
             text_size: 24.0,
             filled: false,
+            sketchy: false,
+            highlight_text: false,
+            text_lines: Vec::new(),
+            pending_measure: None,
             selection: None,
             crop_draft: None,
             dirty: false,
@@ -109,9 +122,15 @@ impl Session {
             self.set_tool(Tool::Select);
         }
         self.change();
-        let id = self
-            .doc
-            .add(Shape::Image { rect, picture }, self.color, self.width);
+        let id = self.doc.add(
+            Shape::Image {
+                rect,
+                picture,
+                opacity: 1.0,
+            },
+            self.color,
+            self.width,
+        );
         self.selection = Some(id);
         id
     }
@@ -410,6 +429,12 @@ impl Session {
                 start: p,
                 end: p,
                 style: self.arrow_style,
+                bend: None,
+            },
+            Tool::Measure => Shape::Measure { start: p, end: p },
+            Tool::Magnify => Shape::Magnify {
+                source: rect,
+                callout: rect,
             },
             Tool::Line => Shape::Line { start: p, end: p },
             Tool::Rectangle => Shape::Rectangle {
@@ -428,10 +453,88 @@ impl Session {
             Tool::Crop | Tool::Background => unreachable!("handled above"),
         };
         self.change();
+        let sketchy = self.sketchy
+            && matches!(
+                shape,
+                Shape::Arrow { .. }
+                    | Shape::Line { .. }
+                    | Shape::Rectangle { .. }
+                    | Shape::Ellipse { .. }
+            );
         let id = self.doc.add(shape, self.color, self.width);
+        if let Some(a) = self.doc.get_mut(id) {
+            a.sketchy = sketchy;
+        }
         self.selection = None;
         self.drag = Some(Drag::Create { id, anchor: p });
         Effect::Redraw
+    }
+
+    /// A click (no drag) with the Measure tool, for the view to measure
+    /// from automatically.
+    pub fn take_pending_measure(&mut self) -> Option<Point> {
+        self.pending_measure.take()
+    }
+
+    /// Adds a measurement from `start` to `end`, selected, as one undo step.
+    pub fn add_measure(&mut self, start: Point, end: Point) {
+        self.change();
+        let id = self
+            .doc
+            .add(Shape::Measure { start, end }, self.color, self.width);
+        self.selection = Some(id);
+    }
+
+    /// Sets the hand-drawn look for new shapes and the selected one.
+    pub fn set_sketchy(&mut self, sketchy: bool) {
+        self.sketchy = sketchy;
+        if let Some(id) = self.selection
+            && self.doc.get(id).is_some_and(|a| {
+                a.sketchy != sketchy
+                    && matches!(
+                        a.shape,
+                        Shape::Arrow { .. }
+                            | Shape::Line { .. }
+                            | Shape::Rectangle { .. }
+                            | Shape::Ellipse { .. }
+                    )
+            })
+        {
+            self.change();
+            if let Some(a) = self.doc.get_mut(id) {
+                a.sketchy = sketchy;
+            }
+        }
+    }
+
+    /// The opacity of the selected image layer, if one is selected.
+    pub fn selected_opacity(&self) -> Option<f64> {
+        match self
+            .selection
+            .and_then(|id| self.doc.get(id))
+            .map(|a| &a.shape)
+        {
+            Some(Shape::Image { opacity, .. }) => Some(*opacity),
+            _ => None,
+        }
+    }
+
+    /// Sets the selected image layer's opacity, as one undo step.
+    pub fn set_opacity(&mut self, value: f64) {
+        let value = value.clamp(0.05, 1.0);
+        if self
+            .selected_opacity()
+            .is_some_and(|o| (o - value).abs() > f64::EPSILON)
+        {
+            self.change();
+            if let Some(Shape::Image { opacity, .. }) = self
+                .selection
+                .and_then(|id| self.doc.get_mut(id))
+                .map(|a| &mut a.shape)
+            {
+                *opacity = value;
+            }
+        }
     }
 
     fn edit_existing_text(&mut self, id: u64) -> Effect {
@@ -453,12 +556,21 @@ impl Session {
         };
         match drag {
             Drag::Create { id, anchor } => {
+                let extent = self.extent();
                 let Some(a) = self.doc.get_mut(id) else {
                     return;
                 };
                 match &mut a.shape {
                     Shape::Arrow { end, .. } | Shape::Line { end, .. } => {
                         *end = if constrain { snap_angle(anchor, p) } else { p };
+                    }
+                    Shape::Measure { end, .. } => {
+                        *end = if constrain { snap_axis(anchor, p) } else { p };
+                    }
+                    Shape::Magnify { source, callout } => {
+                        let r = (p.x - anchor.x).hypot(p.y - anchor.y).max(1.0);
+                        *source = Rect::new(anchor.x - r, anchor.y - r, 2.0 * r, 2.0 * r);
+                        *callout = callout_beside(*source, extent);
                     }
                     Shape::Rectangle { rect, .. }
                     | Shape::Ellipse { rect, .. }
@@ -531,6 +643,7 @@ impl Session {
                         },
                         color: Color::BLACK,
                         width: 0.0,
+                        sketchy: false,
                     };
                     a.drag_handle(handle, p);
                     self.crop_draft = Some(a.bounds().intersection(&self.extent()));
@@ -544,18 +657,32 @@ impl Session {
             return;
         };
         match drag {
-            Drag::Create { id, .. } => {
+            Drag::Create { id, anchor } => {
+                if self.highlight_text {
+                    self.snap_highlight(id);
+                }
                 let keep = self.doc.get(id).is_some_and(|a| match &a.shape {
-                    Shape::Arrow { start, end, .. } | Shape::Line { start, end } => {
+                    Shape::Arrow { start, end, .. }
+                    | Shape::Line { start, end }
+                    | Shape::Measure { start, end } => {
                         (end.x - start.x).hypot(end.y - start.y) >= 4.0
                     }
+                    Shape::Magnify { source, .. } => source.width >= 8.0,
+                    Shape::TextHighlight { .. } => true,
                     Shape::Pen { .. } | Shape::Highlighter { .. } => true,
                     _ => a.bounds().width >= 3.0 && a.bounds().height >= 3.0,
                 });
                 if keep {
                     self.selection = Some(id);
                 } else {
-                    // A click without a drag draws nothing.
+                    // A click without a drag draws nothing (with the
+                    // Measure tool, it measures automatically).
+                    if matches!(
+                        self.doc.get(id).map(|a| &a.shape),
+                        Some(Shape::Measure { .. })
+                    ) {
+                        self.pending_measure = Some(anchor);
+                    }
                     self.doc.remove(id);
                     self.history.discard_last();
                 }
@@ -570,6 +697,20 @@ impl Session {
                 self.crop_draft = Some(self.doc.crop.unwrap_or(self.extent()));
             }
             _ => {}
+        }
+    }
+
+    /// Turns a highlighter stroke into markers over the lines of text it
+    /// crosses, if it crosses any.
+    fn snap_highlight(&mut self, id: u64) {
+        let Some(a) = self.doc.get_mut(id) else {
+            return;
+        };
+        if let Shape::Highlighter { points } = &a.shape {
+            let rects = snap_to_text(points, &self.text_lines);
+            if !rects.is_empty() {
+                a.shape = Shape::TextHighlight { rects };
+            }
         }
     }
 
@@ -608,6 +749,69 @@ fn snap_angle(anchor: Point, p: Point) -> Point {
         anchor.x + length * angle.cos(),
         anchor.y + length * angle.sin(),
     )
+}
+
+/// `p` moved onto the horizontal or vertical line through `anchor`,
+/// whichever is closer.
+fn snap_axis(anchor: Point, p: Point) -> Point {
+    if (p.x - anchor.x).abs() >= (p.y - anchor.y).abs() {
+        Point::new(p.x, anchor.y)
+    } else {
+        Point::new(anchor.x, p.y)
+    }
+}
+
+/// Where a new magnify callout goes: twice the spot's size, beside it on
+/// the right (or on the left when there is no room), within `extent`.
+pub fn callout_beside(source: Rect, extent: Rect) -> Rect {
+    let size = (source.width * 2.0).max(48.0);
+    let gap = 24.0;
+    let y = (source.y + source.height / 2.0 - size / 2.0)
+        .min(extent.max_y() - size)
+        .max(extent.y);
+    let right = source.max_x() + gap;
+    let x = if right + size <= extent.max_x() || source.x - gap - size < extent.x {
+        right
+    } else {
+        source.x - gap - size
+    };
+    Rect::new(x, y, size, size)
+}
+
+/// Markers over the parts of `lines` (text line boxes) that the stroke
+/// through `points` crosses: from the first to the last point inside each
+/// line, at the line's height.
+pub fn snap_to_text(points: &[Point], lines: &[Rect]) -> Vec<Rect> {
+    // Fast strokes have few points: fill in every 2 points along them.
+    let mut dense: Vec<Point> = points.first().copied().into_iter().collect();
+    for w in points.windows(2) {
+        let (a, b) = (w[0], w[1]);
+        let steps = ((b.x - a.x).hypot(b.y - a.y) / 2.0).ceil().max(1.0) as usize;
+        dense.extend((1..=steps).map(|i| {
+            let t = i as f64 / steps as f64;
+            Point::new(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)
+        }));
+    }
+    let points = &dense;
+    lines
+        .iter()
+        .filter_map(|line| {
+            let slack = line.height * 0.25;
+            let inside: Vec<f64> = points
+                .iter()
+                .filter(|p| {
+                    p.y >= line.y - slack
+                        && p.y <= line.max_y() + slack
+                        && p.x >= line.x - slack
+                        && p.x <= line.max_x() + slack
+                })
+                .map(|p| p.x.clamp(line.x, line.max_x()))
+                .collect();
+            let lo = inside.iter().copied().fold(f64::INFINITY, f64::min);
+            let hi = inside.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            (hi - lo >= 4.0).then(|| Rect::new(lo - 2.0, line.y, hi - lo + 4.0, line.height))
+        })
+        .collect()
 }
 
 fn square_corner(anchor: Point, p: Point) -> Point {
@@ -782,6 +986,84 @@ mod tests {
     }
 
     #[test]
+    fn snaps_highlights_to_text_lines() {
+        let lines = [
+            Rect::new(10.0, 10.0, 200.0, 20.0),
+            Rect::new(10.0, 40.0, 150.0, 20.0),
+        ];
+        // A stroke across the middle of the first line, from x 50 to 120.
+        let stroke: Vec<Point> = (50..=120)
+            .step_by(5)
+            .map(|x| Point::new(f64::from(x), 22.0))
+            .collect();
+        assert_eq!(
+            snap_to_text(&stroke, &lines),
+            vec![Rect::new(48.0, 10.0, 74.0, 20.0)]
+        );
+        // A diagonal stroke over both lines marks both.
+        let both = [
+            Point::new(20.0, 15.0),
+            Point::new(60.0, 30.0),
+            Point::new(100.0, 50.0),
+        ];
+        assert_eq!(snap_to_text(&both, &lines).len(), 2);
+        // Strokes away from text keep their freehand shape.
+        assert!(snap_to_text(&[Point::new(300.0, 300.0)], &lines).is_empty());
+    }
+
+    #[test]
+    fn places_magnify_callouts_beside_the_spot() {
+        let extent = Rect::new(0.0, 0.0, 400.0, 300.0);
+        let right = callout_beside(Rect::new(50.0, 50.0, 40.0, 40.0), extent);
+        assert_eq!(right, Rect::new(114.0, 30.0, 80.0, 80.0));
+        // No room on the right: on the left.
+        let left = callout_beside(Rect::new(340.0, 200.0, 40.0, 40.0), extent);
+        assert_eq!(left.max_x(), 316.0);
+        assert!(left.max_y() <= 300.0);
+    }
+
+    #[test]
+    fn a_click_with_the_measure_tool_asks_to_measure() {
+        let mut s = session();
+        s.set_tool(Tool::Measure);
+        s.mouse_down(Point::new(30.0, 40.0), 4.0);
+        s.mouse_up();
+        assert!(s.doc.annotations.is_empty());
+        assert!(!s.history.can_undo());
+        assert_eq!(s.take_pending_measure(), Some(Point::new(30.0, 40.0)));
+        assert_eq!(s.take_pending_measure(), None);
+        s.add_measure(Point::new(10.0, 40.0), Point::new(90.0, 40.0));
+        assert_eq!(s.doc.annotations.len(), 1);
+        assert!(s.undo());
+    }
+
+    #[test]
+    fn bends_arrows_by_their_middle_handle() {
+        let mut s = session();
+        s.mouse_down(Point::new(10.0, 10.0), 4.0);
+        s.mouse_dragged(Point::new(110.0, 10.0), false);
+        s.mouse_up();
+        let id = s.selection.unwrap();
+        // Drag the middle handle (60, 10) down by 40.
+        s.mouse_down(Point::new(60.0, 10.0), 4.0);
+        s.mouse_dragged(Point::new(60.0, 50.0), false);
+        s.mouse_up();
+        match &s.doc.get(id).unwrap().shape {
+            Shape::Arrow { bend, .. } => assert_eq!(*bend, Some(Point::new(60.0, 90.0))),
+            other => panic!("{other:?}"),
+        }
+        let a = s.doc.get(id).unwrap();
+        assert!(
+            a.hit(Point::new(60.0, 50.0), 2.0),
+            "the curve is hit at its middle"
+        );
+        assert!(
+            !a.hit(Point::new(60.0, 10.0), 2.0),
+            "the straight line is gone"
+        );
+    }
+
+    #[test]
     fn redactions_are_padded_clamped_and_one_undo_step() {
         let mut s = session();
         let n = s.add_redactions(&[
@@ -873,7 +1155,7 @@ mod tests {
         s.insert_picture(picture(20, 10, 2.0), None);
         let json = serde_json::to_string(&s.doc).unwrap();
         let back: Document = serde_json::from_str(&json).unwrap();
-        let Some(Shape::Image { rect, picture }) = back.annotations.first().map(|a| &a.shape)
+        let Some(Shape::Image { rect, picture, .. }) = back.annotations.first().map(|a| &a.shape)
         else {
             panic!("no image layer");
         };

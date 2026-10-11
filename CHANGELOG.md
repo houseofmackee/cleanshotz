@@ -6,6 +6,20 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Editor: Magnify (M) and Measure (U) tools, curved arrows, a hand-drawn
+  look for shapes, a highlighter that snaps to text, opacity for image
+  layers and Export Before/After GIF, more background sizes for social
+  media and Balance.
+- Window captures on a background drop their own shadow; Quick Access
+  offers Add Background for them.
+
+### Changed
+
+- The tapered arrow (like CleanShot X's) is the default arrow.
+- The editor's menus and labels are translated.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added

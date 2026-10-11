@@ -55,6 +55,8 @@ pub struct Item {
     png: RefCell<Option<Vec<u8>>>,
     /// For recordings: the duration in seconds. `image` is the thumbnail.
     video: Cell<Option<f64>>,
+    /// Whether it is a window captured with its shadow, once checked.
+    window: Cell<Option<bool>>,
 }
 
 impl Item {
@@ -73,7 +75,19 @@ impl Item {
             saved: Cell::new(saved),
             png: RefCell::new(None),
             video: Cell::new(None),
+            window: Cell::new(None),
         }
+    }
+
+    /// A window captured on a transparent background (with its shadow),
+    /// which can get a background in the editor.
+    pub fn is_window_capture(&self) -> bool {
+        if let Some(known) = self.window.get() {
+            return known;
+        }
+        let window = !self.is_video() && image::has_transparent_corners(&self.image.borrow());
+        self.window.set(Some(window));
+        window
     }
 
     pub fn is_video(&self) -> bool {
@@ -120,6 +134,8 @@ enum Button {
     Upload,
     Copy,
     Save,
+    /// Window captures: open the editor with a background.
+    Background,
 }
 
 struct Card {
@@ -169,6 +185,7 @@ pub fn add(mtm: MainThreadMarker, delivered: Delivered) {
         saved: Cell::new(delivered.saved),
         png: RefCell::new(delivered.png),
         video: Cell::new(None),
+        window: Cell::new(None),
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
@@ -193,6 +210,7 @@ pub fn add_video(
         saved: Cell::new(saved),
         png: RefCell::new(None),
         video: Cell::new(Some(duration)),
+        window: Cell::new(Some(false)),
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
@@ -362,6 +380,9 @@ fn describe_card(view: &CardView, id: u64, item: &Item) {
     ];
     if !video {
         list.push(("Pin to Screen", Button::Pin));
+    }
+    if item.is_window_capture() {
+        list.push(("Add Background", Button::Background));
     }
     if crate::upload::enabled() {
         list.push(("Upload", Button::Upload));
@@ -533,6 +554,7 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
         Button::Upload => crate::upload::start(mtm, item.file()),
         Button::Annotate if item.is_video() => crate::video_editor::open(mtm, &item.file()),
         Button::Annotate => crate::editor::open_capture(mtm, &item),
+        Button::Background => crate::editor::open_capture_with_background(mtm, &item),
     }
 }
 
@@ -610,7 +632,12 @@ fn fit(image: NSSize, bounds: Rect) -> Rect {
     )
 }
 
-fn button_rects(bounds: Rect, saved: bool, video: bool) -> Vec<(Button, Rect, &'static str)> {
+fn button_rects(
+    bounds: Rect,
+    saved: bool,
+    video: bool,
+    window: bool,
+) -> Vec<(Button, Rect, &'static str)> {
     let corner = 24.0;
     let pill_w = (bounds.width - 32.0).min(120.0);
     let pill_h = 28.0;
@@ -644,6 +671,18 @@ fn button_rects(bounds: Rect, saved: bool, video: bool) -> Vec<(Button, Rect, &'
             Button::Upload,
             Rect::new(8.0, bounds.max_y() - 8.0 - corner, corner, corner),
             "icloud.and.arrow.up",
+        ));
+    }
+    if window {
+        buttons.push((
+            Button::Background,
+            Rect::new(
+                bounds.max_x() - 8.0 - corner,
+                bounds.max_y() - 8.0 - corner,
+                corner,
+                corner,
+            ),
+            "photo.on.rectangle",
         ));
     }
     // Recordings cannot be pinned, and "annotate" means trimming them.
@@ -801,7 +840,8 @@ impl CardView {
         let item = item_for(self.ivars().id);
         let saved = item.as_ref().is_some_and(|i| i.is_saved());
         let video = item.as_ref().is_some_and(|i| i.is_video());
-        button_rects(self.bounds_rect(), saved, video)
+        let window = item.as_ref().is_some_and(|i| i.is_window_capture());
+        button_rects(self.bounds_rect(), saved, video, window)
             .into_iter()
             .find(|(_, r, _)| r.contains(p))
             .map(|(b, _, _)| b)
@@ -892,10 +932,20 @@ impl CardView {
         if ivars.hover.get() {
             draw::fill_rect(bounds, &NSColor::colorWithWhite_alpha(0.0, 0.45));
             let pressed = ivars.pressed.get();
-            for (button, rect, label) in button_rects(bounds, item.is_saved(), item.is_video()) {
+            let buttons = button_rects(
+                bounds,
+                item.is_saved(),
+                item.is_video(),
+                item.is_window_capture(),
+            );
+            for (button, rect, label) in buttons {
                 let down = pressed == Some(button);
                 match button {
-                    Button::Close | Button::Pin | Button::Annotate | Button::Upload => {
+                    Button::Close
+                    | Button::Pin
+                    | Button::Annotate
+                    | Button::Upload
+                    | Button::Background => {
                         let alpha = if down { 0.85 } else { 0.6 };
                         draw::fill_rounded(
                             rect,

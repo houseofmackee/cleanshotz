@@ -112,6 +112,26 @@ pub fn to_gif(video: &Path, gif: &Path, fps: u32, max_width: u32) -> Result<(), 
     }
     let frames = Frames::new(video, Some(max_width as f64));
     let count = ((duration * fps as f64).floor() as usize).max(1);
+    let written = write_gif(
+        gif,
+        count,
+        1.0 / fps as f64,
+        (0..count).filter_map(|i| frames.at(i as f64 / fps as f64)),
+    )?;
+    if written == 0 {
+        return Err("no frames could be read from the recording".into());
+    }
+    Ok(())
+}
+
+/// Writes `frames` (at most `count`) as a looping GIF showing each for
+/// `delay` seconds. Returns how many frames were written.
+pub fn write_gif(
+    gif: &Path,
+    count: usize,
+    delay: f64,
+    frames: impl Iterator<Item = CFRetained<CGImage>>,
+) -> Result<usize, String> {
     let url = CFURL::from_file_path(gif).ok_or("invalid GIF path")?;
     let gif_type = CFString::from_static_str("com.compuserve.gif");
     // SAFETY: valid URL and type identifier.
@@ -132,28 +152,21 @@ pub fn to_gif(video: &Path, gif: &Path, fps: u32, max_width: u32) -> Result<(), 
     };
     // Loop forever.
     let file_properties = nested(loop_key, &CFNumber::new_i32(0));
-    let frame_properties = nested(delay_key, &CFNumber::new_f64(1.0 / fps as f64));
+    let frame_properties = nested(delay_key, &CFNumber::new_f64(delay));
     // SAFETY: dictionaries of ImageIO keys to CF values.
     unsafe { destination.set_properties(Some(file_properties.as_opaque())) };
 
     let mut written = 0;
-    for i in 0..count {
-        let Some(frame) = frames.at(i as f64 / fps as f64) else {
-            continue;
-        };
+    for frame in frames.take(count) {
         // SAFETY: as above.
         unsafe { destination.add_image(&frame, Some(frame_properties.as_opaque())) };
         written += 1;
     }
-    if written == 0 {
-        return Err("no frames could be read from the recording".into());
-    }
     // SAFETY: finalizing after adding images.
-    if unsafe { destination.finalize() } {
-        Ok(())
-    } else {
-        Err("could not write the GIF".into())
+    if written > 0 && !unsafe { destination.finalize() } {
+        return Err("could not write the GIF".into());
     }
+    Ok(written)
 }
 
 /// Mixes all audio tracks of a recording (system audio and microphone)

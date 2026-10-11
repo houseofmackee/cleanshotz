@@ -7,6 +7,7 @@ pub mod project;
 pub mod render;
 pub mod session;
 pub mod tools;
+pub mod trim;
 mod window;
 
 use std::path::{Path, PathBuf};
@@ -117,6 +118,38 @@ pub fn open_capture(mtm: MainThreadMarker, item: &Item) {
         mtm,
         base,
         Document::default(),
+        Source::Capture { file: file.clone() },
+        &title_for(&file),
+    );
+}
+
+thread_local! {
+    /// The background last chosen in an editor, for "Add Background".
+    static LAST_BACKGROUND: std::cell::RefCell<Option<model::Background>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Remembers `background` for the next "Add Background".
+pub fn remember_background(background: &model::Background) {
+    LAST_BACKGROUND.with(|b| *b.borrow_mut() = Some(background.clone()));
+}
+
+/// Opens a Quick Access capture with the last chosen background (or the
+/// default one), for window captures.
+pub fn open_capture_with_background(mtm: MainThreadMarker, item: &Item) {
+    let file = item.file();
+    let base = BaseImage::new(item.image(), item.scale);
+    let background = LAST_BACKGROUND
+        .with(|b| b.borrow().clone())
+        .unwrap_or_default();
+    let doc = Document {
+        background: Some(background),
+        ..Document::default()
+    };
+    open(
+        mtm,
+        base,
+        doc,
         Source::Capture { file: file.clone() },
         &title_for(&file),
     );
@@ -347,6 +380,7 @@ pub fn render_sample(input: &std::path::Path, output: &std::path::Path) -> Resul
             start: at(0.05, 0.1),
             end: at(0.3, 0.3),
             style: ArrowStyle::Filled,
+            bend: None,
         },
         Color::RED,
         6.0,
@@ -356,6 +390,7 @@ pub fn render_sample(input: &std::path::Path, output: &std::path::Path) -> Resul
             start: at(0.05, 0.4),
             end: at(0.3, 0.4),
             style: ArrowStyle::Open,
+            bend: None,
         },
         Color::rgb(0.1, 0.5, 1.0),
         4.0,
@@ -365,6 +400,7 @@ pub fn render_sample(input: &std::path::Path, output: &std::path::Path) -> Resul
             start: at(0.05, 0.5),
             end: at(0.3, 0.55),
             style: ArrowStyle::Double,
+            bend: None,
         },
         Color::rgb(0.2, 0.75, 0.3),
         4.0,

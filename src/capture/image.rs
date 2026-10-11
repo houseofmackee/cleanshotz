@@ -180,6 +180,23 @@ pub fn to_srgb(image: &CGImage) -> Option<CFRetained<CGImage>> {
     CGBitmapContextCreateImage(Some(&context))
 }
 
+/// Whether any corner pixel is mostly transparent (a window captured on
+/// a transparent background with its shadow).
+pub fn has_transparent_corners(image: &CGImage) -> bool {
+    let (w, h) = pixel_size(image);
+    if w == 0 || h == 0 {
+        return false;
+    }
+    [(0, 0), (w - 1, 0), (0, h - 1), (w - 1, h - 1)]
+        .iter()
+        .any(|&(x, y)| {
+            let corner = CGRect::new(CGPoint::new(x as f64, y as f64), CGSize::new(1.0, 1.0));
+            CGImage::with_image_in_rect(Some(image), corner)
+                .and_then(|pixel| to_srgb_rgba(&pixel))
+                .is_some_and(|(_, _, rgba)| rgba.get(3).is_some_and(|a| *a < 128))
+        })
+}
+
 pub fn pixel_size(image: &CGImage) -> (usize, usize) {
     (CGImage::width(Some(image)), CGImage::height(Some(image)))
 }

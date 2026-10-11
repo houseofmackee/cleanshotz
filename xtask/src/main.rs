@@ -461,6 +461,7 @@ fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
 /// translated where they are shown (see src/i18n.rs).
 const STRING_SINKS: &[&str] = &[
     "t!(",
+    "labels(",
     "toast::show(",
     "alert::show(",
     "titled_item(",
@@ -485,6 +486,7 @@ const FORM_METHODS: &[&str] = &[
 /// Files whose `fn title` lists names shown in menus, toolbars and tabs.
 const TITLE_FILES: &[&str] = &[
     "src/action.rs",
+    "src/editor/model.rs",
     "src/editor/tools.rs",
     "src/settings/mod.rs",
 ];

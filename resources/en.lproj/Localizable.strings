@@ -12,6 +12,27 @@
 /* src/history/window.rs */
 "1 capture" = "1 capture";
 
+/* src/editor/model.rs */
+"1.91:1 Link Preview (X, LinkedIn)" = "1.91:1 Link Preview (X, LinkedIn)";
+
+/* src/editor/model.rs */
+"16:9 Wide (YouTube)" = "16:9 Wide (YouTube)";
+
+/* src/editor/model.rs */
+"1:1 Square (Instagram)" = "1:1 Square (Instagram)";
+
+/* src/editor/model.rs */
+"3:2 Photo" = "3:2 Photo";
+
+/* src/editor/model.rs */
+"4:3 Standard" = "4:3 Standard";
+
+/* src/editor/model.rs */
+"4:5 Portrait (Instagram)" = "4:5 Portrait (Instagram)";
+
+/* src/editor/model.rs */
+"9:16 Story (Instagram, TikTok)" = "9:16 Story (Instagram, TikTok)";
+
 /* src/settings/mod.rs */
 "A pipeline replaces copying, saving and the thumbnail above." = "A pipeline replaces copying, saving and the thumbnail above.";
 
@@ -26,6 +47,12 @@
 
 /* src/action.rs */
 "Accessibility" = "Accessibility";
+
+/* src/editor/window.rs */
+"Add Image Below…" = "Add Image Below…";
+
+/* src/editor/window.rs */
+"Add Image to the Right…" = "Add Image to the Right…";
 
 /* src/settings/mod.rs */
 "After capture:" = "After capture:";
@@ -68,11 +95,20 @@
 /* src/settings/mod.rs */
 "Authorization:" = "Authorization:";
 
+/* src/editor/model.rs */
+"Auto" = "Auto";
+
 /* src/settings/mod.rs */
 "Automatic" = "Automatic";
 
 /* src/editor/tools.rs */
 "Background" = "Background";
+
+/* src/editor/window.rs */
+"Balance" = "Balance";
+
+/* src/editor/window.rs */
+"Before and After.gif" = "Before and After.gif";
 
 /* src/editor/tools.rs */
 "Blur" = "Blur";
@@ -191,8 +227,14 @@
 /* src/ocr/mod.rs */
 "Copied: {text}" = "Copied: {text}";
 
+/* src/editor/window.rs */
+"Copy Text" = "Copy Text";
+
 /* src/settings/mod.rs */
 "Copy to the clipboard" = "Copy to the clipboard";
+
+/* src/editor/window.rs */
+"Corners" = "Corners";
 
 /* src/settings/mod.rs */
 "Correct words with a dictionary" = "Correct words with a dictionary";
@@ -202,6 +244,9 @@
 
 /* src/record/session.rs */
 "Could not create the GIF" = "Could not create the GIF";
+
+/* src/editor/window.rs */
+"Could not save the GIF" = "Could not save the GIF";
 
 /* src/settings/mod.rs */
 "Could not save to the Keychain" = "Could not save to the Keychain";
@@ -224,6 +269,9 @@
 /* src/editor/window.rs */
 "Delete “{name}”" = "Delete “{name}”";
 
+/* src/editor/window.rs */
+"Double Arrow" = "Double Arrow";
+
 /* src/video_editor/crop.rs */
 "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop." = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
 
@@ -242,6 +290,9 @@
 /* src/settings/mod.rs */
 "Every setting is also in this file. After editing it, choose Reload Settings in the menu." = "Every setting is also in this file. After editing it, choose Reload Settings in the menu.";
 
+/* src/editor/window.rs */
+"Export Before/After GIF…" = "Export Before/After GIF…";
+
 /* src/video_editor/window.rs */
 "Exporting…" = "Exporting…";
 
@@ -254,8 +305,20 @@
 /* src/settings/mod.rs */
 "File name:" = "File name:";
 
+/* src/editor/window.rs */
+"Filled" = "Filled";
+
+/* src/editor/window.rs */
+"Filled Arrow" = "Filled Arrow";
+
 /* src/record/session.rs */
 "Finishing recording…" = "Finishing recording…";
+
+/* src/editor/window.rs */
+"Flip Horizontally" = "Flip Horizontally";
+
+/* src/editor/window.rs */
+"Flip Vertically" = "Flip Vertically";
 
 /* src/pin.rs */
 "Floats above other windows. Drag to move; use the actions to copy, zoom or close." = "Floats above other windows. Drag to move; use the actions to copy, zoom or close.";
@@ -271,6 +334,9 @@
 
 /* src/settings/mod.rs */
 "Frame rate:" = "Frame rate:";
+
+/* src/editor/window.rs */
+"Freehand" = "Freehand";
 
 /* src/settings/mod.rs */
 "Freeze the screen while selecting" = "Freeze the screen while selecting";
@@ -304,6 +370,9 @@
 
 /* src/settings/mod.rs */
 "HTTP endpoint" = "HTTP endpoint";
+
+/* src/editor/window.rs */
+"Hand-drawn" = "Hand-drawn";
 
 /* src/settings/mod.rs */
 "Hide desktop icons and widgets" = "Hide desktop icons and widgets";
@@ -392,6 +461,12 @@
 /* src/settings/mod.rs */
 "MP4" = "MP4";
 
+/* src/editor/tools.rs */
+"Magnify" = "Magnify";
+
+/* src/editor/tools.rs */
+"Measure" = "Measure";
+
 /* src/settings/mod.rs */
 "Medium" = "Medium";
 
@@ -440,6 +515,12 @@
 /* src/settings/mod.rs */
 "Off" = "Off";
 
+/* src/editor/window.rs */
+"Opacity {percent}%" = "Opacity {percent}%";
+
+/* src/editor/window.rs */
+"Open Arrow" = "Open Arrow";
+
 /* src/settings/mod.rs */
 "Open History…" = "Open History…";
 
@@ -464,6 +545,9 @@
 /* src/settings/mod.rs */
 "Otherwise they are mixed into one track, which every player plays." = "Otherwise they are mixed into one track, which every player plays.";
 
+/* src/editor/window.rs */
+"Outline" = "Outline";
+
 /* src/settings/mod.rs */
 "PNG" = "PNG";
 
@@ -472,6 +556,12 @@
 
 /* src/settings/mod.rs */
 "PUT (file as body)" = "PUT (file as body)";
+
+/* src/editor/window.rs */
+"Padding" = "Padding";
+
+/* src/editor/window.rs */
+"Paste or add a second image first, to compare with" = "Paste or add a second image first, to compare with";
 
 /* src/editor/tools.rs */
 "Pen" = "Pen";
@@ -485,6 +575,9 @@
 /* src/editor/window.rs */
 "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions." = "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions.";
 
+/* src/editor/window.rs */
+"Pin to Screen" = "Pin to Screen";
+
 /* src/pin.rs */
 "Pinned screenshot, {width} by {height} points" = "Pinned screenshot, {width} by {height} points";
 
@@ -493,6 +586,9 @@
 
 /* src/editor/tools.rs */
 "Pixelate" = "Pixelate";
+
+/* src/editor/window.rs */
+"Plain Text" = "Plain Text";
 
 /* src/settings/mod.rs */
 "Play a sound" = "Play a sound";
@@ -546,6 +642,9 @@
 "Rectangle" = "Rectangle";
 
 /* src/editor/window.rs */
+"Redact Sensitive Info" = "Redact Sensitive Info";
+
+/* src/editor/window.rs */
 "Redacted 1 item" = "Redacted 1 item";
 
 /* src/editor/window.rs */
@@ -563,8 +662,17 @@
 /* src/editor/window.rs */
 "Resize" = "Resize";
 
+/* src/editor/window.rs */
+"Resize…" = "Resize…";
+
 /* src/action.rs */
 "Restore Recently Closed" = "Restore Recently Closed";
+
+/* src/editor/window.rs */
+"Rotate Left" = "Rotate Left";
+
+/* src/editor/window.rs */
+"Rotate Right" = "Rotate Right";
 
 /* src/settings/mod.rs */
 "Rounded rectangle" = "Rounded rectangle";
@@ -575,6 +683,12 @@
 /* src/settings/mod.rs */
 "S3-compatible storage" = "S3-compatible storage";
 
+/* src/editor/window.rs */
+"Save As…" = "Save As…";
+
+/* src/editor/window.rs */
+"Save Project…" = "Save Project…";
+
 /* src/settings/mod.rs */
 "Save Retina screenshots at 1x" = "Save Retina screenshots at 1x";
 
@@ -584,7 +698,7 @@
 /* src/settings/mod.rs */
 "Save to:" = "Save to:";
 
-/* src/video_editor/window.rs */
+/* src/editor/window.rs, src/video_editor/window.rs */
 "Saved" = "Saved";
 
 /* src/action.rs */
@@ -644,6 +758,9 @@
 /* src/action.rs */
 "Settings…" = "Settings…";
 
+/* src/editor/window.rs */
+"Shadow" = "Shadow";
+
 /* src/settings/mod.rs */
 "Shortcuts" = "Shortcuts";
 
@@ -668,6 +785,9 @@
 /* src/scroll/session.rs */
 "Size limit reached · click Done" = "Size limit reached · click Done";
 
+/* src/editor/window.rs */
+"Snap to Text" = "Snap to Text";
+
 /* src/app/mod.rs */
 "Some shortcuts could not be registered" = "Some shortcuts could not be registered";
 
@@ -683,8 +803,14 @@
 /* src/settings/mod.rs */
 "System languages" = "System languages";
 
+/* src/editor/window.rs */
+"Tapered Arrow" = "Tapered Arrow";
+
 /* src/editor/tools.rs */
 "Text" = "Text";
+
+/* src/editor/window.rs */
+"Text on Color" = "Text on Color";
 
 /* src/ocr/mod.rs */
 "Text recognition failed" = "Text recognition failed";
@@ -715,6 +841,9 @@
 
 /* src/settings/mod.rs */
 "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file." = "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file.";
+
+/* src/editor/window.rs */
+"Trim plain margins so the capture sits in the middle" = "Trim plain margins so the capture sits in the middle";
 
 /* src/editor/window.rs */
 "Type a size in pixels or a percentage, such as 1280 or 50%" = "Type a size in pixels or a percentage, such as 1280 or 50%";

@@ -355,7 +355,7 @@ Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
   pull request to Raycast's extensions repository and needs the
   maintainer's Raycast username as `author`.
 
-### M12: Editor tools from other capture apps
+### M12: Editor tools from other capture apps (done)
 Group 2 of the October 2026 comparison, plus CleanShot X's arrow. Each item
 is independent; the order is a suggestion (quick ones first).
 - **Tapered arrow** (CleanShot X): a fourth arrow style, one filled shape
@@ -402,6 +402,17 @@ is independent; the order is a suggestion (quick ones first).
   background can be changed or removed later without a doubled shadow.
   Quick Access gets "Add Background" for window captures, which opens the
   editor with the last used background applied.
+- Status: all done; the tapered arrow is the default. Notes: the magnify
+  tool drags out from the spot's center; its callout moves with the
+  annotation and the spot by its own handle. Hand-drawn shapes use two
+  jittered passes from a generator seeded by the annotation id. The text
+  highlighter clips each line it crosses to the stroke's extent, so it
+  marks words rather than whole lines. Auto-measure scans the turned base
+  image with a tolerance of 12 per channel. "Add Background" remembers the
+  last background for the session only. Window captures are recognized by
+  transparent corners, both in Quick Access and in the editor (where the
+  opaque window body is shown on a background). The editor's style menu,
+  ••• menu and background labels are now translated too.
 
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
