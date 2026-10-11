@@ -35,15 +35,17 @@ Requires macOS 14 or later on an Apple Silicon Mac. Download
 [GitHub Releases](https://github.com/houseofmackee/cleanshotz/releases), open
 it and drag CleanShotZ into Applications. `SHA256SUMS.txt` has the checksums.
 
-The app is signed but not notarized by Apple, so macOS blocks the first open.
-To allow it: open the app once, dismiss the warning, then go to
-System Settings > Privacy & Security and click Open Anyway. Or, in Terminal:
-`xattr -dr com.apple.quarantine /Applications/CleanShotZ.app`.
+CleanShotZ is signed with a Developer ID and notarized by Apple (since
+0.6.0), so it opens like any other downloaded app.
 
 To update, download the new release and replace the app (quit it first).
-Every release is signed with the same certificate, so macOS keeps the Screen
-Recording and other permissions you gave it; you may need to allow the first
-open again.
+Every release is signed by the same developer, so macOS keeps the Screen
+Recording and other permissions you gave it.
+
+Coming from 0.5.0 or earlier: those releases were signed with a
+self-signed certificate, so macOS treats 0.6.0 as a new app and asks for
+Screen Recording, Accessibility and the other permissions again, once.
+The old entries in System Settings > Privacy & Security can be removed.
 
 ## Privacy
 
@@ -94,17 +96,22 @@ certificate is not marked as trusted and does not need to be.
 
 ### Releases
 
-Releases are signed with a separate self-signed "CleanShotZ Release"
-certificate, the same for every release (users' permissions depend on it).
-Create it once, add it to the repository's secrets as the command explains,
-and back it up outside GitHub:
-
-```sh
-cargo xtask create-release-cert
-```
+Releases are signed with a Developer ID Application certificate and
+notarized with an App Store Connect API key (Developer role). The release
+workflow reads the certificate from the `DEVELOPER_ID_P12_BASE64` and
+`DEVELOPER_ID_P12_PASSWORD` secrets, the key from `NOTARY_API_KEY_BASE64`,
+and the `APPLE_TEAM_ID`, `NOTARY_KEY_ID` and `NOTARY_ISSUER_ID` variables.
+Keep backups of the `.p12` and `.p8` outside GitHub. Releases up to 0.5.0
+used a self-signed "CleanShotZ Release" certificate
+(`cargo xtask create-release-cert`), which still works for builds without
+an Apple developer account.
 
 `cargo xtask dist` builds the signed release bundle and packages it in
-`target/dist` (zip, DMG, `SHA256SUMS.txt`). Pushing a version tag runs the
+`target/dist` (zip, DMG, `SHA256SUMS.txt`). With a Developer ID in the
+keychain it signs with it (set `CLEANSHOTZ_TEAM_ID` to pick a team), and
+with `CLEANSHOTZ_NOTARY_KEY` (the `.p8` path), `CLEANSHOTZ_NOTARY_KEY_ID`
+and `CLEANSHOTZ_NOTARY_ISSUER` it also notarizes and staples the app and
+the DMG. Pushing a version tag runs the
 same in the [release workflow](.github/workflows/release.yml) and publishes
 a GitHub release; the tag must match the version in `Cargo.toml`:
 

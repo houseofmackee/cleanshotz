@@ -6,7 +6,10 @@
 //!   testing, with its own bundle id and `cleanshotz-test://` URL scheme,
 //!   so tests never reach the user's running CleanShotZ
 //! - `dist`: a signed release bundle packaged for GitHub Releases in
-//!   `target/dist`: a zip, a DMG and `SHA256SUMS.txt`
+//!   `target/dist`: a zip, a DMG and `SHA256SUMS.txt`. Signed with a
+//!   Developer ID, the app and the DMG are notarized and stapled when the
+//!   App Store Connect API key is given: `CLEANSHOTZ_NOTARY_KEY` (path to
+//!   the `.p8`), `CLEANSHOTZ_NOTARY_KEY_ID` and `CLEANSHOTZ_NOTARY_ISSUER`
 //! - `create-dev-cert`: create the self-signed "CleanShotZ Dev" signing
 //!   identity in the login keychain
 //! - `create-release-cert`: create the self-signed "CleanShotZ Release"
@@ -16,8 +19,9 @@
 //!
 //! Signing identity, in order: `CLEANSHOTZ_SIGN_IDENTITY` (a name or SHA-1
 //! from `security find-identity -p codesigning`), then for release builds
-//! "CleanShotZ Release" if it is in the keychain, then "CleanShotZ Dev",
-//! then ad-hoc. Ad-hoc works but makes macOS forget the Screen Recording
+//! a valid "Developer ID Application" identity (of team
+//! `CLEANSHOTZ_TEAM_ID`, if set), then "CleanShotZ Release", then
+//! "CleanShotZ Dev", then ad-hoc. Ad-hoc works but makes macOS forget the Screen Recording
 //! permission after every rebuild. See README.md.
 
 use std::fs;
@@ -164,9 +168,11 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
     Ok(app)
 }
 
-fn sign(app: &Path, entitlements: &Path, release: bool) -> Result<()> {
-    let identity = match std::env::var("CLEANSHOTZ_SIGN_IDENTITY") {
+/// The identity `sign` uses.
+fn signing_identity(release: bool) -> Result<String> {
+    Ok(match std::env::var("CLEANSHOTZ_SIGN_IDENTITY") {
         Ok(identity) if !identity.is_empty() => identity,
+        _ if release && let Some(identity) = developer_id()? => identity,
         _ if release && has_identity(RELEASE_IDENTITY)? => RELEASE_IDENTITY.to_string(),
         _ if has_identity(DEV_IDENTITY)? => DEV_IDENTITY.to_string(),
         _ => {
@@ -176,7 +182,12 @@ fn sign(app: &Path, entitlements: &Path, release: bool) -> Result<()> {
             );
             "-".to_string()
         }
-    };
+    })
+}
+
+fn sign(app: &Path, entitlements: &Path, release: bool) -> Result<()> {
+    let identity = signing_identity(release)?;
+    println!("signing with {identity}");
     let mut codesign = Command::new("/usr/bin/codesign");
     codesign
         .args(["--force", "--sign", &identity, "--entitlements"])
@@ -201,6 +212,99 @@ fn has_identity(name: &str) -> Result<bool> {
         .output()
         .context("running security find-identity")?;
     Ok(String::from_utf8_lossy(&output.stdout).contains(&format!("\"{name}\"")))
+}
+
+/// The full name of a valid (trusted) "Developer ID Application" identity
+/// in the keychain, of team `CLEANSHOTZ_TEAM_ID` if that is set.
+fn developer_id() -> Result<Option<String>> {
+    let output = Command::new("/usr/bin/security")
+        .args(["find-identity", "-v", "-p", "codesigning"])
+        .output()
+        .context("running security find-identity")?;
+    let team = std::env::var("CLEANSHOTZ_TEAM_ID").unwrap_or_default();
+    Ok(String::from_utf8_lossy(&output.stdout)
+        .lines()
+        .filter_map(|line| line.split('"').nth(1))
+        .find(|name| {
+            name.starts_with("Developer ID Application:")
+                && (team.is_empty() || name.ends_with(&format!("({team})")))
+        })
+        .map(str::to_owned))
+}
+
+/// The App Store Connect API key for `notarytool`, from the environment.
+struct NotaryKey {
+    path: String,
+    id: String,
+    issuer: String,
+}
+
+impl NotaryKey {
+    fn from_env() -> Option<NotaryKey> {
+        let var = |name| std::env::var(name).ok().filter(|v| !v.is_empty());
+        Some(NotaryKey {
+            path: var("CLEANSHOTZ_NOTARY_KEY")?,
+            id: var("CLEANSHOTZ_NOTARY_KEY_ID")?,
+            issuer: var("CLEANSHOTZ_NOTARY_ISSUER")?,
+        })
+    }
+
+    /// Submits `file` (a zip or DMG) for notarization and waits for the
+    /// verdict; on rejection, prints Apple's log and fails.
+    fn notarize(&self, file: &Path) -> Result<()> {
+        println!("notarizing {}", file.display());
+        let output = Command::new("/usr/bin/xcrun")
+            .args(["notarytool", "submit", "--wait", "--output-format", "json"])
+            .args([
+                "--key",
+                &self.path,
+                "--key-id",
+                &self.id,
+                "--issuer",
+                &self.issuer,
+            ])
+            .arg(file)
+            .output()
+            .context("running notarytool")?;
+        let text = String::from_utf8_lossy(&output.stdout);
+        println!("{text}");
+        let id = json_field(&text, "id");
+        if json_field(&text, "status").as_deref() == Some("Accepted") {
+            return Ok(());
+        }
+        if let Some(id) = id {
+            let _ = Command::new("/usr/bin/xcrun")
+                .args(["notarytool", "log", &id])
+                .args([
+                    "--key",
+                    &self.path,
+                    "--key-id",
+                    &self.id,
+                    "--issuer",
+                    &self.issuer,
+                ])
+                .status();
+        }
+        bail!(
+            "notarization of {} failed: {}",
+            file.display(),
+            String::from_utf8_lossy(&output.stderr)
+        )
+    }
+}
+
+/// A top-level string field of a small JSON object, without a JSON parser.
+fn json_field(json: &str, name: &str) -> Option<String> {
+    let rest = &json[json.find(&format!("\"{name}\""))? + name.len() + 2..];
+    let rest = &rest[rest.find('"')? + 1..];
+    Some(rest[..rest.find('"')?].to_string())
+}
+
+fn staple(file: &Path) -> Result<()> {
+    run(Command::new("/usr/bin/xcrun")
+        .args(["stapler", "staple"])
+        .arg(file))
+    .with_context(|| format!("stapling {}", file.display()))
 }
 
 /// Creates the self-signed "CleanShotZ Dev" identity for local builds.
@@ -340,6 +444,30 @@ fn dist() -> Result<()> {
         fs::remove_dir_all(&dist)?;
     }
     fs::create_dir_all(&dist)?;
+    let identity = signing_identity(true)?;
+    let notary = if identity.starts_with("Developer ID") {
+        let key = NotaryKey::from_env();
+        if key.is_none() {
+            eprintln!(
+                "note: signed with a Developer ID but not notarized; set \
+                 CLEANSHOTZ_NOTARY_KEY, CLEANSHOTZ_NOTARY_KEY_ID and CLEANSHOTZ_NOTARY_ISSUER"
+            );
+        }
+        key
+    } else {
+        None
+    };
+    if let Some(notary) = &notary {
+        // The app first, so the zip and the DMG both hold a stapled app.
+        let upload = dist.join("notarize.zip");
+        run(Command::new("/usr/bin/ditto")
+            .args(["-c", "-k", "--keepParent"])
+            .arg(&app)
+            .arg(&upload))?;
+        notary.notarize(&upload)?;
+        fs::remove_file(&upload)?;
+        staple(&app)?;
+    }
     let zip = format!("{APP_NAME}-{version}.zip");
     let dmg = format!("{APP_NAME}-{version}.dmg");
     run(Command::new("/usr/bin/ditto")
@@ -368,6 +496,17 @@ fn dist() -> Result<()> {
         .arg(&staging)
         .arg(dist.join(&dmg)))?;
     fs::remove_dir_all(&staging)?;
+    if let Some(notary) = &notary {
+        run(Command::new("/usr/bin/codesign")
+            .args(["--sign", &identity, "--timestamp"])
+            .arg(dist.join(&dmg)))?;
+        notary.notarize(&dist.join(&dmg))?;
+        staple(&dist.join(&dmg))?;
+        run(Command::new("/usr/sbin/spctl")
+            .args(["--assess", "--type", "execute", "--verbose"])
+            .arg(&app))
+        .context("Gatekeeper does not accept the app")?;
+    }
 
     let sums = Command::new("/usr/bin/shasum")
         .current_dir(&dist)
@@ -677,6 +816,17 @@ fn run(command: &mut Command) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_notarytool_json() {
+        let json = r#"{"id":"2efe2717-52ef-43a5-96dc-0797e4ca1041","message":"Processing complete","status":"Accepted"}"#;
+        assert_eq!(
+            json_field(json, "id").as_deref(),
+            Some("2efe2717-52ef-43a5-96dc-0797e4ca1041")
+        );
+        assert_eq!(json_field(json, "status").as_deref(), Some("Accepted"));
+        assert_eq!(json_field(json, "missing"), None);
+    }
 
     #[test]
     fn extracts_user_facing_literals() {

@@ -4,11 +4,13 @@ name: Release
 #   git tag v0.1.0 && git push origin v0.1.0
 # Tags with a hyphen (v0.2.0-beta.1) become pre-releases.
 #
-# Needs two repository secrets, made by `cargo xtask create-release-cert`:
-#   RELEASE_CERT_P12_BASE64  the "CleanShotZ Release" certificate and key
-#   RELEASE_CERT_PASSWORD    its password
-# Every release must be signed with the same certificate: its signature is
-# what keeps users' Screen Recording permission across updates.
+# Signs with a Developer ID and notarizes. Needs these repository secrets:
+#   DEVELOPER_ID_P12_BASE64    the Developer ID Application certificate and key
+#   DEVELOPER_ID_P12_PASSWORD  its password
+#   NOTARY_API_KEY_BASE64      an App Store Connect API key (.p8, Developer role)
+# and these variables: APPLE_TEAM_ID, NOTARY_KEY_ID, NOTARY_ISSUER_ID.
+# Every release must be signed by the same team: the signature is what
+# keeps users' Screen Recording and other permissions across updates.
 
 on:
   push:
@@ -37,11 +39,11 @@ jobs:
 
       - name: Import the signing certificate
         env:
-          P12_BASE64: ${{ secrets.RELEASE_CERT_P12_BASE64 }}
-          P12_PASSWORD: ${{ secrets.RELEASE_CERT_PASSWORD }}
+          P12_BASE64: ${{ secrets.DEVELOPER_ID_P12_BASE64 }}
+          P12_PASSWORD: ${{ secrets.DEVELOPER_ID_P12_PASSWORD }}
         run: |
           if [ -z "$P12_BASE64" ] || [ -z "$P12_PASSWORD" ]; then
-            echo "::error::RELEASE_CERT_P12_BASE64 and RELEASE_CERT_PASSWORD must be set"
+            echo "::error::DEVELOPER_ID_P12_BASE64 and DEVELOPER_ID_P12_PASSWORD must be set"
             exit 1
           fi
           keychain="$RUNNER_TEMP/release.keychain-db"
@@ -52,14 +54,42 @@ jobs:
           echo "$P12_BASE64" | base64 --decode > "$RUNNER_TEMP/release.p12"
           security import "$RUNNER_TEMP/release.p12" -k "$keychain" -P "$P12_PASSWORD" -T /usr/bin/codesign
           rm "$RUNNER_TEMP/release.p12"
+          # Apple's Developer ID G2 intermediate, so the identity is valid.
+          curl -sSfL -o "$RUNNER_TEMP/DeveloperIDG2CA.cer" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          fingerprint=$(openssl x509 -inform der -in "$RUNNER_TEMP/DeveloperIDG2CA.cer" -noout -fingerprint -sha256 | cut -d= -f2)
+          if [ "$fingerprint" != "F1:6C:D3:C5:4C:7F:83:CE:A4:BF:1A:3E:6A:08:19:C8:AA:A8:E4:A1:52:8F:D1:44:71:5F:35:06:43:D2:DF:3A" ]; then
+            echo "::error::unexpected Developer ID G2 intermediate certificate"
+            exit 1
+          fi
+          security add-certificates -k "$keychain" "$RUNNER_TEMP/DeveloperIDG2CA.cer"
           security set-key-partition-list -S apple-tool:,apple: -s -k "$keychain_password" "$keychain" > /dev/null
           security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
-          security find-identity -p codesigning "$keychain"
+          security find-identity -v -p codesigning "$keychain"
 
-      - name: Build and package
+      - name: Write the notary key
         env:
-          CLEANSHOTZ_SIGN_IDENTITY: CleanShotZ Release
-        run: cargo xtask dist
+          KEY_BASE64: ${{ secrets.NOTARY_API_KEY_BASE64 }}
+        run: |
+          if [ -z "$KEY_BASE64" ]; then
+            echo "::error::NOTARY_API_KEY_BASE64 must be set"
+            exit 1
+          fi
+          echo "$KEY_BASE64" | base64 --decode > "$RUNNER_TEMP/notary.p8"
+
+      - name: Build, notarize and package
+        env:
+          CLEANSHOTZ_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          CLEANSHOTZ_NOTARY_KEY: ${{ runner.temp }}/notary.p8
+          CLEANSHOTZ_NOTARY_KEY_ID: ${{ vars.NOTARY_KEY_ID }}
+          CLEANSHOTZ_NOTARY_ISSUER: ${{ vars.NOTARY_ISSUER_ID }}
+        run: |
+          if [ -z "$CLEANSHOTZ_TEAM_ID" ] || [ -z "$CLEANSHOTZ_NOTARY_KEY_ID" ] || [ -z "$CLEANSHOTZ_NOTARY_ISSUER" ]; then
+            echo "::error::the APPLE_TEAM_ID, NOTARY_KEY_ID and NOTARY_ISSUER_ID variables must be set"
+            exit 1
+          fi
+          cargo xtask dist
+          # Fail rather than publish anything Gatekeeper would block.
+          xcrun stapler validate "target/dist/CleanShotZ-${GITHUB_REF_NAME#v}.dmg"
 
       - name: Publish the release
         env:
@@ -70,12 +100,7 @@ jobs:
           cat > "$notes" <<NOTES
           ## Installing
 
-          Download \`CleanShotZ-$version.dmg\` (or the zip), open it and drag CleanShotZ into Applications. CleanShotZ is free software that is not notarized by Apple, so macOS blocks it the first time:
-
-          1. Open CleanShotZ once; macOS says it cannot be opened.
-          2. Open System Settings > Privacy & Security, scroll down and click **Open Anyway** next to CleanShotZ.
-
-          Or, in Terminal: \`xattr -dr com.apple.quarantine /Applications/CleanShotZ.app\`
+          Download \`CleanShotZ-$version.dmg\` (or the zip), open it and drag CleanShotZ into Applications. It is signed with a Developer ID and notarized by Apple, so it opens like any other app.
 
           Requires macOS 14 or later on Apple silicon. Checksums are in \`SHA256SUMS.txt\`.
           NOTES
@@ -85,6 +110,8 @@ jobs:
             --title "CleanShotZ $version" \
             target/dist/CleanShotZ-$version.dmg target/dist/CleanShotZ-$version.zip target/dist/SHA256SUMS.txt
 
-      - name: Remove the temporary keychain
+      - name: Remove the temporary keychain and key
         if: always()
-        run: security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+        run: |
+          security delete-keychain "$RUNNER_TEMP/release.keychain-db" || true
+          rm -f "$RUNNER_TEMP/notary.p8"

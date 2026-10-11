@@ -582,9 +582,10 @@ Group 4 of the October 2026 comparison.
   xtask dist` (zip, DMG, checksums), `cargo xtask create-release-cert`, the
   app icon (`resources/icon/make-icon.swift`), the release certificate and
   its secrets, README screenshots and repository hygiene are done; v0.1.0
-  to v0.5.0 were published as pre-releases. Open: automatic updates
-  (Sparkle), notarization with a Developer ID, Homebrew, and publishing the
-  Raycast extension.
+  to v0.5.0 were published as pre-releases with the self-signed
+  certificate. Since 0.6.0 releases are signed with a Developer ID and
+  notarized (the app and the DMG, both stapled). Open: automatic updates
+  (Sparkle), Homebrew, and publishing the Raycast extension.
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
@@ -608,12 +609,15 @@ Group 4 of the October 2026 comparison.
   by the same certificate; updates it installs do not hit Gatekeeper again.
   The private EdDSA key is a CI secret. Automatic checks are opt-in on first
   launch.
-- **Homebrew:** not possible until releases are notarized, since Homebrew no
-  longer accepts casks that fail Gatekeeper.
-- **Later, with a Developer ID:** sign with Developer ID Application, enable
-  `--timestamp`, notarize with `notarytool` and staple. Switching certificates
-  changes the designated requirement, so users re-grant Screen Recording
-  once; announce it in that release's notes.
+- **Homebrew:** possible now that releases are notarized (Homebrew no
+  longer accepts casks that fail Gatekeeper): a cask in a
+  `houseofmackee/homebrew-tap` repository first, later possibly
+  homebrew-cask itself.
+- **Developer ID (done in 0.6.0):** signed with Developer ID Application,
+  the hardened runtime and a timestamp; notarized with `notarytool` using
+  an App Store Connect API key, then stapled. The switch from the
+  self-signed certificate changed the designated requirement, so users
+  re-grant permissions once; the 0.6.0 notes say so.
 - **Repository hygiene:** README with install instructions and screenshots,
   CONTRIBUTING.md, issue and PR templates, CHANGELOG.md, Dependabot for Cargo
   and Actions.
@@ -650,11 +654,11 @@ Group 4 of the October 2026 comparison.
 1. **Captions** (see Future work); needs macOS 26 for SpeechAnalyzer.
 2. **Automatic updates with Sparkle** (see Distribution); can be done
    without any account.
-3. **Needs the maintainer's accounts:** a Developer ID for notarization
-   (then Homebrew), and a Raycast username to publish the extension to the
-   Raycast Store.
-4. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
+3. **Homebrew:** a tap with a cask for the notarized DMG.
+4. **Needs the maintainer's account:** a Raycast username to publish the
+   extension to the Raycast Store.
+5. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
    preview; translating the History window's context menu titles.
-5. **Not yet tested on real hardware:** Studio and the panel before
+6. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
    an M1, notch cropping on a notched display, and printing to a printer.
