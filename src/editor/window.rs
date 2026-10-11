@@ -51,6 +51,7 @@ const MORE_FLIP_HORIZONTAL: isize = 10;
 const MORE_FLIP_VERTICAL: isize = 11;
 const MORE_RESIZE: isize = 12;
 const MORE_BEFORE_AFTER: isize = 13;
+const MORE_PRINT: isize = 14;
 /// Image layer opacities offered in the style menu.
 const OPACITIES: [f64; 4] = [1.0, 0.75, 0.5, 0.25];
 
@@ -274,6 +275,7 @@ define_class!(
                 MORE_FLIP_VERTICAL => self.turn(Turn::FlipVertical),
                 MORE_RESIZE => self.resize(),
                 MORE_BEFORE_AFTER => self.export_before_after(),
+                MORE_PRINT => self.print(),
                 _ => {}
             }
         }
@@ -546,6 +548,7 @@ impl EditorController {
             "Flip Vertically",
             "Resize…",
             "Export Before/After GIF…",
+            "Print…",
         ]) {
             more.addItemWithTitle(&NSString::from_str(&title));
         }
@@ -1229,6 +1232,18 @@ impl EditorController {
         if let Some((start, end)) = found {
             self.ivars().session.borrow_mut().add_measure(start, end);
         }
+    }
+
+    /// Prints the image as it is now (long captures over several pages).
+    pub fn print(&self) {
+        let Some(image) = self.rendered() else {
+            return;
+        };
+        let title = self
+            .window()
+            .map(|w| w.title().to_string())
+            .unwrap_or_default();
+        crate::ui::print::print_image(self.mtm(), &image, &title);
     }
 
     /// Saves a two-frame GIF: the image without, then with, its top image
@@ -2173,6 +2188,7 @@ impl CanvasView {
             .map(|s| s.to_string().to_lowercase())
             .unwrap_or_default();
         match (command, event.keyCode(), chars.as_str()) {
+            (true, _, "p") => editor.print(),
             (true, _, "r") if shift => editor.turn(Turn::Left),
             (true, _, "r") => editor.turn(Turn::Right),
             (true, _, "z") if shift => editor.redo(),

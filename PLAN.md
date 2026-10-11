@@ -521,14 +521,33 @@ video, and a renderer draws them at export (and in the preview).
   the host clock and aligned at the first frame); macOS 14, where clicks
   come from the event tap fallback as they do today.
 
+### M14: Organization and workflow
+Group 4 of the October 2026 comparison.
+- **Notch cropping** (CleanShot X): on displays with a camera housing,
+  full-screen captures of a full-screen app have a black band where the
+  menu bar would be; it is cropped away (Settings > Screenshots, on by
+  default). Only a band that is black edge to edge is removed, so normal
+  captures keep the menu bar.
+- **Printing** (CleanShot X): Print… in the editor's ••• menu (Command-P)
+  and in History's context menu prints the image; scrolling captures (taller than a page) are
+  split across pages at full width instead of being shrunk onto one.
+- **Snap to UI elements** (Snipaste): while selecting an area, holding
+  Command snaps the selection to the button, field or panel under the
+  pointer (found through the accessibility API, with Accessibility
+  permission); a click selects that element's frame.
+- **History organization** (ScreenFloat): a star rating, tags and a note
+  for each capture, a Starred filter, and searching by tag (`#tag`) and
+  note text along with the recognized text; stored in the history
+  database.
+- **Step capture** (Snagit): a Step Capture mode that saves a screenshot
+  of the window under the pointer at every click, numbered and with the
+  click marked, until stopped; then exports one guide as Markdown (with
+  the images), HTML or PDF, with a title and an editable caption per step.
+
 ### Future work
 - **Captions** (from group 3, deferred): subtitles made on the Mac with
   Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor and
   burned in or exported as SRT.
-- **Group 4, organization and workflow:** tags, ratings, notes and
-  collections in History; step capture; snapping to UI elements while
-  selecting; printing scrolling captures across pages; cropping the notch
-  out of full-screen captures.
 
 ### Distribution (before the first public release, targeted after M3)
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo

@@ -66,6 +66,8 @@ pub struct WindowInfo {
     pub frame: Rect,
     pub title: String,
     pub app_name: String,
+    /// The owning app's process, for finding UI elements in it.
+    pub pid: i32,
 }
 
 impl Content {
@@ -185,6 +187,7 @@ impl Content {
                             frame: Rect::new(f.origin.x, f.origin.y, f.size.width, f.size.height),
                             title: w.title().map(|t| t.to_string()).unwrap_or_default(),
                             app_name: app.applicationName().to_string(),
+                            pid: app.processID(),
                         },
                     ))
                 })

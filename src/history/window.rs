@@ -46,6 +46,7 @@ mod tag {
     pub const DELETE: isize = 6;
     pub const UPLOAD: isize = 7;
     pub const COPY_LINK: isize = 8;
+    pub const PRINT: isize = 9;
 }
 
 struct Item {
@@ -311,6 +312,7 @@ impl HistoryWindow {
                 ];
                 if !recording {
                     commands.push(("Pin to Screen", tag::PIN));
+                    commands.push(("Print…", tag::PRINT));
                 }
                 if crate::upload::enabled() {
                     commands.push(("Upload", tag::UPLOAD));
@@ -581,6 +583,7 @@ impl HistoryWindow {
         add("Show in Finder", tag::SHOW_IN_FINDER, exists);
         if !recording {
             add("Pin to Screen", tag::PIN, exists);
+            add("Print…", tag::PRINT, exists);
         }
         if crate::upload::enabled() {
             add("Upload", tag::UPLOAD, exists);
@@ -625,6 +628,16 @@ impl HistoryWindow {
             tag::SHOW_IN_FINDER => {
                 NSWorkspace::sharedWorkspace()
                     .activateFileViewerSelectingURLs(&NSArray::from_retained_slice(&[url()]));
+            }
+            tag::PRINT => {
+                if let Some(image) = crate::capture::image::load(&entry.path) {
+                    let title = entry
+                        .path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().into_owned())
+                        .unwrap_or_default();
+                    crate::ui::print::print_image(mtm, &image, &title);
+                }
             }
             tag::PIN => {
                 if let Some(image) = crate::capture::image::load(&entry.path) {

@@ -80,6 +80,9 @@ pub struct CaptureSettings {
     /// Convert captures from the display's color space to sRGB, so colors
     /// look the same on other screens.
     pub convert_to_srgb: bool,
+    /// Crop the black band around the camera housing (notch) from
+    /// full-screen captures of full-screen apps.
+    pub crop_notch: bool,
     /// Include the mouse pointer in fullscreen and area captures.
     pub show_cursor: bool,
     /// Freeze the screen while selecting an area, so the capture matches
@@ -116,6 +119,7 @@ impl Default for CaptureSettings {
             webp_quality: 1.0,
             downscale_retina: false,
             convert_to_srgb: false,
+            crop_notch: true,
             show_cursor: false,
             freeze_screen: false,
             hide_desktop_icons: false,

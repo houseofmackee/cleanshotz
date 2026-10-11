@@ -2,6 +2,7 @@
 
 pub mod color;
 pub mod countdown;
+pub mod elements;
 pub mod flow;
 pub mod geometry;
 pub mod image;
@@ -84,17 +85,68 @@ pub fn capture_fullscreen(
             shadow: false,
         },
     )?;
-    let source = Some(display_bounds(display_id));
+    let mut source = display_bounds(display_id);
+    // A full-screen app on a display with a camera housing leaves a black
+    // band where the menu bar would be.
+    let notch = screen.safeAreaInsets().top;
+    let image = match settings
+        .crop_notch
+        .then(|| without_black_band(&image, (notch * scale).round() as usize))
+        .flatten()
+    {
+        Some(cropped) => {
+            tracing::info!(points = notch, "notch band cropped");
+            source = Rect::new(
+                source.x,
+                source.y + notch,
+                source.width,
+                source.height - notch,
+            );
+            cropped
+        }
+        None => image,
+    };
     output::deliver(
         mtm,
         Captured {
             image,
             scale,
-            source,
+            source: Some(source),
         },
         settings,
     );
     Ok(())
+}
+
+/// `image` without its top `rows` pixels, if those are black from edge to
+/// edge; `None` otherwise (or when there are none).
+fn without_black_band(
+    image: &objc2_core_graphics::CGImage,
+    rows: usize,
+) -> Option<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>> {
+    let (w, h) = image::pixel_size(image);
+    if rows == 0 || rows >= h / 4 {
+        return None;
+    }
+    let band = image::crop(image, Rect::new(0.0, 0.0, w as f64, rows as f64), 1.0)?;
+    let (_, _, pixels) = image::to_pixels(&band)?;
+    if !is_black(&pixels) {
+        return None;
+    }
+    image::crop(
+        image,
+        Rect::new(0.0, rows as f64, w as f64, (h - rows) as f64),
+        1.0,
+    )
+}
+
+/// Whether every pixel (BGRA) is black, give or take a little noise.
+fn is_black(pixels: &[u32]) -> bool {
+    !pixels.is_empty()
+        && pixels.iter().all(|p| {
+            let [b, g, r, _] = p.to_le_bytes();
+            r.max(g).max(b) <= 8
+        })
 }
 
 /// Captures `rect` (display-local points, top-left origin) of a display as
@@ -247,4 +299,28 @@ pub fn capture_window(
     let captured = grab_window(window_id, settings)?;
     output::deliver(mtm, captured, settings);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn crops_only_a_black_band() {
+        let (w, h) = (40usize, 100usize);
+        // 10 black rows, then a light picture.
+        let mut pixels = vec![0xFFF0_F0F0u32; w * h];
+        for p in &mut pixels[..w * 10] {
+            *p = 0xFF02_0202;
+        }
+        let image = image::from_pixels(w, h, &pixels).unwrap();
+        let cropped = without_black_band(&image, 10).expect("the band is cropped");
+        assert_eq!(image::pixel_size(&cropped), (40, 90));
+        // A menu bar (light pixels in the band) stays.
+        pixels[5] = 0xFFFF_FFFF;
+        let with_menu_bar = image::from_pixels(w, h, &pixels).unwrap();
+        assert!(without_black_band(&with_menu_bar, 10).is_none());
+        // No band on displays without a camera housing.
+        assert!(without_black_band(&image, 0).is_none());
+    }
 }

@@ -1029,6 +1029,12 @@ fn screenshots(f: &mut Form) {
     );
     f.check(
         "",
+        "Crop the notch from full-screen apps",
+        |c| c.capture.crop_notch,
+        |c, v| c.capture.crop_notch = v,
+    );
+    f.check(
+        "",
         "Convert colors to sRGB",
         |c| c.capture.convert_to_srgb,
         |c, v| c.capture.convert_to_srgb = v,

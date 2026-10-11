@@ -10,6 +10,8 @@
 //!   to move the selection
 //! - Space (not dragging): toggle area and window mode
 //! - arrow keys: move the pointer by 1 point (10 with Shift)
+//! - hold Command: snap to the UI element under the pointer (a button,
+//!   field or panel, with Accessibility permission); click to select it
 //! - Escape or right click: cancel
 //!
 //! In color mode a click (or Return) picks the pixel under the pointer and
@@ -117,6 +119,10 @@ struct Session {
     space_anchor: Option<Point>,
     shift: bool,
     option: bool,
+    /// Command held: snapping to UI elements.
+    command: bool,
+    /// The UI element under the pointer (surface, display-local rect).
+    snap: Option<(usize, Rect)>,
     hovered: Option<usize>,
     on_done: Option<Completion>,
     previous_app: Option<Retained<NSRunningApplication>>,
@@ -169,6 +175,8 @@ pub fn begin(
         space_anchor: None,
         shift: false,
         option: false,
+        command: false,
+        snap: None,
         hovered: None,
         on_done: Some(Box::new(on_done)),
         previous_app,
@@ -197,7 +205,9 @@ pub fn begin(
         Mode::Color => t!(
             "Move the pointer over a color and click to copy it, or drag for the average of an area. Escape cancels."
         ),
-        _ => t!("Drag to select an area. Space picks a window instead. Escape cancels."),
+        _ => t!(
+            "Drag to select an area. Space picks a window instead; hold Command to pick a button or panel. Escape cancels."
+        ),
     });
     for surface in &session.surfaces {
         crate::ui::access::describe(
@@ -346,8 +356,32 @@ impl Session {
         Some((drag.surface, rect))
     }
 
+    /// Finds the UI element under the pointer while Command is held.
+    fn update_snap(&mut self) {
+        self.snap = None;
+        if !self.command || self.mode != Mode::Area || self.drag.is_some() {
+            return;
+        }
+        let Some((surface, p)) = self.cursor else {
+            return;
+        };
+        let Some(window) = self.window_at(surface, p) else {
+            return;
+        };
+        let o = self.surfaces[surface].display.cg_origin;
+        let global = Point::new(o.x + p.x, o.y + p.y);
+        let window_rect = self.window_rect_on(window, surface);
+        self.snap = super::elements::at(self.windows[window].pid, self.windows[window].id, global)
+            .map(|r| r.offset(-o.x, -o.y).intersection(&window_rect))
+            .filter(|r| r.is_usable())
+            .map(|r| (surface, r));
+    }
+
     fn pointer_moved(&mut self, surface: usize, p: Point) {
         self.cursor = Some((surface, p));
+        if self.command {
+            self.update_snap();
+        }
         if let Some(last) = self.space_anchor {
             // Space held: move the whole selection.
             if let Some((s, rect)) = self.selection() {
@@ -372,6 +406,21 @@ impl Session {
 
     fn mouse_down(&mut self, surface: usize, p: Point) -> Outcome {
         self.cursor = Some((surface, p));
+        if self.mode == Mode::Area
+            && let Some((s, rect)) = self.snap.filter(|(s, _)| *s == surface)
+        {
+            let display = &self.surfaces[s].display;
+            let frozen = if self.freeze {
+                display.snapshot.clone().map(|img| (img, display.scale))
+            } else {
+                None
+            };
+            return Outcome::Done(Some(Selection::Area {
+                display_id: display.id,
+                rect,
+                frozen,
+            }));
+        }
         match self.mode {
             Mode::Area | Mode::Color => {
                 self.drag = Some(Drag {
@@ -520,7 +569,9 @@ impl Session {
             }
         }
 
+        let snapped = self.snap.filter(|(s, _)| *s == index).map(|(_, r)| r);
         let hole = match self.mode {
+            Mode::Area if snapped.is_some() => snapped,
             Mode::Area | Mode::Color => self
                 .selection()
                 .filter(|(s, _)| *s == index)
@@ -537,6 +588,14 @@ impl Session {
 
         if let Some(hole) = hole.filter(|h| h.width > 0.0 && h.height > 0.0) {
             match self.mode {
+                Mode::Area if snapped.is_some() => {
+                    NSColor::colorWithSRGBRed_green_blue_alpha(0.2, 0.5, 1.0, 0.2).setFill();
+                    NSBezierPath::fillRect(ns_rect(hole));
+                    NSColor::colorWithSRGBRed_green_blue_alpha(0.2, 0.5, 1.0, 0.9).setStroke();
+                    stroke_rect(inset(hole, 1.0), 2.0);
+                    let label = format!("{} × {}", hole.width.round(), hole.height.round());
+                    draw_label(&label, label_origin(hole, bounds), 12.0);
+                }
                 Mode::Color => {
                     NSColor::blackColor().setStroke();
                     stroke_rect(inset(hole, -1.5), 1.0);
@@ -780,9 +839,16 @@ define_class!(
         #[unsafe(method(mouseMoved:))]
         fn mouse_moved(&self, event: &NSEvent) {
             let (index, p) = (*self.ivars(), self.point(event));
+            // Read Command from the event too: without keyboard focus
+            // (opened from the terminal) no flagsChanged arrives.
+            let command = event.modifierFlags().contains(NSEventModifierFlags::Command);
             NSCursor::crosshairCursor().set();
             dispatch(|s| {
+                s.command = command;
                 s.pointer_moved(index, p);
+                if !command {
+                    s.snap = None;
+                }
                 Outcome::Continue
             });
         }
@@ -801,7 +867,13 @@ define_class!(
         #[unsafe(method(mouseDown:))]
         fn mouse_down(&self, event: &NSEvent) {
             let (index, p) = (*self.ivars(), self.point(event));
-            dispatch(|s| s.mouse_down(index, p));
+            let command = event.modifierFlags().contains(NSEventModifierFlags::Command);
+            dispatch(|s| {
+                if !command {
+                    s.snap = None;
+                }
+                s.mouse_down(index, p)
+            });
         }
 
         #[unsafe(method(mouseDragged:))]
@@ -848,6 +920,11 @@ define_class!(
             dispatch(|s| {
                 s.shift = flags.contains(NSEventModifierFlags::Shift);
                 s.option = flags.contains(NSEventModifierFlags::Option);
+                let command = flags.contains(NSEventModifierFlags::Command);
+                if command != s.command {
+                    s.command = command;
+                    s.update_snap();
+                }
                 Outcome::Continue
             });
         }

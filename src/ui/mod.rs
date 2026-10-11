@@ -1,6 +1,7 @@
 pub mod access;
 pub mod draw;
 pub mod panels;
+pub mod print;
 pub mod toast;
 
 use objc2::MainThreadMarker;
