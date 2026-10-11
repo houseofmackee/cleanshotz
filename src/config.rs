@@ -302,6 +302,9 @@ pub struct RecordingSettings {
     pub camera_shape: CameraShape,
     /// Show pressed keys in the recording.
     pub keystrokes: KeystrokeMode,
+    /// Record in Studio mode: the cursor, clicks, keys and camera are kept
+    /// apart from the screen video, to be styled afterwards.
+    pub studio: bool,
 }
 
 impl Default for RecordingSettings {
@@ -326,6 +329,7 @@ impl Default for RecordingSettings {
             camera_size: 180,
             camera_shape: CameraShape::Circle,
             keystrokes: KeystrokeMode::Off,
+            studio: false,
         }
     }
 }
@@ -504,6 +508,7 @@ pub struct Hotkeys {
     pub capture_text: String,
     pub pick_color: String,
     pub record_screen: String,
+    pub record_studio: String,
     pub open_history: String,
 }
 
@@ -519,6 +524,7 @@ impl Default for Hotkeys {
             capture_text: "alt+shift+o".into(),
             pick_color: String::new(),
             record_screen: "alt+shift+5".into(),
+            record_studio: String::new(),
             open_history: String::new(),
         }
     }
@@ -526,7 +532,7 @@ impl Default for Hotkeys {
 
 impl Hotkeys {
     /// The actions that can have a global shortcut.
-    pub const ACTIONS: [Action; 10] = [
+    pub const ACTIONS: [Action; 11] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -536,6 +542,7 @@ impl Hotkeys {
         Action::CaptureText,
         Action::PickColor,
         Action::RecordScreen,
+        Action::RecordStudio,
         Action::OpenHistory,
     ];
 
@@ -550,6 +557,7 @@ impl Hotkeys {
             Action::CaptureText => &mut self.capture_text,
             Action::PickColor => &mut self.pick_color,
             Action::RecordScreen => &mut self.record_screen,
+            Action::RecordStudio => &mut self.record_studio,
             Action::OpenHistory => &mut self.open_history,
             _ => return None,
         })
@@ -579,6 +587,7 @@ impl Hotkeys {
             (Action::CaptureText, &self.capture_text),
             (Action::PickColor, &self.pick_color),
             (Action::RecordScreen, &self.record_screen),
+            (Action::RecordStudio, &self.record_studio),
             (Action::OpenHistory, &self.open_history),
         ]
         .into_iter()

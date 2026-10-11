@@ -12,6 +12,7 @@ pub enum Action {
     CaptureText,
     PickColor,
     RecordScreen,
+    RecordStudio,
     OpenHistory,
     OpenInEditor,
     AnnotateClipboard,
@@ -33,7 +34,7 @@ pub enum Action {
 }
 
 impl Action {
-    pub const ALL: [Action; 27] = [
+    pub const ALL: [Action; 28] = [
         Action::CaptureArea,
         Action::CapturePreviousArea,
         Action::CaptureFullscreen,
@@ -43,6 +44,7 @@ impl Action {
         Action::CaptureText,
         Action::PickColor,
         Action::RecordScreen,
+        Action::RecordStudio,
         Action::OpenHistory,
         Action::OpenInEditor,
         Action::AnnotateClipboard,
@@ -86,6 +88,7 @@ impl Action {
             Action::CaptureText => "Capture Text",
             Action::PickColor => "Pick Color",
             Action::RecordScreen => "Record Screen",
+            Action::RecordStudio => "Record Screen (Studio)",
             Action::OpenHistory => "Capture History…",
             Action::OpenInEditor => "Open in Editor…",
             Action::AnnotateClipboard => "Annotate Clipboard Image",

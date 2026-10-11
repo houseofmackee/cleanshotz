@@ -130,6 +130,8 @@ pub enum Request {
     PickColor,
     RecordScreen {
         region: Option<Region>,
+        /// Studio mode, overriding the setting.
+        studio: Option<bool>,
     },
     Pin {
         file: Option<PathBuf>,
@@ -228,6 +230,7 @@ pub fn parse(command: &str, params: &[(String, String)]) -> Result<Request, Stri
         "pick-color" => Request::PickColor,
         "record-screen" => Request::RecordScreen {
             region: p.region()?,
+            studio: p.bool("studio")?,
         },
         "pin" => Request::Pin { file: p.file()? },
         "open-annotate" => Request::OpenAnnotate { file: p.file()? },
@@ -276,7 +279,8 @@ fn allowed(command: &str) -> &'static [&'static str] {
     const REGION: [&str; 5] = ["x", "y", "width", "height", "display"];
     match command {
         "capture-area" => &["x", "y", "width", "height", "display", "action", "pipeline"],
-        "all-in-one" | "record-screen" => &REGION,
+        "all-in-one" => &REGION,
+        "record-screen" => &["x", "y", "width", "height", "display", "studio"],
         "capture-previous-area" | "capture-fullscreen" | "capture-window" | "self-timer" => {
             &["action", "pipeline"]
         }
@@ -364,7 +368,9 @@ impl<'a> Params<'a> {
                 if !path.is_absolute() {
                     return Err(format!("filepath must be absolute: {}", path.display()));
                 }
-                if !path.is_file() {
+                // Studio recordings are folders shown as one file.
+                let package = path.is_dir() && crate::studio::package::is_package(&path);
+                if !path.is_file() && !package {
                     return Err(format!("no such file: {}", path.display()));
                 }
                 Ok(Some(path))

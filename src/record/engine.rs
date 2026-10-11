@@ -75,6 +75,9 @@ struct WriterState {
     audio: Option<Retained<AVAssetWriterInput>>,
     microphone: Option<Retained<AVAssetWriterInput>>,
     started: bool,
+    /// When the first frame arrived (the video's time zero), for lining up
+    /// Studio events with the video.
+    first_frame_at: Option<std::time::Instant>,
     paused: bool,
     /// Timestamp of the first sample dropped in the current pause.
     pause_start: Option<CMTime>,
@@ -146,6 +149,7 @@ impl StreamOutput {
                 // SAFETY: the writer is in the writing state.
                 unsafe { state.writer.startSessionAtSourceTime(pts) };
                 state.started = true;
+                state.first_frame_at = Some(std::time::Instant::now());
             }
         } else if !state.started {
             // Audio before the first frame would start the file with silence.
@@ -612,6 +616,15 @@ impl Recorder {
         })
     }
 
+    /// When the first frame arrived, once it has.
+    pub fn first_frame_at(&self) -> Option<std::time::Instant> {
+        self.output
+            .ivars()
+            .lock()
+            .ok()
+            .and_then(|s| s.first_frame_at)
+    }
+
     pub fn set_paused(&self, paused: bool) {
         if let Ok(mut state) = self.output.ivars().lock() {
             state.paused = paused;
@@ -817,6 +830,7 @@ fn new_writer(options: &Options) -> Result<WriterState, String> {
         audio,
         microphone,
         started: false,
+        first_frame_at: None,
         paused: false,
         pause_start: None,
         offset: zero_time(),

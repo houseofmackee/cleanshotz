@@ -138,14 +138,12 @@ unsafe fn composition(
 fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), String> {
     use objc2::runtime::ProtocolObject;
     use objc2_av_foundation::{
-        AVAssetReader, AVAssetReaderAudioMixOutput, AVAssetReaderOutput,
-        AVAssetReaderVideoCompositionOutput, AVAssetWriter, AVAssetWriterInput,
         AVMutableVideoComposition, AVMutableVideoCompositionInstruction,
         AVMutableVideoCompositionLayerInstruction, AVVideoCompositionInstructionProtocol,
         AVVideoCompositionLayerInstruction,
     };
     use objc2_core_foundation::{CGAffineTransform, CGSize};
-    use objc2_foundation::{NSArray, NSDictionary, NSNumber};
+    use objc2_foundation::NSArray;
 
     let source_size = media::size(source);
     // SAFETY: AVFoundation objects created and used on this thread.
@@ -153,26 +151,11 @@ fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), Str
         let (composition, source_video) = composition(source, plan)?;
         let source_video = source_video.ok_or("the recording has no video")?;
         let video = AVMediaTypeVideo.ok_or("no video media type")?;
-        let audio = AVMediaTypeAudio.ok_or("no audio media type")?;
         #[allow(deprecated)]
-        let video_tracks = composition.tracksWithMediaType(video);
-        #[allow(deprecated)]
-        let audio_tracks = composition.tracksWithMediaType(audio);
-        let video_track = video_tracks
+        let video_track = composition
+            .tracksWithMediaType(video)
             .firstObject()
             .ok_or("the recording has no video")?;
-        // Reader outputs take plain asset tracks.
-        let as_asset_tracks = |tracks: &NSArray<objc2_av_foundation::AVMutableCompositionTrack>| {
-            let tracks: Vec<Retained<AVAssetTrack>> = tracks
-                .iter()
-                .map(|t| Retained::into_super(Retained::into_super(t)))
-                .collect();
-            NSArray::from_retained_slice(&tracks)
-        };
-        let (video_tracks, audio_tracks) = (
-            as_asset_tracks(&video_tracks),
-            as_asset_tracks(&audio_tracks),
-        );
 
         let fps = f64::from(source_video.nominalFrameRate());
         let fps = if fps.is_finite() && fps > 0.0 {
@@ -214,6 +197,58 @@ fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), Str
         video_composition.setFrameDuration(CMTime::with_seconds(1.0 / fps, 600));
         video_composition.setInstructions(&NSArray::from_retained_slice(&[instruction]));
 
+        encode(
+            &composition,
+            &video_composition,
+            (width, height),
+            fps,
+            plan.bitrate(source_size, fps),
+            output,
+        )
+    }
+}
+
+/// Encodes `composition` through `video_composition` (which draws the
+/// frames at `size` pixels) to an MP4 at `output`, with all audio tracks
+/// mixed into one stereo track.
+///
+/// # Safety
+///
+/// AVFoundation objects, used on one thread.
+pub unsafe fn encode(
+    composition: &AVMutableComposition,
+    video_composition: &objc2_av_foundation::AVMutableVideoComposition,
+    (width, height): (usize, usize),
+    fps: f64,
+    bitrate: u64,
+    output: &Path,
+) -> Result<(), String> {
+    use objc2_av_foundation::{
+        AVAssetReader, AVAssetReaderAudioMixOutput, AVAssetReaderOutput,
+        AVAssetReaderVideoCompositionOutput, AVAssetWriter, AVAssetWriterInput,
+    };
+    use objc2_foundation::{NSArray, NSDictionary, NSNumber};
+
+    // SAFETY: per the function's contract.
+    unsafe {
+        let video = AVMediaTypeVideo.ok_or("no video media type")?;
+        let audio = AVMediaTypeAudio.ok_or("no audio media type")?;
+        #[allow(deprecated)]
+        let video_tracks = composition.tracksWithMediaType(video);
+        #[allow(deprecated)]
+        let audio_tracks = composition.tracksWithMediaType(audio);
+        // Reader outputs take plain asset tracks.
+        let as_asset_tracks = |tracks: &NSArray<objc2_av_foundation::AVMutableCompositionTrack>| {
+            let tracks: Vec<Retained<AVAssetTrack>> = tracks
+                .iter()
+                .map(|t| Retained::into_super(Retained::into_super(t)))
+                .collect();
+            NSArray::from_retained_slice(&tracks)
+        };
+        let (video_tracks, audio_tracks) = (
+            as_asset_tracks(&video_tracks),
+            as_asset_tracks(&audio_tracks),
+        );
         let number =
             |n: f64| -> Retained<objc2::runtime::AnyObject> { NSNumber::new_f64(n).into() };
         let dict = |pairs: &[(&str, Retained<objc2::runtime::AnyObject>)]| {
@@ -224,14 +259,14 @@ fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), Str
             NSDictionary::from_retained_objects(&key_refs, &values)
         };
 
-        let reader = AVAssetReader::assetReaderWithAsset_error(&composition)
+        let reader = AVAssetReader::assetReaderWithAsset_error(composition)
             .map_err(|e| e.localizedDescription().to_string())?;
         const BGRA: f64 = 0x4247_5241 as f64; // 'BGRA'
         let frames_out = AVAssetReaderVideoCompositionOutput::assetReaderVideoCompositionOutputWithVideoTracks_videoSettings(
             &video_tracks,
             Some(&dict(&[("PixelFormatType", number(BGRA))])),
         );
-        frames_out.setVideoComposition(Some(&video_composition));
+        frames_out.setVideoComposition(Some(video_composition));
         frames_out.setAlwaysCopiesSampleData(false);
         reader.addOutput(&frames_out);
         const LPCM: f64 = 0x6c70_636d as f64; // 'lpcm'
@@ -265,10 +300,7 @@ fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), Str
             "hvc1"
         };
         let compression = dict(&[
-            (
-                "AverageBitRate",
-                number(plan.bitrate(source_size, fps) as f64),
-            ),
+            ("AverageBitRate", number(bitrate as f64)),
             ("ExpectedFrameRate", number(fps)),
             ("MaxKeyFrameInterval", number((fps * 2.0).round())),
         ]);

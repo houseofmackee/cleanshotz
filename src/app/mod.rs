@@ -112,6 +112,13 @@ define_class!(
                     crate::record::overlays::simulate_key(code, flags);
                     continue;
                 }
+                // Files opened from Finder (Studio recordings, projects).
+                if url.isFileURL() {
+                    if let Some(path) = url.path() {
+                        crate::editor::open_file(self.mtm(), std::path::Path::new(&path.to_string()));
+                    }
+                    continue;
+                }
                 let text = url.absoluteString().map(|s| s.to_string()).unwrap_or_default();
                 if let Err(e) = self.handle_url(&text) {
                     alert::show(self.mtm(), "CleanShotZ could not run the URL", &format!("{text}\n\n{e}"), &["OK"]);
@@ -305,6 +312,7 @@ impl AppDelegate {
             | Action::PickColor
             | Action::CaptureScrolling
             | Action::RecordScreen
+            | Action::RecordStudio
             | Action::SelfTimer => {
                 let request = match action {
                     Action::CaptureArea => Request::CaptureArea {
@@ -325,7 +333,14 @@ impl AppDelegate {
                         autoscroll: false,
                     },
                     Action::PickColor => Request::PickColor,
-                    _ => Request::RecordScreen { region: None },
+                    Action::RecordStudio => Request::RecordScreen {
+                        region: None,
+                        studio: Some(true),
+                    },
+                    _ => Request::RecordScreen {
+                        region: None,
+                        studio: None,
+                    },
                 };
                 // Errors were already shown.
                 let _ = self.handle(request);
@@ -479,10 +494,13 @@ impl AppDelegate {
                 let area = region.map(|r| resolve_region(mtm, r)).transpose()?;
                 crate::scroll::start(mtm, settings, area, autoscroll).map_err(error)
             }
-            Request::RecordScreen { region } => {
+            Request::RecordScreen { region, studio } => {
                 self.require_screen_recording()?;
                 let area = region.map(|r| resolve_region(mtm, r)).transpose()?;
-                let recording = self.ivars().config.borrow().recording.clone();
+                let mut recording = self.ivars().config.borrow().recording.clone();
+                if let Some(studio) = studio {
+                    recording.studio = studio;
+                }
                 crate::record::toggle(mtm, settings, recording, area).map_err(error)
             }
             Request::Pin { file } => {
@@ -612,6 +630,9 @@ impl AppDelegate {
             record.setTitle(ns_string!("Stop Recording"));
         }
         menu.addItem(&record);
+        if !crate::record::is_recording() {
+            menu.addItem(&self.menu_item(Action::RecordStudio));
+        }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         menu.addItem(&self.menu_item(Action::OpenHistory));
         menu.addItem(&self.menu_item(Action::OpenInEditor));

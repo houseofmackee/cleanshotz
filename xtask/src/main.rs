@@ -102,6 +102,15 @@ fn bundle(release: bool, test: bool) -> Result<PathBuf> {
             .replace(
                 "<string>CleanShotZ</string>",
                 &format!("<string>{name}</string>"),
+            )
+            // Its own document types, so it never claims the app's files.
+            .replace(
+                "io.github.houseofmackee.cleanshotz.recording",
+                "io.github.houseofmackee.cleanshotz.test.recording",
+            )
+            .replace(
+                "io.github.houseofmackee.cleanshotz.project",
+                "io.github.houseofmackee.cleanshotz.test.project",
             );
         if !plist.contains("cleanshotz-test") || !plist.contains(".cleanshotz.test") {
             bail!("Info.plist changed shape; update the test variant replacements in xtask");

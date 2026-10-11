@@ -258,10 +258,13 @@ pub fn wallpaper_filter(
 /// but keeps our editor windows and pins. With `hide_notifications`,
 /// notification banners are left out too (Notification Center's desktop
 /// widgets stay).
+/// `leave_out`: CleanShotZ windows (by number) to leave out as well, such
+/// as the camera bubble in Studio recordings.
 pub fn recording_filter(
     content: &Content,
     display: &SCDisplay,
     hide_notifications: bool,
+    leave_out: &[u32],
 ) -> Retained<SCContentFilter> {
     const NOTIFICATION_CENTER: &str = "com.apple.notificationcenterui";
     let own_pid = std::process::id() as i32;
@@ -283,7 +286,7 @@ pub fn recording_filter(
             .filter(|w| {
                 w.owningApplication().is_some_and(|a| {
                     if a.processID() == own_pid {
-                        w.windowLayer() < OWN_UI_LEVEL
+                        w.windowLayer() < OWN_UI_LEVEL && !leave_out.contains(&w.windowID())
                     } else {
                         // Widgets sit on the desktop, below normal windows;
                         // banners appear above them.

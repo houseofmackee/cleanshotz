@@ -50,6 +50,29 @@ struct Overlays {
 }
 
 impl Overlays {
+    /// Window numbers of the overlays, which Studio recordings leave out.
+    fn window_ids(&self) -> Vec<u32> {
+        let mut ids = Vec::new();
+        if let Some(c) = &self.camera {
+            ids.push(c.window_id());
+        }
+        if let Some(id) = self.keys.as_ref().and_then(|k| k.window_id()) {
+            ids.push(id);
+        }
+        ids
+    }
+
+    /// Stops the overlays; a camera file being written is handed over.
+    fn stop_keeping_camera(self) -> Option<super::overlays::CameraRecording> {
+        if let Some(k) = self.keys {
+            k.stop();
+        }
+        if let Some(c) = self.cursor {
+            c.stop();
+        }
+        self.camera.and_then(|c| c.stop_recording())
+    }
+
     fn stop(self) {
         if let Some(c) = self.camera {
             c.stop();
@@ -65,6 +88,8 @@ impl Overlays {
 
 struct Active {
     recorder: Recorder,
+    /// Studio recordings: the `.cszrec` package being recorded into.
+    studio: Option<PathBuf>,
     overlays: Overlays,
     controls: Retained<NSPanel>,
     time_label: Retained<NSTextField>,
@@ -272,7 +297,8 @@ fn start_overlays(mtm: MainThreadMarker, area: NSRect, settings: &RecordingSetti
     // ScreenCaptureKit draws clicks from macOS 15 on; before that, the
     // pointer overlay shows them.
     let clicks = settings.show_clicks && !engine::macos_at_least(15);
-    let cursor = (settings.highlight_cursor || clicks)
+    // Studio recordings draw the cursor afterwards.
+    let cursor = (!settings.studio && (settings.highlight_cursor || clicks))
         .then(|| CursorHighlight::start(mtm, settings.highlight_cursor, clicks));
     Overlays {
         camera: camera.flatten(),
@@ -286,8 +312,14 @@ fn begin_recording(
     target: Target,
     capture: &CaptureSettings,
     settings: &RecordingSettings,
-    overlays: Overlays,
+    mut overlays: Overlays,
 ) -> Result<(), String> {
+    let studio = settings.studio;
+    let leave_out = if studio {
+        overlays.window_ids()
+    } else {
+        Vec::new()
+    };
     // All windows, so the (still transparent) keystroke display is listed.
     let content = match Content::fetch_all() {
         Ok(content) => content,
@@ -296,12 +328,21 @@ fn begin_recording(
             return Err(e.to_string());
         }
     };
-    let (filter, source_rect, size, cocoa_rect, ignore_shadows) = match target {
+    let (filter, source_rect, size, cocoa_rect, ignore_shadows, global) = match target {
         Target::Area { display_id, rect } => {
             let display = content
                 .display(display_id)
                 .ok_or("the display is no longer available")?;
-            let filter = sck::recording_filter(&content, &display, settings.hide_notifications);
+            let filter =
+                sck::recording_filter(&content, &display, settings.hide_notifications, &leave_out);
+            // SAFETY: plain property read.
+            let origin = unsafe { display.frame() }.origin;
+            let global = Rect::new(
+                origin.x + rect.x,
+                origin.y + rect.y,
+                rect.width,
+                rect.height,
+            );
             let screen = screen_for(mtm, display_id).ok_or("the display is no longer available")?;
             let f = screen.frame();
             let cocoa = NSRect::new(
@@ -311,7 +352,14 @@ fn begin_recording(
                 ),
                 NSSize::new(rect.width, rect.height),
             );
-            (filter, Some(rect), (rect.width, rect.height), cocoa, false)
+            (
+                filter,
+                Some(rect),
+                (rect.width, rect.height),
+                cocoa,
+                false,
+                global,
+            )
         }
         Target::Window { window_id } => {
             let window = content
@@ -331,7 +379,13 @@ fn begin_recording(
                 ),
                 frame.size,
             );
-            (filter, None, (size.width, size.height), cocoa, true)
+            let global = Rect::new(
+                frame.origin.x,
+                frame.origin.y,
+                frame.size.width,
+                frame.size.height,
+            );
+            (filter, None, (size.width, size.height), cocoa, true, global)
         }
     };
     let native = sck::pixel_scale(&filter);
@@ -353,13 +407,25 @@ fn begin_recording(
     let final_dir = if saved { &save_dir } else { &unsaved };
     std::fs::create_dir_all(&temp).map_err(|e| e.to_string())?;
     std::fs::create_dir_all(final_dir).map_err(|e| e.to_string())?;
-    let (video, gif) = match settings.format {
-        VideoFormat::Mp4 => (naming::unique_path(final_dir, &stem, "mp4"), None),
-        VideoFormat::Gif => (
+    // Studio recordings go into a package; formats apply when exporting.
+    let package =
+        studio.then(|| naming::unique_path(final_dir, &stem, crate::studio::package::EXTENSION));
+    let (video, gif) = match (&package, settings.format) {
+        (Some(package), _) => {
+            std::fs::create_dir_all(package).map_err(|e| e.to_string())?;
+            (crate::studio::package::screen(package), None)
+        }
+        (None, VideoFormat::Mp4) => (naming::unique_path(final_dir, &stem, "mp4"), None),
+        (None, VideoFormat::Gif) => (
             naming::unique_path(&temp, &stem, "mp4"),
             Some(naming::unique_path(final_dir, &stem, "gif")),
         ),
     };
+    if let (Some(package), Some(camera)) = (&package, overlays.camera.as_mut())
+        && let Err(e) = camera.record_to(&package.join(crate::studio::package::CAMERA))
+    {
+        tracing::warn!(error = %e, "the camera is not recorded separately");
+    }
 
     let recorder = match Recorder::start(engine::Options {
         filter,
@@ -369,8 +435,9 @@ fn begin_recording(
         fps: settings.fps(),
         codec: settings.codec_for(width, height),
         bitrate: settings.bitrate(width, height),
-        show_cursor: settings.show_cursor,
-        show_clicks: settings.show_clicks,
+        // Studio recordings draw the cursor and clicks afterwards.
+        show_cursor: settings.show_cursor && !studio,
+        show_clicks: settings.show_clicks && !studio,
         ignore_shadows,
         system_audio: settings.system_audio,
         microphone,
@@ -389,9 +456,13 @@ fn begin_recording(
     let (controls, time_label, pause_button, meter) = control_panel(mtm, cocoa_rect, microphone);
     engine::level::reset();
     let timer = tick_timer();
+    if studio {
+        crate::studio::capture::start(mtm, global);
+    }
     STATE.with(|s| {
         *s.borrow_mut() = State::Recording(Box::new(Active {
             recorder,
+            studio: package,
             overlays,
             controls,
             time_label,
@@ -455,6 +526,7 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
     };
     let Active {
         recorder,
+        studio,
         overlays,
         controls,
         border,
@@ -463,6 +535,14 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
         ..
     } = *active;
     timer.invalidate();
+    if let Some(package) = studio {
+        controls.orderOut(None);
+        if let Some(border) = &border {
+            border.orderOut(None);
+        }
+        stop_studio(mtm, recorder, overlays, package, finish, discard);
+        return;
+    }
     overlays.stop();
     controls.orderOut(None);
     if let Some(border) = &border {
@@ -486,6 +566,82 @@ pub fn stop(mtm: MainThreadMarker, discard: bool) {
                 crate::app::alert::show(mtm, "The recording could not be saved", &e, &["OK"]);
             }
         }
+    });
+}
+
+/// Finishes a Studio recording: the screen video, the camera file and the
+/// events, then opens it.
+fn stop_studio(
+    mtm: MainThreadMarker,
+    recorder: Recorder,
+    overlays: Overlays,
+    package: PathBuf,
+    finish: Finish,
+    discard: bool,
+) {
+    let first_frame = recorder.first_frame_at();
+    let camera = overlays.stop_keeping_camera();
+    if discard {
+        crate::studio::capture::cancel();
+    } else {
+        toast::show(mtm, "Finishing recording…");
+    }
+    let camera = AssertSend(camera);
+    recorder.stop(move |result| {
+        let camera = camera.into_inner();
+        let mtm = MainThreadMarker::new().expect("runs on the main thread");
+        if discard || result.is_err() {
+            if let Some(camera) = camera {
+                std::thread::spawn(move || drop(camera.finish()));
+            }
+            let _ = std::fs::remove_dir_all(&package);
+            STATE.with(|s| *s.borrow_mut() = State::Idle);
+            match result {
+                Err(e) => {
+                    crate::studio::capture::cancel();
+                    tracing::error!(error = %e, "recording failed");
+                    crate::app::alert::show(mtm, "The recording could not be saved", &e, &["OK"]);
+                }
+                Ok(_) => tracing::info!("studio recording discarded"),
+            }
+            return;
+        }
+        // Wait for the camera file off the main thread, then save the
+        // events (main thread: the collector lives there).
+        let camera = AssertSend(camera);
+        std::thread::spawn(move || {
+            let camera_started = camera.into_inner().map(|c| c.finish());
+            let camera_started = AssertSend(camera_started);
+            dispatch2::DispatchQueue::main().exec_async(move || {
+                let mtm = MainThreadMarker::new().expect("runs on the main thread");
+                let camera = match camera_started.into_inner() {
+                    Some(Ok(Some(started))) => Some((crate::studio::package::CAMERA, started)),
+                    Some(Ok(None)) | None => None,
+                    Some(Err(e)) => {
+                        tracing::warn!(error = %e, "the camera file is not usable");
+                        None
+                    }
+                };
+                let saved =
+                    crate::studio::capture::finish(&package, first_frame, finish.scale, camera);
+                STATE.with(|s| *s.borrow_mut() = State::Idle);
+                match saved {
+                    Ok(_) => {
+                        tracing::info!(path = %package.display(), "studio recording saved");
+                        crate::studio::recorded(mtm, &package);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "studio events not saved");
+                        crate::app::alert::show(
+                            mtm,
+                            "The recording could not be saved",
+                            &e,
+                            &["OK"],
+                        );
+                    }
+                }
+            });
+        });
     });
 }
 
@@ -572,6 +728,7 @@ pub fn toggle_pause() {
             }
         };
         active.recorder.set_paused(paused);
+        crate::studio::capture::set_paused(paused);
         let (symbol, label) = if paused {
             ("play.fill", "Resume recording")
         } else {

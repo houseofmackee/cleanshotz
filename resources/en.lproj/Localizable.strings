@@ -245,6 +245,9 @@
 /* src/record/session.rs */
 "Could not create the GIF" = "Could not create the GIF";
 
+/* src/studio/mod.rs */
+"Could not open the recording" = "Could not open the recording";
+
 /* src/editor/window.rs */
 "Could not save the GIF" = "Could not save the GIF";
 
@@ -268,6 +271,9 @@
 
 /* src/editor/window.rs */
 "Delete “{name}”" = "Delete “{name}”";
+
+/* src/studio/window.rs */
+"Desktop Wallpaper" = "Desktop Wallpaper";
 
 /* src/editor/window.rs */
 "Double Arrow" = "Double Arrow";
@@ -293,7 +299,16 @@
 /* src/editor/window.rs */
 "Export Before/After GIF…" = "Export Before/After GIF…";
 
-/* src/video_editor/window.rs */
+/* src/studio/window.rs */
+"Export MP4" = "Export MP4";
+
+/* src/studio/window.rs */
+"Export failed" = "Export failed";
+
+/* src/studio/window.rs */
+"Exported" = "Exported";
+
+/* src/studio/window.rs, src/video_editor/window.rs */
 "Exporting…" = "Exporting…";
 
 /* src/editor/window.rs */
@@ -491,13 +506,16 @@
 /* src/capture/overlay.rs */
 "Move the pointer over a window and click to capture it. Escape cancels." = "Move the pointer over a window and click to capture it. Escape cancels.";
 
+/* src/studio/window.rs */
+"No Background" = "No Background";
+
 /* src/editor/window.rs */
 "No sensitive info found" = "No sensitive info found";
 
 /* src/ocr/mod.rs */
 "No text found" = "No text found";
 
-/* src/settings/mod.rs */
+/* src/settings/mod.rs, src/studio/window.rs */
 "None" = "None";
 
 /* src/scroll/session.rs */
@@ -509,7 +527,7 @@
 /* src/settings/mod.rs */
 "Nowhere (off)" = "Nowhere (off)";
 
-/* src/app/mod.rs, src/pipeline.rs, src/record/session.rs, src/settings/mod.rs, src/upload/mod.rs */
+/* src/app/mod.rs, src/pipeline.rs, src/record/session.rs, src/settings/mod.rs, src/studio/mod.rs, src/studio/window.rs, src/upload/mod.rs */
 "OK" = "OK";
 
 /* src/settings/mod.rs */
@@ -626,8 +644,14 @@
 /* src/action.rs */
 "Record Screen" = "Record Screen";
 
+/* src/action.rs */
+"Record Screen (Studio)" = "Record Screen (Studio)";
+
 /* src/settings/recorder.rs */
 "Record Shortcut" = "Record Shortcut";
+
+/* src/settings/mod.rs */
+"Record in Studio mode" = "Record in Studio mode";
 
 /* src/history/window.rs, src/settings/mod.rs */
 "Recording" = "Recording";
@@ -667,6 +691,12 @@
 
 /* src/action.rs */
 "Restore Recently Closed" = "Restore Recently Closed";
+
+/* src/studio/window.rs */
+"Ring" = "Ring";
+
+/* src/studio/window.rs */
+"Ripple" = "Ripple";
 
 /* src/editor/window.rs */
 "Rotate Left" = "Rotate Left";
@@ -798,6 +828,9 @@
 "Startup:" = "Startup:";
 
 /* src/settings/mod.rs */
+"Studio:" = "Studio:";
+
+/* src/settings/mod.rs */
 "System audio" = "System audio";
 
 /* src/settings/mod.rs */
@@ -824,6 +857,9 @@
 /* src/record/session.rs */
 "The camera, keystrokes and cursor highlight are not shown in window recordings" = "The camera, keystrokes and cursor highlight are not shown in window recordings";
 
+/* src/studio/window.rs */
+"The desktop picture could not be read" = "The desktop picture could not be read";
+
 /* src/history/window.rs */
 "The file is no longer there" = "The file is no longer there";
 
@@ -832,6 +868,12 @@
 
 /* src/pipeline.rs */
 "The pipeline stopped" = "The pipeline stopped";
+
+/* src/settings/mod.rs */
+"The pointer, clicks, keys and camera are kept apart, so zooms, the cursor, a background and the camera can be changed after recording." = "The pointer, clicks, keys and camera are kept apart, so zooms, the cursor, a background and the camera can be changed after recording.";
+
+/* src/studio/window.rs */
+"The recording could not be exported" = "The recording could not be exported";
 
 /* src/record/session.rs */
 "The recording could not be saved" = "The recording could not be saved";

@@ -158,6 +158,10 @@ pub fn open_capture_with_background(mtm: MainThreadMarker, item: &Item) {
 /// Opens an image file or a `.cszdoc` project (videos go to the video
 /// editor).
 pub fn open_file(mtm: MainThreadMarker, path: &Path) {
+    if crate::studio::package::is_package(path) {
+        crate::studio::open(mtm, path);
+        return;
+    }
     if crate::video_editor::is_video(path) {
         crate::video_editor::open(mtm, path);
         return;

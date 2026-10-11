@@ -11,15 +11,19 @@ use std::ptr::{self, NonNull};
 
 use block2::RcBlock;
 use objc2::rc::Retained;
-use objc2::{MainThreadMarker, MainThreadOnly};
+use objc2::runtime::{NSObject, ProtocolObject};
+use objc2::{
+    AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
+};
 use objc2_app_kit::{
     NSBackingStoreType, NSBox, NSBoxType, NSColor, NSFont, NSFontWeightSemibold, NSPanel,
     NSTextAlignment, NSTextField, NSTitlePosition, NSView, NSWindowCollectionBehavior,
     NSWindowStyleMask,
 };
 use objc2_av_foundation::{
-    AVCaptureDevice, AVCaptureDeviceInput, AVCaptureSession, AVCaptureVideoPreviewLayer,
-    AVLayerVideoGravityResizeAspectFill, AVMediaTypeVideo,
+    AVCaptureConnection, AVCaptureDevice, AVCaptureDeviceInput, AVCaptureFileOutput,
+    AVCaptureFileOutputRecordingDelegate, AVCaptureMovieFileOutput, AVCaptureSession,
+    AVCaptureVideoPreviewLayer, AVLayerVideoGravityResizeAspectFill, AVMediaTypeVideo,
 };
 use objc2_core_foundation::{
     CFMachPort, CFRetained, CFRunLoop, CFRunLoopSource, kCFRunLoopCommonModes,
@@ -28,7 +32,9 @@ use objc2_core_graphics::{
     CGEvent, CGEventField, CGEventTapLocation, CGEventTapOptions, CGEventTapPlacement,
     CGEventTapProxy, CGEventType,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize, NSString, NSTimer};
+use objc2_foundation::{
+    NSArray, NSError, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSTimer, NSURL,
+};
 
 use super::keys;
 use crate::config::{CameraShape, KeystrokeMode};
@@ -74,6 +80,93 @@ pub struct Camera {
     /// `None` in fake-camera test mode.
     session: Option<Retained<AVCaptureSession>>,
     panel: Retained<NSPanel>,
+    /// Studio recordings: the camera is also written to its own file.
+    movie: Option<(Retained<AVCaptureMovieFileOutput>, Retained<MovieDelegate>)>,
+}
+
+/// When the camera file started and whether it is complete, as reported
+/// by the movie output (on its own queue).
+#[derive(Default)]
+pub struct MovieState {
+    started: Option<std::time::Instant>,
+    finished: Option<Result<(), String>>,
+}
+
+define_class!(
+    // SAFETY: NSObject has no subclassing requirements; no Drop.
+    #[unsafe(super(NSObject))]
+    #[ivars = (std::sync::Mutex<MovieState>, std::sync::Condvar)]
+    pub struct MovieDelegate;
+
+    unsafe impl NSObjectProtocol for MovieDelegate {}
+
+    unsafe impl AVCaptureFileOutputRecordingDelegate for MovieDelegate {
+        #[unsafe(method(captureOutput:didStartRecordingToOutputFileAtURL:fromConnections:))]
+        fn did_start(
+            &self,
+            _output: &AVCaptureFileOutput,
+            _url: &NSURL,
+            _connections: &NSArray<AVCaptureConnection>,
+        ) {
+            if let Ok(mut state) = self.ivars().0.lock() {
+                state.started.get_or_insert_with(std::time::Instant::now);
+            }
+        }
+
+        #[unsafe(method(captureOutput:didFinishRecordingToOutputFileAtURL:fromConnections:error:))]
+        fn did_finish(
+            &self,
+            _output: &AVCaptureFileOutput,
+            _url: &NSURL,
+            _connections: &NSArray<AVCaptureConnection>,
+            error: Option<&NSError>,
+        ) {
+            if let Ok(mut state) = self.ivars().0.lock() {
+                state.finished = Some(match error {
+                    Some(e) => Err(e.localizedDescription().to_string()),
+                    None => Ok(()),
+                });
+            }
+            self.ivars().1.notify_all();
+        }
+    }
+);
+
+/// A camera file being written: stop it and wait for the file with
+/// [`CameraRecording::finish`], off the main thread.
+pub struct CameraRecording {
+    output: Retained<AVCaptureMovieFileOutput>,
+    delegate: Retained<MovieDelegate>,
+    session: Retained<AVCaptureSession>,
+}
+
+// SAFETY: AVCaptureSession and its outputs may be used from any thread;
+// the delegate's state is behind a mutex.
+unsafe impl Send for CameraRecording {}
+
+impl CameraRecording {
+    /// Stops the camera file, waits (up to 10 seconds) until it is
+    /// written, then stops the camera. Returns when the file started.
+    pub fn finish(self) -> Result<Option<std::time::Instant>, String> {
+        // SAFETY: stopping a recording that is running (or already ended).
+        unsafe { self.output.stopRecording() };
+        let (lock, done) = self.delegate.ivars();
+        let state = lock.lock().map_err(|_| "camera state poisoned")?;
+        let (state, _) = done
+            .wait_timeout_while(state, std::time::Duration::from_secs(10), |s| {
+                s.finished.is_none()
+            })
+            .map_err(|_| "camera state poisoned")?;
+        let result = state
+            .finished
+            .clone()
+            .unwrap_or(Err("the camera file did not finish".into()));
+        let started = state.started;
+        drop(state);
+        // SAFETY: AVCaptureSession may be stopped from any thread.
+        unsafe { self.session.stopRunning() };
+        result.map(|()| started)
+    }
 }
 
 impl Camera {
@@ -100,7 +193,102 @@ impl Camera {
                 unsafe { session.startRunning() };
             });
         }
-        Ok(Camera { session, panel })
+        Ok(Camera {
+            session,
+            panel,
+            movie: None,
+        })
+    }
+
+    /// The bubble's window number, so Studio recordings can leave it out
+    /// of the screen video.
+    pub fn window_id(&self) -> u32 {
+        self.panel.windowNumber() as u32
+    }
+
+    /// Studio recordings: also writes the camera to `file` (mirrored, as in
+    /// the bubble). Recording starts once the camera is running.
+    pub fn record_to(&mut self, file: &std::path::Path) -> Result<(), String> {
+        let Some(session) = &self.session else {
+            return Err("no camera".into());
+        };
+        // SAFETY: configuring a capture session and its movie output.
+        let output = unsafe {
+            let output = AVCaptureMovieFileOutput::new();
+            session.beginConfiguration();
+            if !session.canAddOutput(&output) {
+                session.commitConfiguration();
+                return Err("the camera cannot be recorded".into());
+            }
+            session.addOutput(&output);
+            session.commitConfiguration();
+            if let Some(media) = AVMediaTypeVideo
+                && let Some(connection) = output.connectionWithMediaType(media)
+                && connection.isVideoMirroringSupported()
+            {
+                connection.setAutomaticallyAdjustsVideoMirroring(false);
+                connection.setVideoMirrored(true);
+            }
+            output
+        };
+        let delegate: Retained<MovieDelegate> = {
+            let this = MovieDelegate::alloc().set_ivars(Default::default());
+            // SAFETY: NSObject's designated initializer.
+            unsafe { msg_send![super(this), init] }
+        };
+        let _ = std::fs::remove_file(file);
+        let url = NSURL::fileURLWithPath(&NSString::from_str(&file.to_string_lossy()));
+        let (recording, recording_delegate) =
+            (AssertSend(output.clone()), AssertSend(delegate.clone()));
+        let starting = AssertSend(session.clone());
+        std::thread::spawn(move || {
+            let (output, delegate, session) = (
+                recording.into_inner(),
+                recording_delegate.into_inner(),
+                starting.into_inner(),
+            );
+            // Wait (briefly) for the session to run, then record.
+            for _ in 0..50 {
+                // SAFETY: plain property read.
+                if unsafe { session.isRunning() } {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(40));
+            }
+            // SAFETY: a configured movie output and a delegate that lives as
+            // long as the recording.
+            unsafe {
+                output.startRecordingToOutputFileURL_recordingDelegate(
+                    &url,
+                    ProtocolObject::from_ref(&*delegate),
+                )
+            };
+        });
+        self.movie = Some((output, delegate));
+        Ok(())
+    }
+
+    /// Hides the bubble; with a camera file being written, hands it over
+    /// to be finished (which also stops the camera).
+    pub fn stop_recording(self) -> Option<CameraRecording> {
+        self.panel.orderOut(None);
+        match (self.movie, self.session) {
+            (Some((output, delegate)), Some(session)) => Some(CameraRecording {
+                output,
+                delegate,
+                session,
+            }),
+            (None, session) => {
+                Camera {
+                    session,
+                    panel: self.panel,
+                    movie: None,
+                }
+                .stop();
+                None
+            }
+            (Some(_), None) => None,
+        }
     }
 
     fn session() -> Result<Retained<AVCaptureSession>, String> {
@@ -300,6 +488,12 @@ impl KeyDisplay {
         Ok(KeyDisplay)
     }
 
+    /// The pill's window number, so Studio recordings can leave it out of
+    /// the screen video.
+    pub fn window_id(&self) -> Option<u32> {
+        KEYS.with(|k| k.borrow().as_ref().map(|s| s.panel.windowNumber() as u32))
+    }
+
     pub fn stop(self) {
         KEYS.with(|k| {
             if let Some(state) = k.borrow_mut().take() {
@@ -493,6 +687,7 @@ fn show_key(code: u32, modifiers: crate::shortcut::Modifiers) {
         let Some(text) = keys::label(code, modifiers, state.mode) else {
             return;
         };
+        crate::studio::capture::note_key(&text);
         state.label.setStringValue(&NSString::from_str(&text));
         state.label.sizeToFit();
         let text_size = state.label.frame().size;

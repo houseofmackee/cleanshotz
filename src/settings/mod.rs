@@ -1180,6 +1180,15 @@ fn recording(f: &mut Form) {
         |c| c.recording.countdown_seconds as f64,
         |c, v| c.recording.countdown_seconds = (v as u32).min(10),
     );
+    f.check(
+        "Studio:",
+        "Record in Studio mode",
+        |c| c.recording.studio,
+        |c, v| c.recording.studio = v,
+    );
+    f.note(
+        "The pointer, clicks, keys and camera are kept apart, so zooms, the cursor, a background and the camera can be changed after recording.",
+    );
     f.gap();
     f.check(
         "Show:",

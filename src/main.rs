@@ -22,6 +22,7 @@ mod scroll;
 mod settings;
 mod shortcut;
 mod state;
+mod studio;
 mod ui;
 mod upload;
 mod video_editor;
@@ -65,6 +66,16 @@ fn main() -> ExitCode {
         #[cfg(debug_assertions)]
         Some("--dev-render-sample") if args.len() == 3 => {
             match editor::render_sample(args[1].as_ref(), args[2].as_ref()) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
+        #[cfg(debug_assertions)]
+        Some("--dev-studio-export") if args.len() == 3 => {
+            match studio::export_sample(args[1].as_ref(), args[2].as_ref()) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(e) => {
                     eprintln!("cleanshotz: {e}");
