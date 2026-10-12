@@ -57,6 +57,8 @@ pub struct Item {
     video: Cell<Option<f64>>,
     /// Whether it is a window captured with its shadow, once checked.
     window: Cell<Option<bool>>,
+    /// Without the default watermark, and the watermark, for the editor.
+    unmarked: RefCell<Option<(CFRetained<CGImage>, crate::watermark::Overlay)>>,
 }
 
 impl Item {
@@ -76,6 +78,7 @@ impl Item {
             png: RefCell::new(None),
             video: Cell::new(None),
             window: Cell::new(None),
+            unmarked: RefCell::new(None),
         }
     }
 
@@ -96,6 +99,11 @@ impl Item {
 
     pub fn image(&self) -> CFRetained<CGImage> {
         self.image.borrow().clone()
+    }
+
+    /// The capture without its default watermark, and the watermark.
+    pub fn unmarked(&self) -> Option<(CFRetained<CGImage>, crate::watermark::Overlay)> {
+        self.unmarked.borrow().clone()
     }
 
     pub fn file(&self) -> PathBuf {
@@ -186,6 +194,7 @@ pub fn add(mtm: MainThreadMarker, delivered: Delivered) {
         png: RefCell::new(delivered.png),
         video: Cell::new(None),
         window: Cell::new(None),
+        unmarked: RefCell::new(delivered.unmarked),
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
@@ -211,6 +220,7 @@ pub fn add_video(
         png: RefCell::new(None),
         video: Cell::new(Some(duration)),
         window: Cell::new(Some(false)),
+        unmarked: RefCell::new(None),
     });
     if !SHELF.with(|s| s.borrow().settings.enabled) {
         return;
@@ -598,6 +608,8 @@ pub fn refresh(file: &std::path::Path, image: CFRetained<CGImage>) {
         for card in shelf.cards.iter_mut().filter(|c| c.item.file() == file) {
             *card.item.image.borrow_mut() = image.clone();
             *card.item.png.borrow_mut() = None;
+            // Saved from the editor: what it shows now is the capture.
+            *card.item.unmarked.borrow_mut() = None;
             card.item.saved.set(true);
             card.thumbnail = card.item.ns_image();
             card.size = card_size(card.item.point_size());

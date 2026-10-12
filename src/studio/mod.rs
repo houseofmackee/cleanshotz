@@ -53,6 +53,11 @@ pub fn load(package: &Path) -> Result<Loaded, String> {
         };
         project.zooms = zoom::automatic(&events, (w / scale, h / scale), duration);
         project.zooms_made = true;
+        // The default watermark for new recordings.
+        let watermark = crate::watermark::settings();
+        if watermark.recordings {
+            project.watermark = Some(watermark.style);
+        }
         if let Err(e) = package::save_project(package, &project) {
             tracing::warn!(error = %e, "studio project not saved");
         }

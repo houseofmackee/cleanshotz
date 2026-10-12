@@ -4,7 +4,16 @@
    {placeholder} as it is; they may move within the sentence. */
 
 /* src/settings/mod.rs */
+"#FFFFFF" = "#FFFFFF";
+
+/* src/settings/mod.rs */
 "% (100 is lossless)" = "% (100 is lossless)";
+
+/* src/settings/mod.rs */
+"% of the shorter side" = "% of the shorter side";
+
+/* src/settings/mod.rs */
+"% of the width" = "% of the width";
 
 /* src/editor/window.rs */
 "1 annotation" = "1 annotation";
@@ -37,6 +46,9 @@
 "9:16 Story (Instagram, TikTok)" = "9:16 Story (Instagram, TikTok)";
 
 /* src/settings/mod.rs */
+"A PNG with a transparent background looks best." = "A PNG with a transparent background looks best.";
+
+/* src/settings/mod.rs */
 "A pipeline replaces copying, saving and the thumbnail above." = "A pipeline replaces copying, saving and the thumbnail above.";
 
 /* src/settings/mod.rs */
@@ -56,6 +68,12 @@
 
 /* src/editor/window.rs */
 "Add Image to the Right…" = "Add Image to the Right…";
+
+/* src/editor/window.rs */
+"Add Watermark" = "Add Watermark";
+
+/* src/settings/mod.rs */
+"Add to new:" = "Add to new:";
 
 /* src/settings/mod.rs */
 "After capture:" = "After capture:";
@@ -143,7 +161,7 @@
 /* src/settings/mod.rs */
 "Camera:" = "Camera:";
 
-/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs */
+/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs, src/video_editor/window.rs */
 "Cancel" = "Cancel";
 
 /* src/steps/window.rs */
@@ -252,6 +270,9 @@
 "Codes such as en-US, de-DE, ja-JP, in order of preference." = "Codes such as en-US, de-DE, ja-JP, in order of preference.";
 
 /* src/settings/mod.rs */
+"Color:" = "Color:";
+
+/* src/settings/mod.rs */
 "Command:" = "Command:";
 
 /* src/settings/mod.rs */
@@ -287,6 +308,12 @@
 /* src/record/session.rs */
 "Could not create the GIF" = "Could not create the GIF";
 
+/* src/watermark.rs */
+"Could not draw the preview" = "Could not draw the preview";
+
+/* src/watermark.rs */
+"Could not draw the watermark text" = "Could not draw the watermark text";
+
 /* src/steps/export.rs */
 "Could not export the guide" = "Could not export the guide";
 
@@ -316,6 +343,9 @@
 
 /* src/settings/mod.rs */
 "Cursor highlight" = "Cursor highlight";
+
+/* src/settings/mod.rs */
+"Dark background behind the text" = "Dark background behind the text";
 
 /* src/editor/window.rs */
 "Delete “{name}”" = "Delete “{name}”";
@@ -411,10 +441,16 @@
 "For R2, MinIO and others, for example https://<account>.r2.cloudflarestorage.com." = "For R2, MinIO and others, for example https://<account>.r2.cloudflarestorage.com.";
 
 /* src/settings/mod.rs */
+"For a single capture, use Add Watermark in the editor or the Watermark checkbox in the video editor." = "For a single capture, use Add Watermark in the editor or the Watermark checkbox in the video editor.";
+
+/* src/settings/mod.rs */
 "Format:" = "Format:";
 
 /* src/settings/mod.rs */
 "Frame rate:" = "Frame rate:";
+
+/* src/editor/window.rs */
+"Free (Drag to Move)" = "Free (Drag to Move)";
 
 /* src/editor/window.rs */
 "Freehand" = "Freehand";
@@ -481,6 +517,9 @@
 
 /* src/steps/window.rs */
 "How to …" = "How to …";
+
+/* src/settings/mod.rs */
+"Image" = "Image";
 
 /* src/editor/window.rs */
 "Image, {width} by {height} points, {annotations}. Tool: {tool}" = "Image, {width} by {height} points, {annotations}. Tool: {tool}";
@@ -560,6 +599,9 @@
 /* src/editor/tools.rs */
 "Magnify" = "Magnify";
 
+/* src/settings/mod.rs */
+"Margin:" = "Margin:";
+
 /* src/steps/window.rs */
 "Markdown…" = "Markdown…";
 
@@ -611,6 +653,12 @@
 /* src/ocr/mod.rs */
 "No text found" = "No text found";
 
+/* src/watermark.rs */
+"No watermark image is chosen" = "No watermark image is chosen";
+
+/* src/editor/window.rs, src/video_editor/window.rs */
+"No watermark to add" = "No watermark to add";
+
 /* src/settings/mod.rs, src/studio/window.rs */
 "None" = "None";
 
@@ -635,11 +683,17 @@
 /* src/editor/window.rs */
 "Opacity {percent}%" = "Opacity {percent}%";
 
+/* src/settings/mod.rs */
+"Opacity:" = "Opacity:";
+
 /* src/editor/window.rs */
 "Open Arrow" = "Open Arrow";
 
 /* src/settings/mod.rs */
 "Open History…" = "Open History…";
+
+/* src/editor/window.rs, src/video_editor/window.rs */
+"Open Settings" = "Open Settings";
 
 /* src/action.rs */
 "Open Settings File…" = "Open Settings File…";
@@ -722,6 +776,9 @@
 /* src/settings/mod.rs */
 "Public URL:" = "Public URL:";
 
+/* src/video_editor/window.rs */
+"Puts the watermark from Settings > Watermark on the video (re-encodes it)" = "Puts the watermark from Settings > Watermark on the video (re-encodes it)";
+
 /* src/settings/mod.rs */
 "Quality:" = "Quality:";
 
@@ -776,6 +833,9 @@
 /* src/history/window.rs, src/quick_access.rs */
 "Recording, {length}" = "Recording, {length}";
 
+/* src/settings/mod.rs */
+"Recordings and Studio exports" = "Recordings and Studio exports";
+
 /* src/editor/tools.rs */
 "Rectangle" = "Rectangle";
 
@@ -796,6 +856,9 @@
 
 /* src/steps/window.rs */
 "Remove Step" = "Remove Step";
+
+/* src/editor/window.rs */
+"Remove Watermark" = "Remove Watermark";
 
 /* src/settings/mod.rs */
 "Removed it from {action}." = "Removed it from {action}.";
@@ -947,6 +1010,9 @@
 /* src/scroll/session.rs */
 "Size limit reached · click Done" = "Size limit reached · click Done";
 
+/* src/settings/mod.rs */
+"Size:" = "Size:";
+
 /* src/editor/window.rs */
 "Snap to Text" = "Snap to Text";
 
@@ -992,7 +1058,7 @@
 /* src/editor/window.rs */
 "Tapered Arrow" = "Tapered Arrow";
 
-/* src/editor/tools.rs */
+/* src/editor/tools.rs, src/settings/mod.rs */
 "Text" = "Text";
 
 /* src/editor/window.rs */
@@ -1003,6 +1069,9 @@
 
 /* src/settings/mod.rs */
 "Text recognition:" = "Text recognition:";
+
+/* src/settings/mod.rs */
+"Text:" = "Text:";
 
 /* src/settings/mod.rs */
 "The bucket's URL" = "The bucket's URL";
@@ -1033,6 +1102,12 @@
 
 /* src/editor/window.rs */
 "The size of the exported image in pixels. Type pixels or a percentage of the original; proportions are kept." = "The size of the exported image in pixels. Type pixels or a percentage of the original; proportions are kept.";
+
+/* src/watermark.rs */
+"The watermark has no text" = "The watermark has no text";
+
+/* src/watermark.rs */
+"The watermark image {path} could not be opened" = "The watermark image {path} could not be opened";
 
 /* src/settings/mod.rs */
 "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file." = "The whole header value, for example Bearer abc123. Other headers and form fields can be set in the settings file.";
@@ -1082,6 +1157,9 @@
 /* src/settings/mod.rs */
 "Video codec:" = "Video codec:";
 
+/* src/settings/mod.rs, src/video_editor/window.rs */
+"Watermark" = "Watermark";
+
 /* src/settings/mod.rs */
 "WebP" = "WebP";
 
@@ -1127,6 +1205,9 @@
 /* src/app/mod.rs */
 "{errors}\n\nChoose other shortcuts in Settings > Shortcuts." = "{errors}\n\nChoose other shortcuts in Settings > Shortcuts.";
 
+/* src/editor/window.rs, src/video_editor/window.rs */
+"{error}. Set one up in Settings > Watermark." = "{error}. Set one up in Settings > Watermark.";
+
 /* src/app/mod.rs */
 "{error}\n\nThe previous settings are still in use." = "{error}\n\nThe previous settings are still in use.";
 
@@ -1168,3 +1249,6 @@
 
 /* src/settings/mod.rs */
 "~/bin/upload.sh" = "~/bin/upload.sh";
+
+/* src/settings/mod.rs */
+"© Your Name" = "© Your Name";

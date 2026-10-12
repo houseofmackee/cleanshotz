@@ -52,8 +52,20 @@ const MORE_FLIP_VERTICAL: isize = 11;
 const MORE_RESIZE: isize = 12;
 const MORE_BEFORE_AFTER: isize = 13;
 const MORE_PRINT: isize = 14;
+const MORE_WATERMARK: isize = 15;
 /// Image layer opacities offered in the style menu.
-const OPACITIES: [f64; 4] = [1.0, 0.75, 0.5, 0.25];
+const OPACITIES: [f64; 7] = [1.0, 0.85, 0.7, 0.55, 0.4, 0.25, 0.1];
+
+/// The opacity menu's values: the usual steps, plus `current` in its place
+/// when it is not one of them (a watermark set to 80% in Settings).
+fn opacity_choices(current: f64) -> Vec<f64> {
+    let mut choices = OPACITIES.to_vec();
+    if !choices.iter().any(|o| (o - current).abs() < 0.005) {
+        choices.push(current);
+        choices.sort_by(|a, b| b.total_cmp(a));
+    }
+    choices
+}
 
 // Tags of the background menu's items.
 const BG_NONE: isize = 1;
@@ -77,6 +89,9 @@ struct Ui {
     width: Retained<NSSlider>,
     style: Retained<NSPopUpButton>,
     sketchy: Retained<NSButton>,
+    /// The selected watermark's position, or Free once dragged.
+    position: Retained<NSPopUpButton>,
+    more: Retained<NSPopUpButton>,
     background: Retained<NSPopUpButton>,
     padding: Retained<NSSlider>,
     radius: Retained<NSSlider>,
@@ -191,7 +206,11 @@ define_class!(
                 let mut session = self.ivars().session.borrow_mut();
                 match session.tool {
                     _ if session.selected_opacity().is_some() => {
-                        let opacity = OPACITIES.get(index.max(0) as usize).copied().unwrap_or(1.0);
+                        let current = session.selected_opacity().unwrap_or(1.0);
+                        let opacity = opacity_choices(current)
+                            .get(index.max(0) as usize)
+                            .copied()
+                            .unwrap_or(1.0);
                         session.set_opacity(opacity);
                     }
                     Tool::Highlighter => {
@@ -221,6 +240,20 @@ define_class!(
             }
             if wants_text {
                 self.recognize_text_lines();
+            }
+            self.refresh();
+        }
+
+        #[unsafe(method(positionChanged:))]
+        fn position_changed(&self, sender: &NSPopUpButton) {
+            // The last item, Free, is chosen by dragging.
+            if let Some(position) = crate::watermark::Position::ALL
+                .get(sender.indexOfSelectedItem().max(0) as usize)
+            {
+                self.ivars()
+                    .session
+                    .borrow_mut()
+                    .anchor_watermark(*position);
             }
             self.refresh();
         }
@@ -276,6 +309,7 @@ define_class!(
                 MORE_RESIZE => self.resize(),
                 MORE_BEFORE_AFTER => self.export_before_after(),
                 MORE_PRINT => self.print(),
+                MORE_WATERMARK => self.toggle_watermark(),
                 _ => {}
             }
         }
@@ -549,6 +583,7 @@ impl EditorController {
             "Resize…",
             "Export Before/After GIF…",
             "Print…",
+            "Add Watermark",
         ]) {
             more.addItemWithTitle(&NSString::from_str(&title));
         }
@@ -644,6 +679,31 @@ impl EditorController {
         add(
             &sketchy,
             NSRect::new(NSPoint::new(398.0, row2 + 2.0), NSSize::new(110.0, 20.0)),
+            top,
+        );
+        // Where the selected watermark sits (in the hand-drawn checkbox's
+        // place: the two never show together).
+        let position = NSPopUpButton::initWithFrame_pullsDown(
+            NSPopUpButton::alloc(mtm),
+            NSRect::new(NSPoint::ZERO, NSSize::new(170.0, 26.0)),
+            false,
+        );
+        for title in crate::watermark::Position::ALL
+            .iter()
+            .map(|p| crate::i18n::tr(p.title()))
+            .chain(std::iter::once(t!("Free (Drag to Move)")))
+        {
+            position.addItemWithTitle(&NSString::from_str(&title));
+        }
+        // SAFETY: the action exists on the controller.
+        unsafe {
+            position.setTarget(Some(target));
+            position.setAction(Some(sel!(positionChanged:)));
+        }
+        position.setHidden(true);
+        add(
+            &position,
+            NSRect::new(NSPoint::new(398.0, row2 - 1.0), NSSize::new(170.0, 26.0)),
             top,
         );
 
@@ -764,6 +824,8 @@ impl EditorController {
             width: width_slider,
             style,
             sketchy,
+            position,
+            more: more.clone(),
             background,
             padding,
             radius,
@@ -806,7 +868,10 @@ impl EditorController {
             || selected.is_some_and(|a| {
                 !matches!(
                     a.shape,
-                    Shape::Pixelate { .. } | Shape::Blur { .. } | Shape::Spotlight { .. }
+                    Shape::Pixelate { .. }
+                        | Shape::Blur { .. }
+                        | Shape::Spotlight { .. }
+                        | Shape::Watermark { .. }
                 )
             });
         ui.color.setEnabled(shows_color);
@@ -833,12 +898,13 @@ impl EditorController {
         let (items, index): (Vec<String>, isize) = match tool {
             _ if selected_opacity.is_some() => {
                 let opacity = selected_opacity.unwrap_or(1.0);
+                let choices = opacity_choices(opacity);
                 (
-                    OPACITIES
+                    choices
                         .iter()
                         .map(|o| t!("Opacity {percent}%", percent = (o * 100.0).round()))
                         .collect(),
-                    OPACITIES
+                    choices
                         .iter()
                         .enumerate()
                         .min_by(|a, b| (a.1 - opacity).abs().total_cmp(&(b.1 - opacity).abs()))
@@ -900,6 +966,23 @@ impl EditorController {
             ),
         };
         ui.sketchy.setHidden(!shows_sketchy || background_tool);
+        let watermark_selected =
+            selected.is_some_and(|a| matches!(a.shape, Shape::Watermark { .. }));
+        ui.position
+            .setHidden(!watermark_selected || background_tool);
+        if let Some(position) = session.watermark_position() {
+            let index = position
+                .and_then(|p| crate::watermark::Position::ALL.iter().position(|a| *a == p))
+                .unwrap_or(crate::watermark::Position::ALL.len());
+            ui.position.selectItemAtIndex(index as isize);
+        }
+        if let Some(item) = ui.more.itemAtIndex(MORE_WATERMARK) {
+            item.setTitle(&NSString::from_str(&if session.doc.watermark().is_some() {
+                t!("Remove Watermark")
+            } else {
+                t!("Add Watermark")
+            }));
+        }
         ui.sketchy.setState(if sketchy {
             NSControlStateValueOn
         } else {
@@ -1138,6 +1221,14 @@ impl EditorController {
     /// Redraws the canvas and updates the controls.
     pub fn refresh(&self) {
         self.sync_orientation();
+        // The watermark follows the visible picture (crop, background,
+        // turns, combined images).
+        {
+            let base = self.ivars().base.borrow();
+            let mut session = self.ivars().session.borrow_mut();
+            let frame = base.layout(&session.doc).source;
+            session.doc.place_watermarks(frame);
+        }
         if let Some(canvas) = self.ivars().canvas.get() {
             canvas.setNeedsDisplay(true);
             self.describe_canvas(canvas);
@@ -1231,6 +1322,44 @@ impl EditorController {
         };
         if let Some((start, end)) = found {
             self.ivars().session.borrow_mut().add_measure(start, end);
+        }
+    }
+
+    /// Adds the default watermark (from Settings > Watermark), or removes
+    /// the one there.
+    fn toggle_watermark(&self) {
+        let mtm = self.mtm();
+        if self.ivars().session.borrow().doc.watermark().is_some() {
+            self.ivars().session.borrow_mut().remove_watermark();
+            self.refresh();
+            return;
+        }
+        let style = crate::watermark::settings().style;
+        match crate::watermark::mark(&style) {
+            Ok(mark) => {
+                let picture = Picture::new(mark, 1.0, Origin::Pixels);
+                let frame = {
+                    let base = self.ivars().base.borrow();
+                    base.layout(&self.ivars().session.borrow().doc).source
+                };
+                {
+                    let mut session = self.ivars().session.borrow_mut();
+                    session.set_tool(Tool::Select);
+                    session.add_watermark(style, picture, frame);
+                }
+                self.refresh();
+            }
+            Err(e) => {
+                let choice = crate::app::alert::show(
+                    mtm,
+                    "No watermark to add",
+                    &t!("{error}. Set one up in Settings > Watermark.", error = e),
+                    &["Open Settings", "Cancel"],
+                );
+                if choice == 0 {
+                    crate::app::open_settings_tab(mtm, crate::settings::Tab::Watermark);
+                }
+            }
         }
     }
 
@@ -1561,6 +1690,7 @@ impl EditorController {
                             file: path.clone(),
                             saved: true,
                             png: (settings.format == ImageFormat::Png).then_some(png),
+                            unmarked: None,
                         },
                     );
                     path

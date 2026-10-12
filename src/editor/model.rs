@@ -124,6 +124,23 @@ pub enum Shape {
     TextHighlight {
         rects: Vec<Rect>,
     },
+    /// A logo or text in a corner of the visible picture (see
+    /// [`crate::watermark`]): anchored at its style's position, or with
+    /// its center at `free` (fractions of the picture) once dragged. It is
+    /// always drawn on top.
+    Watermark {
+        style: crate::watermark::Style,
+        /// The mark: the logo, or the text drawn once.
+        picture: Picture,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        free: Option<Point>,
+        /// Where it is now, in image points, and the visible picture it was
+        /// placed in; kept current by [`Document::place_watermarks`].
+        #[serde(skip)]
+        rect: Rect,
+        #[serde(skip)]
+        frame: Rect,
+    },
 }
 
 fn opaque() -> f64 {
@@ -580,6 +597,11 @@ impl Document {
                     *bounds = moved;
                 }
                 Shape::Counter { center, .. } => *center = point(*center),
+                // Placed anew in the turned picture; a dragged one keeps
+                // its spot on the picture.
+                Shape::Watermark { free, .. } => {
+                    *free = free.map(|f| turn.map(f, 1.0, 1.0));
+                }
                 Shape::Image {
                     rect: r, picture, ..
                 } => {
@@ -595,6 +617,31 @@ impl Document {
         }
         self.crop = self.crop.map(rect);
         self.orientation = self.orientation.then(turn);
+    }
+
+    /// Places the watermark in `frame`, the visible picture in image points.
+    pub fn place_watermarks(&mut self, frame: Rect) {
+        for a in &mut self.annotations {
+            if let Shape::Watermark {
+                style,
+                picture,
+                free,
+                rect,
+                frame: placed_in,
+            } = &mut a.shape
+            {
+                *placed_in = frame;
+                *rect = crate::watermark::place(frame, picture.size(), style, *free);
+            }
+        }
+    }
+
+    /// The watermark's id, if there is one.
+    pub fn watermark(&self) -> Option<u64> {
+        self.annotations
+            .iter()
+            .find(|a| matches!(a.shape, Shape::Watermark { .. }))
+            .map(|a| a.id)
     }
 
     /// The number for the next counter: one more than the highest so far.
@@ -671,6 +718,7 @@ impl Annotation {
                 let r = self.counter_radius();
                 Rect::new(center.x - r, center.y - r, 2.0 * r, 2.0 * r)
             }
+            Shape::Watermark { rect, .. } => *rect,
         }
     }
 
@@ -727,7 +775,8 @@ impl Annotation {
             Shape::Pixelate { rect }
             | Shape::Blur { rect }
             | Shape::Spotlight { rect }
-            | Shape::Image { rect, .. } => expand(*rect, tolerance).contains(p),
+            | Shape::Image { rect, .. }
+            | Shape::Watermark { rect, .. } => expand(*rect, tolerance).contains(p),
         }
     }
 
@@ -769,6 +818,13 @@ impl Annotation {
                 *bounds = bounds.offset(dx, dy);
             }
             Shape::Counter { center, .. } => mv(center),
+            // Dragging a watermark frees it from its corner.
+            Shape::Watermark {
+                rect, frame, free, ..
+            } => {
+                *rect = rect.offset(dx, dy);
+                *free = Some(crate::watermark::center_in(*rect, *frame));
+            }
         }
     }
 
@@ -806,7 +862,8 @@ impl Annotation {
             | Shape::Pixelate { rect }
             | Shape::Blur { rect }
             | Shape::Spotlight { rect }
-            | Shape::Image { rect, .. } => vec![
+            | Shape::Image { rect, .. }
+            | Shape::Watermark { rect, .. } => vec![
                 (Handle::TopLeft, Point::new(rect.x, rect.y)),
                 (Handle::TopRight, Point::new(rect.max_x(), rect.y)),
                 (Handle::BottomLeft, Point::new(rect.x, rect.max_y())),
@@ -818,6 +875,25 @@ impl Annotation {
 
     /// Moves `handle` to `p`.
     pub fn drag_handle(&mut self, handle: Handle, p: Point) {
+        // A watermark keeps its shape; its size is a share of the picture's
+        // width, and an anchored one stays at its position.
+        if let Shape::Watermark {
+            style,
+            picture,
+            free,
+            rect,
+            frame,
+        } = &mut self.shape
+        {
+            let (w, h) = picture.size();
+            let resized = resize_keeping_ratio(*rect, handle, p, w / h.max(f64::MIN_POSITIVE));
+            style.size = (resized.width / frame.width.max(1.0) * 100.0).clamp(1.0, 100.0);
+            if free.is_some() {
+                *free = Some(crate::watermark::center_in(resized, *frame));
+            }
+            *rect = crate::watermark::place(*frame, (w, h), style, *free);
+            return;
+        }
         if let Shape::Image { rect, picture, .. } = &mut self.shape {
             let (w, h) = picture.size();
             *rect = resize_keeping_ratio(*rect, handle, p, w / h);

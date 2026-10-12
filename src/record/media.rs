@@ -277,7 +277,7 @@ pub fn mix_audio_tracks(path: &Path) -> Result<(), String> {
             ),
             (&*audio_out, &*audio_in),
         ];
-        if let Err(e) = transfer(&reader, &writer, &pairs) {
+        if let Err(e) = transfer(&reader, &writer, &pairs, None) {
             let _ = std::fs::remove_file(&mixed);
             return Err(e);
         }
@@ -300,6 +300,7 @@ pub unsafe fn transfer(
         &objc2_av_foundation::AVAssetReaderOutput,
         &objc2_av_foundation::AVAssetWriterInput,
     )],
+    watermark: Option<&crate::watermark::Overlay>,
 ) -> Result<(), String> {
     use objc2_av_foundation::{AVAssetReaderStatus, AVAssetWriterStatus};
     let failed = |writer: &objc2_av_foundation::AVAssetWriter, what: &str| {
@@ -320,6 +321,12 @@ pub unsafe fn transfer(
                 progressed = true;
                 match out.copyNextSampleBuffer() {
                     Some(sample) => {
+                        // The first pair is the video.
+                        if i == 0
+                            && let Some(watermark) = watermark
+                        {
+                            watermark.draw_on_frame(&sample);
+                        }
                         if !input.appendSampleBuffer(&sample) {
                             reader.cancelReading();
                             writer.cancelWriting();

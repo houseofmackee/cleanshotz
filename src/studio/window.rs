@@ -34,7 +34,7 @@ const ROW: f64 = 30.0;
 const TRACK: f64 = 52.0;
 const MIN_HEIGHT: f64 = 600.0;
 /// The inspector's full height (it scrolls in shorter windows).
-const INSPECTOR_HEIGHT: f64 = 1260.0;
+const INSPECTOR_HEIGHT: f64 = 1390.0;
 
 /// A choice in the background menu.
 #[derive(Clone)]
@@ -58,6 +58,7 @@ struct Ui {
     clicks: Retained<NSPopUpButton>,
     camera: Option<CameraControls>,
     keys: Option<KeyControls>,
+    watermark: WatermarkControls,
     zoom_level: Retained<NSSlider>,
     zoom_follow: Retained<NSButton>,
     zoom_delete: Retained<NSButton>,
@@ -72,6 +73,12 @@ struct CameraControls {
     corner: Retained<NSPopUpButton>,
     size: Retained<NSSlider>,
     shape: Retained<NSPopUpButton>,
+}
+
+struct WatermarkControls {
+    show: Retained<NSButton>,
+    position: Retained<NSPopUpButton>,
+    size: Retained<NSSlider>,
 }
 
 struct KeyControls {
@@ -539,6 +546,30 @@ impl StudioEditor {
             KeyControls { show, place, size }
         });
 
+        heading("Watermark", y);
+        y -= ROW + 2.0;
+        let watermark = {
+            let show = check("Show the watermark", y);
+            y -= ROW;
+            label("Position:", y);
+            let position = popup(
+                &crate::watermark::Position::ALL
+                    .iter()
+                    .map(|p| crate::i18n::tr(p.title()))
+                    .collect::<Vec<_>>(),
+                y,
+            );
+            y -= ROW;
+            label("Size:", y);
+            let size = slider(5.0, 40.0, y);
+            y -= ROW + 14.0;
+            WatermarkControls {
+                show,
+                position,
+                size,
+            }
+        };
+
         heading("Export", y);
         y -= ROW + 2.0;
         label("Output:", y);
@@ -586,6 +617,7 @@ impl StudioEditor {
             clicks,
             camera,
             keys,
+            watermark,
             zoom_level,
             zoom_follow,
             zoom_delete,
@@ -696,6 +728,20 @@ impl StudioEditor {
             c.shape
                 .selectItemAtIndex((style.shape == crate::config::CameraShape::Rounded) as isize);
         }
+        let watermark = project.watermark.as_ref();
+        ui.watermark.show.setState(on(watermark.is_some()));
+        let style = watermark
+            .cloned()
+            .unwrap_or_else(|| crate::watermark::settings().style);
+        ui.watermark.position.selectItemAtIndex(
+            crate::watermark::Position::ALL
+                .iter()
+                .position(|p| *p == style.position)
+                .unwrap_or(8) as isize,
+        );
+        ui.watermark.size.setDoubleValue(style.size);
+        ui.watermark.position.setEnabled(watermark.is_some());
+        ui.watermark.size.setEnabled(watermark.is_some());
         if let Some(k) = &ui.keys {
             k.show.setState(on(project.keys.visible));
             k.place.selectItemAtIndex(project.keys.top as isize);
@@ -798,6 +844,28 @@ impl StudioEditor {
                 crate::config::CameraShape::Circle
             };
         }
+        project.watermark = if ui.watermark.show.state() == NSControlStateValueOn {
+            // Turned on: the watermark from the settings.
+            let mut style = project
+                .watermark
+                .take()
+                .unwrap_or_else(|| crate::watermark::settings().style);
+            if let Some(position) = crate::watermark::Position::ALL
+                .get(ui.watermark.position.indexOfSelectedItem().max(0) as usize)
+            {
+                style.position = *position;
+            }
+            style.size = ui.watermark.size.doubleValue().round();
+            match crate::watermark::mark(&style) {
+                Ok(_) => Some(style),
+                Err(e) => {
+                    crate::ui::toast::show(mtm, &e);
+                    None
+                }
+            }
+        } else {
+            None
+        };
         if let Some(k) = &ui.keys {
             project.keys.visible = k.show.state() == NSControlStateValueOn;
             project.keys.top = k.place.indexOfSelectedItem() == 1;
@@ -822,6 +890,7 @@ impl StudioEditor {
             ivars.duration,
         )?);
         package::save_project(&ivars.package, &project)?;
+        save_watermark(&ivars.package, project.watermark.as_ref());
         *ivars.project.borrow_mut() = project;
         *ivars.renderer.borrow_mut() = renderer.clone();
         let (Some(item), Some(player)) = (ivars.item.get(), ivars.player.get()) else {
@@ -1053,5 +1122,25 @@ impl StudioEditor {
                 }
             });
         });
+    }
+}
+
+/// Keeps a copy of the watermark's mark in the package, for when the logo
+/// file moves; removes it when there is no watermark.
+fn save_watermark(package: &std::path::Path, style: Option<&crate::watermark::Style>) {
+    let path = package.join(package::WATERMARK);
+    match style.map(crate::watermark::mark) {
+        Some(Ok(mark)) => {
+            if let Some(png) =
+                crate::capture::image::encode(&mark, crate::config::ImageFormat::Png, 1.0)
+                && let Err(e) = std::fs::write(&path, png)
+            {
+                tracing::warn!(error = %e, "the watermark was not copied into the recording");
+            }
+        }
+        Some(Err(_)) => {}
+        None => {
+            let _ = std::fs::remove_file(&path);
+        }
     }
 }

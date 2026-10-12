@@ -23,6 +23,8 @@ pub struct Project {
     pub motion_blur: bool,
     pub camera: CameraStyle,
     pub keys: KeysStyle,
+    /// A logo or text in a corner of the frame (see [`crate::watermark`]).
+    pub watermark: Option<crate::watermark::Style>,
 }
 
 /// Where a recording's camera goes.
@@ -107,6 +109,7 @@ impl Default for Project {
             motion_blur: false,
             camera: CameraStyle::default(),
             keys: KeysStyle::default(),
+            watermark: None,
         }
     }
 }

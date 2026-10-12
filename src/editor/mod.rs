@@ -110,16 +110,43 @@ fn title_for(path: &Path) -> String {
         .map_or_else(|| "CleanShotZ".into(), |n| n.to_string_lossy().into_owned())
 }
 
-/// Opens a Quick Access capture.
+/// Opens a Quick Access capture. With the default watermark on, the
+/// capture opens without it and the watermark is a layer on it.
 pub fn open_capture(mtm: MainThreadMarker, item: &Item) {
+    open_item(mtm, item, Document::default());
+}
+
+fn open_item(mtm: MainThreadMarker, item: &Item, mut doc: Document) {
     let file = item.file();
-    let base = BaseImage::new(item.image(), item.scale);
+    let base = match item.unmarked() {
+        Some((original, watermark)) => {
+            add_watermark(&mut doc, &watermark);
+            BaseImage::new(original, item.scale)
+        }
+        None => BaseImage::new(item.image(), item.scale),
+    };
     open(
         mtm,
         base,
-        Document::default(),
+        doc,
         Source::Capture { file: file.clone() },
         &title_for(&file),
+    );
+}
+
+/// Puts `watermark` on `doc` as its watermark layer (placed when the
+/// editor lays the document out).
+fn add_watermark(doc: &mut Document, watermark: &crate::watermark::Overlay) {
+    doc.add(
+        model::Shape::Watermark {
+            style: watermark.style.clone(),
+            picture: Picture::new(watermark.mark.clone(), 1.0, picture::Origin::Pixels),
+            free: watermark.free,
+            rect: Default::default(),
+            frame: Default::default(),
+        },
+        model::Color::RED,
+        4.0,
     );
 }
 
@@ -137,8 +164,6 @@ pub fn remember_background(background: &model::Background) {
 /// Opens a Quick Access capture with the last chosen background (or the
 /// default one), for window captures.
 pub fn open_capture_with_background(mtm: MainThreadMarker, item: &Item) {
-    let file = item.file();
-    let base = BaseImage::new(item.image(), item.scale);
     let background = LAST_BACKGROUND
         .with(|b| b.borrow().clone())
         .unwrap_or_default();
@@ -146,13 +171,7 @@ pub fn open_capture_with_background(mtm: MainThreadMarker, item: &Item) {
         background: Some(background),
         ..Document::default()
     };
-    open(
-        mtm,
-        base,
-        doc,
-        Source::Capture { file: file.clone() },
-        &title_for(&file),
-    );
+    open_item(mtm, item, doc);
 }
 
 /// Opens an image file or a `.cszdoc` project (videos go to the video

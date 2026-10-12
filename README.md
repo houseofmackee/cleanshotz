@@ -167,7 +167,8 @@ Set `CLEANSHOTZ_SKIP_ONBOARDING=1` to skip the first-launch permission dialog.
 ## Settings
 
 Choose Settings… from the menu (Cmd+,) to change options in tabs: General,
-Screenshots, Quick Access, Recording, History, Uploads and Shortcuts.
+Screenshots, Quick Access, Recording, History, Uploads, Watermark and
+Shortcuts.
 Changes apply at once. Everything is stored in the settings file (see
 [Files](#files)), which can also be edited by hand; choose Reload Settings
 afterwards. The tables below list each option's name in the file. Upload
@@ -310,6 +311,7 @@ slack = ["save", "open Slack"]
 | `background [preset]` | Put the image on a saved background preset, or on the editor's default background |
 | `redact` | Cover emails, API keys, tokens, card numbers and similar text |
 | `srgb` | Convert to sRGB |
+| `watermark` | Put the watermark from Settings > Watermark on the image |
 | `format png`, `format jpeg 80%`, `format webp [85%]` | The format of files written after this step (WebP without a quality is lossless) |
 | `save [folder]` | Save to the save folder, or to `folder` |
 | `copy` | Copy the image to the clipboard |
@@ -424,6 +426,10 @@ in the Studio editor, where all of them can be changed afterwards:
 - **Camera** (when it was on): its corner, size and shape, or hidden.
 - **Keys** (when shown while recording): at the bottom or top, any size,
   or hidden.
+- **Watermark:** shown or hidden, its position and size (see
+  [Watermarks](#watermarks)). New Studio recordings start with it when it
+  is on for new recordings; the package keeps a copy of the mark, so the
+  export still has it if the logo file moves.
 
 Export MP4 renders the result at 1080p, 1440p, 4K or the original size,
 at 60 frames per second and faster than real time, and shows it in Quick
@@ -444,14 +450,64 @@ the video (drag inside it to move it, drag a corner to resize; Return
 finishes, Escape removes the crop). The speed menu plays the result from
 0.5× to 4× (the sound keeps its pitch; the player previews the speed).
 Mute removes the sound, the size menu scales down to 1080p, 720p or 540p
-(never up), and MP4 or GIF picks the format. The Quality slider sets the
+(never up), and MP4 or GIF picks the format. Watermark puts the watermark
+from Settings > Watermark on every frame. The Quality slider sets the
 bitrate when the video is re-encoded; next to it are the expected file
 size, the result's length and its size in pixels. Save replaces the
 recording (a GIF is saved next to it); Save As… saves a copy anywhere.
 
 When only trimming or muting, the video is copied without re-encoding, so
 it keeps its quality and saves quickly. Cropping, a speed change, a
-smaller size or moving the Quality slider re-encode it.
+smaller size, the watermark or moving the Quality slider re-encode it.
+
+### Watermarks
+
+<img src="docs/screenshots/watermark-editor.png" width="640" alt="A capture with a selected watermark in its bottom-right corner, with the opacity and position menus">
+
+Like a TV station's logo, a watermark puts your logo or a line of text in a
+corner of screenshots and recordings. Set it up in Settings > Watermark:
+an image (a PNG with transparency looks best) or text (any color,
+optionally on a dark rounded background), its position (a corner, an edge
+or the middle), size, opacity and margin. A preview shows the result.
+
+<img src="docs/screenshots/watermark-settings.png" width="420" alt="The Watermark tab of the Settings window with a live preview">
+
+Its size is a share of the picture's width and its margin a share of the
+shorter side, so it looks the same on a small capture, a Retina capture and
+a 4K video, and it follows crops and resizing.
+
+- **New captures:** turn on Add to new: Screenshots and Recordings to put it
+  on every new capture. Saved and copied screenshots have it; open one
+  from Quick Access in the editor and it is a layer you can move, change or
+  remove for that capture. New recordings get it when they finish (a quick
+  re-encode, before any GIF conversion; it mixes separate audio tracks into
+  one), and Studio recordings when they are exported.
+- **One capture:** in the editor, choose Add Watermark (or Remove
+  Watermark) in the ••• menu. With the watermark selected, the menus next
+  to the width slider set its opacity and position. It stays anchored to its
+  position; drag it to place it anywhere (the position menu then says Free),
+  drag a corner to resize it, and choose a position again to anchor it. In
+  the video editor, check Watermark; in Studio, Show the watermark.
+- **Pipelines:** the `watermark` step adds it to scripted captures. Pipelines
+  replace the usual handling, so the Add to new setting does not apply to
+  them.
+
+Options live in the `[watermark]` section of the settings file:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `screenshots`, `recordings` | `false` | Put it on new screenshots, and on new recordings and Studio exports |
+| `kind` | `"text"` | `"text"` or `"image"` |
+| `text` | `""` | The text, one line |
+| `image` | `""` | The image file (`~` for your home folder) |
+| `color` | `"#FFFFFF"` | The text's color |
+| `background` | `false` | A dark rounded background behind the text |
+| `opacity` | `0.7` | 0 to 1 |
+| `size` | `15` | Width in percent of the picture's width |
+| `position` | `"bottom_right"` | `top_left`, `top`, `top_right`, `left`, `center`, `right`, `bottom_left`, `bottom` or `bottom_right` |
+| `margin` | `3` | Distance from the edges in percent of the shorter side |
+
+Projects keep the watermark as a layer (format version 4).
 
 ### Capture history
 
@@ -691,7 +747,7 @@ into your `PATH` to use it.
 | `hide-desktop-icons`, `show-desktop-icons`, `toggle-desktop-icons` | none |
 | `open-history` | none |
 | `restore-recently-closed` | none |
-| `open-settings` | `tab`: CleanShot's names, plus `history` and `uploads` |
+| `open-settings` | `tab`: CleanShot's names, plus `history`, `uploads` and `watermark` |
 | `run-pipeline` | `name`, `filepath` |
 | `quit` | none (command line only) |
 

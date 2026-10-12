@@ -7,7 +7,7 @@
 //! ```json
 //! {
 //!   "format": "cleanshotz-project",
-//!   "version": 1,             // 2 or 3 when newer features are used
+//!   "version": 1,             // 2 to 4 when newer features are used
 //!   "scale": 2.0,             // image pixels per point
 //!   "image_png": "iVBOR...",  // the original image, base64 PNG
 //!   "document": { ... }       // annotations, crop, background,
@@ -35,8 +35,9 @@ const FORMAT: &str = "cleanshotz-project";
 /// that can hold it, so older versions of the app open what they can show
 /// and refuse the rest: 2 adds the orientation and output size, 3 the
 /// magnify, measure and text highlight shapes, curved arrows, hand-drawn
-/// shapes, image layer opacity, Balance and the newer background sizes.
-const VERSION: u32 = 3;
+/// shapes, image layer opacity, Balance and the newer background sizes,
+/// 4 the watermark.
+const VERSION: u32 = 4;
 
 #[derive(Serialize, Deserialize)]
 struct ProjectFile {
@@ -78,7 +79,13 @@ fn version_for(doc: &Document) -> u32 {
                 Aspect::Auto | Aspect::Square | Aspect::Wide | Aspect::Standard
             )
     });
-    if uses_3 {
+    let uses_4 = doc
+        .annotations
+        .iter()
+        .any(|a| matches!(a.shape, Shape::Watermark { .. }));
+    if uses_4 {
+        4
+    } else if uses_3 {
         3
     } else if doc.orientation != Default::default() || doc.output_scale.is_some() {
         2

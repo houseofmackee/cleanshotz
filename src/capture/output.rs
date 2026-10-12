@@ -40,6 +40,9 @@ pub struct Delivered {
     pub saved: bool,
     /// PNG bytes, when they were already encoded (for the clipboard).
     pub png: Option<Vec<u8>>,
+    /// With the default watermark on: the capture without it, and the
+    /// watermark, so the editor can open it as a layer to change.
+    pub unmarked: Option<(CFRetained<CGImage>, crate::watermark::Overlay)>,
 }
 
 /// Plays the shutter sound, then encodes, saves and copies the capture on a
@@ -67,10 +70,20 @@ pub fn deliver(mtm: MainThreadMarker, mut captured: Captured, settings: &Capture
         }
     }
     let settings = settings.clone();
+    let watermark = crate::watermark::Overlay::default_for_new(false);
     std::thread::spawn(move || {
-        let Some(delivered) = process(captured, &settings) else {
+        let mut captured = captured;
+        let mut unmarked = None;
+        if let Some(watermark) = watermark
+            && let Some(marked) = watermark.apply(&captured.image)
+        {
+            let original = std::mem::replace(&mut captured.image, marked);
+            unmarked = Some((original, watermark));
+        }
+        let Some(mut delivered) = process(captured, &settings) else {
             return;
         };
+        delivered.unmarked = unmarked;
         DispatchQueue::main().exec_async(move || {
             let mtm = MainThreadMarker::new().expect("the main queue runs on the main thread");
             crate::history::record_image(delivered.image.clone(), delivered.file.clone(), None);
@@ -147,6 +160,7 @@ fn process(captured: Captured, settings: &CaptureSettings) -> Option<Delivered> 
         file,
         saved: saved.is_some(),
         png,
+        unmarked: None,
     })
 }
 

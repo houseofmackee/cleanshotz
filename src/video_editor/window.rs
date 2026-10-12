@@ -53,6 +53,8 @@ pub struct Ivars {
     crop_button: OnceCell<Retained<NSButton>>,
     controls: OnceCell<Vec<Retained<AnyObject>>>,
     mute: Cell<bool>,
+    /// Put the watermark from the settings on the video.
+    watermark: Cell<bool>,
     crop: Cell<Option<Rect>>,
     speed: Cell<f64>,
     quality: Cell<Option<f64>>,
@@ -112,6 +114,14 @@ define_class!(
                 // SAFETY: plain player property.
                 unsafe { player.setMuted(mute) };
             }
+            self.update_length();
+        }
+
+        #[unsafe(method(watermarkChanged:))]
+        fn watermark_changed(&self, sender: &NSButton) {
+            self.ivars()
+                .watermark
+                .set(sender.state() == NSControlStateValueOn);
             self.update_length();
         }
 
@@ -231,6 +241,7 @@ impl VideoEditor {
             crop_button: OnceCell::new(),
             controls: OnceCell::new(),
             mute: Cell::new(false),
+            watermark: Cell::new(false),
             crop: Cell::new(None),
             speed: Cell::new(1.0),
             quality: Cell::new(None),
@@ -403,6 +414,19 @@ impl VideoEditor {
         row(&resolution, 380.0, 126.0, top);
         let format = popup(&["MP4", "GIF"], sel!(formatChanged:));
         row(&format, 512.0, 80.0, top);
+        // SAFETY: the action exists on VideoEditor.
+        let watermark = unsafe {
+            NSButton::checkboxWithTitle_target_action(
+                &NSString::from_str(&t!("Watermark")),
+                Some(target),
+                Some(sel!(watermarkChanged:)),
+                mtm,
+            )
+        };
+        watermark.setToolTip(Some(&NSString::from_str(&t!(
+            "Puts the watermark from Settings > Watermark on the video (re-encodes it)"
+        ))));
+        row(&watermark, 598.0, 104.0, top);
 
         // Bottom row: quality, what comes out, saving.
         let quality_label = NSTextField::labelWithString(ns_string!("Quality"), mtm);
@@ -441,6 +465,7 @@ impl VideoEditor {
             any(&trim),
             any(&crop),
             any(&mute),
+            any(&watermark),
             any(&speed),
             any(&resolution),
             any(&format),
@@ -486,6 +511,7 @@ impl VideoEditor {
             crop: ivars.crop.get(),
             speed: ivars.speed.get(),
             quality: ivars.quality.get(),
+            watermark: ivars.watermark.get(),
         }
     }
 
@@ -604,10 +630,29 @@ impl VideoEditor {
             plan::gif_width(plan.resolution, ivars.size, ivars.gif_max_width),
         );
         let id = ivars.id;
+        let watermark = if plan.watermark {
+            match crate::watermark::Overlay::from_settings() {
+                Ok(watermark) => Some(watermark),
+                Err(e) => {
+                    let choice = crate::app::alert::show(
+                        self.mtm(),
+                        "No watermark to add",
+                        &t!("{error}. Set one up in Settings > Watermark.", error = e),
+                        &["Open Settings", "Cancel"],
+                    );
+                    if choice == 0 {
+                        crate::app::open_settings_tab(self.mtm(), crate::settings::Tab::Watermark);
+                    }
+                    return;
+                }
+            }
+        } else {
+            None
+        };
         self.set_busy(true);
         toast::show(self.mtm(), "Exporting…");
         std::thread::spawn(move || {
-            let result = export::export(&source, &plan, preset, gif, &output);
+            let result = export::export(&source, &plan, preset, gif, watermark.as_ref(), &output);
             let thumbnail = result
                 .as_ref()
                 .ok()

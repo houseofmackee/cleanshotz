@@ -17,6 +17,8 @@ pub struct Config {
     pub recording: RecordingSettings,
     pub history: HistorySettings,
     pub upload: UploadSettings,
+    /// The default watermark and what gets it.
+    pub watermark: crate::watermark::Settings,
     pub hotkeys: Hotkeys,
     /// Named post-capture pipelines: lists of steps such as
     /// `["resize 50%", "upload", "copy-link"]` (see `crate::pipeline`).

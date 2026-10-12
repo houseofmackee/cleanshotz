@@ -238,7 +238,7 @@
 		</command>
 		<command name="open settings" code="CszZOSet" description="Open the Settings window.">
 			<cocoa class="CSZScriptCommand"/>
-			<parameter name="tab" code="STab" optional="yes" description="general, screenshots, quickaccess, recording, history, uploads (cloud) or shortcuts.">
+			<parameter name="tab" code="STab" optional="yes" description="general, screenshots, quickaccess, recording, history, uploads (cloud), watermark or shortcuts.">
 				<type type="text"/>
 				<cocoa key="tab"/>
 			</parameter>

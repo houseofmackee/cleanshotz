@@ -20,6 +20,7 @@ use objc2_foundation::{NSString, NSURL};
 
 use super::plan::{Format, Plan, Preset};
 use crate::record::media;
+use crate::watermark::Overlay;
 
 fn file_url(path: &Path) -> Retained<NSURL> {
     NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()))
@@ -32,11 +33,13 @@ fn time(seconds: f64) -> CMTime {
 
 /// Runs the export described by `plan` from `source` into `output`
 /// (replacing it). Blocks: call it off the main thread.
+/// `watermark`: drawn on every frame when the plan asks for it.
 pub fn export(
     source: &Path,
     plan: &Plan,
     preset: Preset,
     gif: (u32, u32),
+    watermark: Option<&Overlay>,
     output: &Path,
 ) -> Result<(), String> {
     let temp_dir = std::env::temp_dir().join("cleanshotz-video-export");
@@ -45,7 +48,7 @@ pub fn export(
     let _ = std::fs::remove_file(&temp);
 
     if plan.needs_reencode(media::size(source)) {
-        export_reencoded(source, plan, &temp)?;
+        export_reencoded(source, plan, watermark.filter(|_| plan.watermark), &temp)?;
     } else {
         export_mp4(source, plan, preset, &temp)?;
     }
@@ -135,7 +138,12 @@ unsafe fn composition(
 /// Re-encodes: crop and scale through a video composition, speed through
 /// the composition's time scaling (audio keeps its pitch), and the bitrate
 /// from the plan's quality.
-fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), String> {
+fn export_reencoded(
+    source: &Path,
+    plan: &Plan,
+    watermark: Option<&Overlay>,
+    output: &Path,
+) -> Result<(), String> {
     use objc2::runtime::ProtocolObject;
     use objc2_av_foundation::{
         AVMutableVideoComposition, AVMutableVideoCompositionInstruction,
@@ -203,14 +211,38 @@ fn export_reencoded(source: &Path, plan: &Plan, output: &Path) -> Result<(), Str
             (width, height),
             fps,
             plan.bitrate(source_size, fps),
+            watermark,
             output,
         )
     }
 }
 
+/// Puts `watermark` on a finished recording in place (re-encoded at about
+/// its own quality). The audio tracks are mixed into one.
+pub fn watermark_in_place(path: &Path, watermark: &Overlay) -> Result<(), String> {
+    let duration = media::duration(path);
+    let plan = Plan {
+        start: 0.0,
+        end: duration,
+        mute: false,
+        resolution: super::plan::Resolution::Original,
+        format: Format::Mp4,
+        crop: None,
+        speed: 1.0,
+        quality: None,
+        watermark: true,
+    };
+    let temp = path.with_extension("watermarking.mp4");
+    let _ = std::fs::remove_file(&temp);
+    let result =
+        export_reencoded(path, &plan, Some(watermark), &temp).and_then(|()| replace(&temp, path));
+    let _ = std::fs::remove_file(&temp);
+    result
+}
+
 /// Encodes `composition` through `video_composition` (which draws the
 /// frames at `size` pixels) to an MP4 at `output`, with all audio tracks
-/// mixed into one stereo track.
+/// mixed into one stereo track, and `watermark` on every frame.
 ///
 /// # Safety
 ///
@@ -221,6 +253,7 @@ pub unsafe fn encode(
     (width, height): (usize, usize),
     fps: f64,
     bitrate: u64,
+    watermark: Option<&Overlay>,
     output: &Path,
 ) -> Result<(), String> {
     use objc2_av_foundation::{
@@ -349,7 +382,7 @@ pub unsafe fn encode(
         if let (Some(out), Some(input)) = (&sound_out, &sound_in) {
             pairs.push((out, input));
         }
-        media::transfer(&reader, &writer, &pairs)
+        media::transfer(&reader, &writer, &pairs, watermark)
     }
 }
 

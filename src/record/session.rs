@@ -121,6 +121,8 @@ struct Finish {
     gif_max_width: u32,
     /// Mix system audio and the microphone into one track afterwards.
     mix_audio: bool,
+    /// The default watermark for new recordings, put on afterwards.
+    watermark: Option<crate::watermark::Overlay>,
 }
 
 enum State {
@@ -614,6 +616,12 @@ fn begin_recording(
                 gif_fps: settings.gif_fps(),
                 gif_max_width: settings.gif_max_width,
                 mix_audio: settings.system_audio && microphone && !settings.separate_audio_tracks,
+                // Studio recordings get it when exported instead.
+                watermark: if studio {
+                    None
+                } else {
+                    crate::watermark::Overlay::default_for_new(true)
+                },
             },
         }))
     });
@@ -786,6 +794,14 @@ fn deliver(finish: Finish) {
         {
             // The recording is still fine, with two audio tracks.
             tracing::warn!(error = %e, "could not mix the audio tracks");
+        }
+        // Before the GIF conversion, so GIFs get it too.
+        if let Some(watermark) = &finish.watermark
+            && let Err(e) =
+                crate::video_editor::export::watermark_in_place(&finish.video, watermark)
+        {
+            // The recording is still there, without the watermark.
+            tracing::error!(error = %e, "could not put the watermark on the recording");
         }
         let thumbnail = media::thumbnail(&finish.video);
         let duration = media::duration(&finish.video);

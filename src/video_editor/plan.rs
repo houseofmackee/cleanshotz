@@ -80,6 +80,8 @@ pub struct Plan {
     /// Quality from 0 to 1, when chosen; otherwise the video is copied
     /// when nothing else needs re-encoding.
     pub quality: Option<f64>,
+    /// Put the watermark from Settings > Watermark on every frame.
+    pub watermark: bool,
 }
 
 impl Plan {
@@ -97,6 +99,7 @@ impl Plan {
     /// samples are copied, which is fast and lossless.
     pub fn needs_reencode(&self, source_size: (f64, f64)) -> bool {
         self.crop.is_some()
+            || self.watermark
             || (self.speed - 1.0).abs() > 1e-6
             || self.quality.is_some()
             || preset(self.resolution, source_size) != Preset::Passthrough
@@ -270,6 +273,7 @@ mod tests {
             crop: None,
             speed: 1.0,
             quality: None,
+            watermark: false,
         };
         assert!(!plan.changes_anything(10.0, (1600.0, 1000.0)));
         assert!(Plan { start: 1.0, ..plan }.changes_anything(10.0, (1600.0, 1000.0)));
@@ -300,7 +304,18 @@ mod tests {
             crop: None,
             speed: 1.0,
             quality: None,
+            watermark: false,
         }
+    }
+
+    #[test]
+    fn watermarks_need_reencoding() {
+        let plan = Plan {
+            watermark: true,
+            ..plan()
+        };
+        assert!(plan.needs_reencode((1600.0, 1000.0)));
+        assert!(plan.changes_anything(10.0, (1600.0, 1000.0)));
     }
 
     #[test]

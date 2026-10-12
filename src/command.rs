@@ -160,8 +160,8 @@ pub enum Request {
 }
 
 /// Settings tabs `open-settings` accepts: CleanShot's names, then
-/// CleanShotZ's own `history` and `uploads`.
-pub const SETTINGS_TABS: [&str; 12] = [
+/// CleanShotZ's own `history`, `uploads` and `watermark`.
+pub const SETTINGS_TABS: [&str; 13] = [
     "general",
     "wallpaper",
     "shortcuts",
@@ -174,6 +174,7 @@ pub const SETTINGS_TABS: [&str; 12] = [
     "about",
     "history",
     "uploads",
+    "watermark",
 ];
 
 /// Parses `scheme://command?query`. The scheme itself is not checked, so

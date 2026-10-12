@@ -121,6 +121,35 @@ pub fn bitmap_context(
     }
 }
 
+/// A bitmap context over existing 8-bit premultiplied BGRA pixels in
+/// sRGB, such as a locked video frame.
+///
+/// # Safety
+///
+/// `data` must point to `height` rows of `bytes_per_row` bytes that stay
+/// valid and writable while the context is used.
+pub unsafe fn bitmap_context_over(
+    data: *mut c_void,
+    width: usize,
+    height: usize,
+    bytes_per_row: usize,
+) -> Option<CFRetained<CGContext>> {
+    let srgb = CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB }))?;
+    // SAFETY: per the function's contract; BGRA is a supported format.
+    unsafe {
+        let raw = CGBitmapContextCreate(
+            data,
+            width,
+            height,
+            8,
+            bytes_per_row,
+            Some(&srgb),
+            K_CG_IMAGE_ALPHA_PREMULTIPLIED_FIRST | K_CG_BITMAP_BYTE_ORDER_32_LITTLE,
+        )?;
+        Some(CFRetained::from_raw(raw))
+    }
+}
+
 /// Draws `image` scaled to `width` x `height` into a new 8-bit
 /// premultiplied BGRA bitmap context.
 fn draw_into_bitmap(image: &CGImage, width: usize, height: usize) -> Option<CFRetained<CGContext>> {

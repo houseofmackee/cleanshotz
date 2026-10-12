@@ -135,6 +135,78 @@ impl Session {
         id
     }
 
+    /// Adds the watermark (replacing one already there), selected, as one
+    /// undo step. `frame` is the visible picture, for placing it.
+    pub fn add_watermark(
+        &mut self,
+        style: crate::watermark::Style,
+        picture: Picture,
+        frame: Rect,
+    ) -> u64 {
+        self.change();
+        if let Some(old) = self.doc.watermark() {
+            self.doc.remove(old);
+        }
+        let id = self.doc.add(
+            Shape::Watermark {
+                style,
+                picture,
+                free: None,
+                rect: Rect::default(),
+                frame: Rect::default(),
+            },
+            self.color,
+            self.width,
+        );
+        self.doc.place_watermarks(frame);
+        self.selection = Some(id);
+        id
+    }
+
+    /// Removes the watermark, as one undo step.
+    pub fn remove_watermark(&mut self) {
+        if let Some(id) = self.doc.watermark() {
+            self.change();
+            self.doc.remove(id);
+            if self.selection == Some(id) {
+                self.selection = None;
+            }
+        }
+    }
+
+    /// The watermark's position: `Some` anchored there, `None` once
+    /// dragged.
+    pub fn watermark_position(&self) -> Option<Option<crate::watermark::Position>> {
+        let id = self.doc.watermark()?;
+        match &self.doc.get(id)?.shape {
+            Shape::Watermark { style, free, .. } => Some(free.is_none().then_some(style.position)),
+            _ => None,
+        }
+    }
+
+    /// Anchors the watermark at `position`, as one undo step.
+    pub fn anchor_watermark(&mut self, position: crate::watermark::Position) {
+        let Some(id) = self.doc.watermark() else {
+            return;
+        };
+        if self.watermark_position() == Some(Some(position)) {
+            return;
+        }
+        self.change();
+        if let Some(Shape::Watermark {
+            style,
+            picture,
+            free,
+            rect,
+            frame,
+        }) = self.doc.get_mut(id).map(|a| &mut a.shape)
+        {
+            style.position = position;
+            *free = None;
+            *rect = crate::watermark::place(*frame, picture.size(), style, None);
+        }
+    }
+
     /// The captured image's size in points, as turned.
     pub fn image_size(&self) -> (f64, f64) {
         self.doc
@@ -515,6 +587,7 @@ impl Session {
             .map(|a| &a.shape)
         {
             Some(Shape::Image { opacity, .. }) => Some(*opacity),
+            Some(Shape::Watermark { style, .. }) => Some(style.opacity),
             _ => None,
         }
     }
@@ -527,12 +600,14 @@ impl Session {
             .is_some_and(|o| (o - value).abs() > f64::EPSILON)
         {
             self.change();
-            if let Some(Shape::Image { opacity, .. }) = self
+            match self
                 .selection
                 .and_then(|id| self.doc.get_mut(id))
                 .map(|a| &mut a.shape)
             {
-                *opacity = value;
+                Some(Shape::Image { opacity, .. }) => *opacity = value,
+                Some(Shape::Watermark { style, .. }) => style.opacity = value,
+                _ => {}
             }
         }
     }
@@ -890,6 +965,105 @@ mod tests {
         match s.doc.annotations[0].shape {
             Shape::Line { end, .. } => assert!(end.y.abs() < 1e-9),
             _ => panic!(),
+        }
+    }
+
+    fn watermark_style() -> crate::watermark::Style {
+        crate::watermark::Style {
+            size: 25.0,
+            margin: 5.0,
+            ..crate::watermark::Style::default()
+        }
+    }
+
+    #[test]
+    fn watermarks_anchor_drag_free_and_resize() {
+        use crate::watermark::Position;
+        let mut s = session();
+        let frame = Rect::new(0.0, 0.0, 800.0, 600.0);
+        // A 4:1 mark at 25% of 800 = 200 × 50, 5% of 600 = 30 from the edges.
+        let id = s.add_watermark(watermark_style(), picture(40, 10, 1.0), frame);
+        assert_eq!(s.selection, Some(id));
+        assert_eq!(
+            s.doc.get(id).unwrap().bounds(),
+            Rect::new(570.0, 520.0, 200.0, 50.0)
+        );
+        assert_eq!(s.watermark_position(), Some(Some(Position::BottomRight)));
+
+        // Dragging frees it; it stays where it was dropped.
+        s.set_tool(Tool::Select);
+        drag(&mut s, (600.0, 540.0), (400.0, 340.0));
+        assert_eq!(
+            s.doc.get(id).unwrap().bounds(),
+            Rect::new(370.0, 320.0, 200.0, 50.0)
+        );
+        assert_eq!(s.watermark_position(), Some(None));
+        // A crop keeps it at the same share of the picture.
+        s.doc.place_watermarks(Rect::new(0.0, 0.0, 400.0, 300.0));
+        assert_eq!(
+            s.doc.get(id).unwrap().bounds(),
+            Rect::new(185.0, 160.0, 100.0, 25.0)
+        );
+        s.doc.place_watermarks(frame);
+
+        // Its corner handle sets the size, as a share of the width.
+        drag(&mut s, (570.0, 370.0), (670.0, 370.0));
+        match &s.doc.get(id).unwrap().shape {
+            Shape::Watermark { style, .. } => assert!((style.size - 37.5).abs() < 1e-9),
+            other => panic!("{other:?}"),
+        }
+
+        // Anchoring again, then undoing back to the free spot.
+        s.anchor_watermark(Position::TopLeft);
+        assert_eq!(
+            s.doc.get(id).unwrap().bounds(),
+            Rect::new(30.0, 30.0, 300.0, 75.0)
+        );
+        assert!(s.undo());
+        assert_eq!(s.watermark_position(), Some(None));
+
+        // Only one watermark; removing it is one undo step.
+        s.add_watermark(watermark_style(), picture(40, 10, 1.0), frame);
+        assert_eq!(
+            s.doc
+                .annotations
+                .iter()
+                .filter(|a| matches!(a.shape, Shape::Watermark { .. }))
+                .count(),
+            1
+        );
+        s.remove_watermark();
+        assert_eq!(s.doc.watermark(), None);
+        assert!(s.undo());
+        assert!(s.doc.watermark().is_some());
+    }
+
+    #[test]
+    fn watermarks_survive_saving() {
+        let mut doc = Document::default();
+        doc.add(
+            Shape::Watermark {
+                style: watermark_style(),
+                picture: picture(40, 10, 1.0),
+                free: Some(Point::new(0.25, 0.75)),
+                rect: Rect::default(),
+                frame: Rect::default(),
+            },
+            Color::RED,
+            4.0,
+        );
+        let json = serde_json::to_string(&doc).unwrap();
+        let mut back: Document = serde_json::from_str(&json).unwrap();
+        back.place_watermarks(Rect::new(0.0, 0.0, 800.0, 600.0));
+        match &back.annotations[0].shape {
+            Shape::Watermark {
+                style, free, rect, ..
+            } => {
+                assert_eq!(style.size, 25.0);
+                assert_eq!(*free, Some(Point::new(0.25, 0.75)));
+                assert_eq!(*rect, Rect::new(100.0, 425.0, 200.0, 50.0));
+            }
+            other => panic!("{other:?}"),
         }
     }
 

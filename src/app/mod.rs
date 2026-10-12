@@ -11,7 +11,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 use objc2::rc::Retained;
-use objc2::runtime::{NSObject, ProtocolObject};
+use objc2::runtime::{AnyObject, NSObject, ProtocolObject};
 use objc2::{DefinedClass, MainThreadMarker, MainThreadOnly, Message, define_class, msg_send, sel};
 use objc2_app_kit::{
     NSApplication, NSApplicationActivationPolicy, NSApplicationDelegate, NSControlStateValueOff,
@@ -40,6 +40,17 @@ pub fn run(config: Config, config_path: PathBuf) {
     let delegate = AppDelegate::new(mtm, config, config_path);
     app.setDelegate(Some(ProtocolObject::from_ref(&*delegate)));
     app.run();
+}
+
+/// Opens Settings at `tab`, from anywhere in the app.
+pub fn open_settings_tab(mtm: MainThreadMarker, tab: crate::settings::Tab) {
+    let Some(delegate) = NSApplication::sharedApplication(mtm).delegate() else {
+        return;
+    };
+    let object: &AnyObject = delegate.as_ref();
+    if let Some(app) = object.downcast_ref::<AppDelegate>() {
+        app.open_settings(tab);
+    }
 }
 
 pub struct Ivars {
@@ -393,6 +404,7 @@ impl AppDelegate {
         crate::ocr::configure(config.text.clone());
         crate::video_editor::configure(config.recording.clone());
         crate::history::configure(config.history);
+        crate::watermark::configure(config.watermark.clone());
         crate::upload::configure(config.upload.clone());
         crate::pipeline::configure(config.pipelines.clone());
     }
@@ -824,6 +836,7 @@ fn add_to_quick_access(mtm: MainThreadMarker, file: PathBuf) -> Result<(), Strin
                 file,
                 saved: true,
                 png: None,
+                unmarked: None,
             },
         );
     }

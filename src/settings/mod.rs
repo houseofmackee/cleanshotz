@@ -35,17 +35,19 @@ pub enum Tab {
     Recording,
     History,
     Uploads,
+    Watermark,
     Shortcuts,
 }
 
 impl Tab {
-    const ALL: [Tab; 7] = [
+    const ALL: [Tab; 8] = [
         Tab::General,
         Tab::Screenshots,
         Tab::QuickAccess,
         Tab::Recording,
         Tab::History,
         Tab::Uploads,
+        Tab::Watermark,
         Tab::Shortcuts,
     ];
 
@@ -57,6 +59,7 @@ impl Tab {
             Tab::Recording => "recording",
             Tab::History => "history",
             Tab::Uploads => "uploads",
+            Tab::Watermark => "watermark",
             Tab::Shortcuts => "shortcuts",
         }
     }
@@ -69,6 +72,7 @@ impl Tab {
             Tab::Recording => "Recording",
             Tab::History => "History",
             Tab::Uploads => "Uploads",
+            Tab::Watermark => "Watermark",
             Tab::Shortcuts => "Shortcuts",
         }
     }
@@ -81,6 +85,7 @@ impl Tab {
             Tab::Recording => "record.circle",
             Tab::History => "clock.arrow.circlepath",
             Tab::Uploads => "icloud.and.arrow.up",
+            Tab::Watermark => "c.circle",
             Tab::Shortcuts => "keyboard",
         }
     }
@@ -97,6 +102,7 @@ impl Tab {
             "quickaccess" => Tab::QuickAccess,
             "recording" => Tab::Recording,
             "cloud" | "uploads" => Tab::Uploads,
+            "watermark" => Tab::Watermark,
             "shortcuts" => Tab::Shortcuts,
             "history" => Tab::History,
             _ => Tab::General,
@@ -137,6 +143,11 @@ enum Bind {
         set: Set<String>,
     },
     Folder(Get<String>, Set<String>),
+    /// An image file, chosen with an open panel.
+    ImageFile(Get<String>, Set<String>),
+    /// The watermark on a sample picture; the control is the label for
+    /// what is wrong with it.
+    WatermarkPreview,
     LoginItem,
     /// Sparkle's automatic checks (kept by Sparkle, not in the file).
     Updates,
@@ -407,6 +418,7 @@ impl SettingsWindow {
             Tab::Recording => recording(&mut form),
             Tab::History => history(&mut form),
             Tab::Uploads => uploads(&mut form, &config),
+            Tab::Watermark => watermark(&mut form, &config),
             Tab::Shortcuts => shortcuts(&mut form, &config),
         }
         let grid = form.finish();
@@ -465,8 +477,30 @@ impl SettingsWindow {
                         "Not set"
                     })));
                 }
-                Bind::Folder(get, _) => {
+                Bind::Folder(get, _) | Bind::ImageFile(get, _) => {
                     text_field(view).setStringValue(&NSString::from_str(&get(&config)))
+                }
+                Bind::WatermarkPreview => {
+                    let image_view = view
+                        .downcast_ref::<objc2_app_kit::NSImageView>()
+                        .expect("the preview is an image view");
+                    let problem = text_field(&bound.control);
+                    match crate::watermark::preview(&config.watermark.style) {
+                        Ok(image) => {
+                            let (w, h) = crate::capture::image::pixel_size(&image);
+                            image_view.setImage(Some(&NSImage::initWithCGImage_size(
+                                <NSImage as objc2::AllocAnyThread>::alloc(),
+                                &image,
+                                NSSize::new(w as f64 / 2.0, h as f64 / 2.0),
+                            )));
+                            problem.setHidden(true);
+                        }
+                        Err(e) => {
+                            image_view.setImage(None);
+                            problem.setStringValue(&NSString::from_str(&e));
+                            problem.setHidden(false);
+                        }
+                    }
                 }
                 Bind::Shortcut(action) => {
                     if let Some(recorder) = view.downcast_ref::<ShortcutRecorder>() {
@@ -563,6 +597,12 @@ impl SettingsWindow {
                     errors = (host.update)(&|c| set(c, folder.clone()));
                 }
             }
+            Bind::ImageFile(_, set) => {
+                if let Some(file) = choose_image(self.mtm()) {
+                    errors = (host.update)(&|c| set(c, file.clone()));
+                }
+            }
+            Bind::WatermarkPreview => {}
             Bind::Shortcut(_) => {}
             Bind::ClearShortcut(action) => {
                 recorded(self.mtm(), action, Outcome::Clear);
@@ -605,6 +645,8 @@ impl Bound {
                 set: *set,
             },
             Bind::Folder(g, s) => Bind::Folder(*g, *s),
+            Bind::ImageFile(g, s) => Bind::ImageFile(*g, *s),
+            Bind::WatermarkPreview => Bind::WatermarkPreview,
             Bind::LoginItem => Bind::LoginItem,
             Bind::Updates => Bind::Updates,
             Bind::Shortcut(a) => Bind::Shortcut(*a),
@@ -649,6 +691,18 @@ fn choose_folder(mtm: MainThreadMarker) -> Option<String> {
     panel.setCanChooseDirectories(true);
     panel.setCanChooseFiles(false);
     panel.setCanCreateDirectories(true);
+    choose_path(&panel)
+}
+
+/// An image file, with `~` for the home folder.
+fn choose_image(mtm: MainThreadMarker) -> Option<String> {
+    let panel = NSOpenPanel::openPanel(mtm);
+    panel.setCanChooseDirectories(false);
+    panel.setCanChooseFiles(true);
+    choose_path(&panel)
+}
+
+fn choose_path(panel: &NSOpenPanel) -> Option<String> {
     panel.setPrompt(Some(ns_string!("Choose")));
     if panel.runModal() != objc2_app_kit::NSModalResponseOK {
         return None;
@@ -809,6 +863,48 @@ impl<'a> Form<'a> {
             choose.setAction(Some(sel!(changed:)));
         }
         self.row(label, hstack(&[into_view(path), into_view(choose)]));
+    }
+
+    fn image_file(&mut self, label: &str, get: Get<String>, set: Set<String>) {
+        self.folder(label, get, set);
+        if let Some(bound) = self.owner.ivars().bound.borrow_mut().last_mut()
+            && let Bind::Folder(get, set) = bound.bind
+        {
+            bound.bind = Bind::ImageFile(get, set);
+        }
+    }
+
+    fn watermark_preview(&mut self) {
+        let image = objc2_app_kit::NSImageView::new(self.mtm);
+        image.setImageScaling(objc2_app_kit::NSImageScaling::ScaleProportionallyUpOrDown);
+        image
+            .widthAnchor()
+            .constraintEqualToConstant(320.0)
+            .setActive(true);
+        image
+            .heightAnchor()
+            .constraintEqualToConstant(180.0)
+            .setActive(true);
+        let problem = NSTextField::wrappingLabelWithString(ns_string!(""), self.mtm);
+        problem.setFont(Some(&NSFont::systemFontOfSize(
+            NSFont::smallSystemFontSize(),
+        )));
+        problem.setTextColor(Some(&NSColor::secondaryLabelColor()));
+        problem.setPreferredMaxLayoutWidth(FIELD_WIDTH);
+        self.owner.ivars().bound.borrow_mut().push(Bound {
+            control: into_view(problem.clone()),
+            view: into_view(image.clone()),
+            bind: Bind::WatermarkPreview,
+        });
+        let stack = NSStackView::stackViewWithViews(
+            &NSArray::from_retained_slice(&[into_view(image), into_view(problem)]),
+            self.mtm,
+        );
+        stack.setOrientation(objc2_app_kit::NSUserInterfaceLayoutOrientation::Vertical);
+        stack.setAlignment(objc2_app_kit::NSLayoutAttribute::Leading);
+        // No label: rows line up on their first baseline, which here is
+        // the problem text under the picture.
+        self.row("", into_view(stack));
     }
 
     fn shortcut(&mut self, action: Action, current: &str) {
@@ -1340,6 +1436,97 @@ fn history(f: &mut Form) {
     );
     f.gap();
     f.button("", "Open History…", sel!(openHistory:));
+}
+
+fn watermark(f: &mut Form, config: &Config) {
+    use crate::watermark::{Kind, Position};
+    f.check(
+        "Add to new:",
+        "Screenshots",
+        |c| c.watermark.screenshots,
+        |c, v| c.watermark.screenshots = v,
+    );
+    f.check(
+        "",
+        "Recordings and Studio exports",
+        |c| c.watermark.recordings,
+        |c, v| c.watermark.recordings = v,
+    );
+    f.gap();
+    f.choice_with(
+        "Show:",
+        &["Text", "Image"],
+        |c| (c.watermark.style.kind == Kind::Image) as usize,
+        |c, v| {
+            c.watermark.style.kind = if v == 1 { Kind::Image } else { Kind::Text };
+        },
+        true,
+    );
+    if config.watermark.style.kind == Kind::Image {
+        f.image_file(
+            "Image:",
+            |c| c.watermark.style.image.clone(),
+            |c, v| c.watermark.style.image = v,
+        );
+        f.note("A PNG with a transparent background looks best.");
+    } else {
+        f.text(
+            "Text:",
+            "© Your Name",
+            |c| c.watermark.style.text.clone(),
+            |c, v| c.watermark.style.text = v,
+        );
+        f.text(
+            "Color:",
+            "#FFFFFF",
+            |c| c.watermark.style.color.clone(),
+            |c, v| {
+                if !v.trim().is_empty() {
+                    c.watermark.style.color = v
+                }
+            },
+        );
+        f.check(
+            "",
+            "Dark background behind the text",
+            |c| c.watermark.style.background,
+            |c, v| c.watermark.style.background = v,
+        );
+    }
+    f.gap();
+    let positions: Vec<&str> = Position::ALL.iter().map(|p| p.title()).collect();
+    f.choice(
+        "Position:",
+        &positions,
+        |c| {
+            Position::ALL
+                .iter()
+                .position(|p| *p == c.watermark.style.position)
+                .unwrap_or(8)
+        },
+        |c, v| c.watermark.style.position = Position::ALL[v.min(8)],
+    );
+    f.number(
+        "Size:",
+        "% of the width",
+        |c| c.watermark.style.size,
+        |c, v| c.watermark.style.size = v.clamp(1.0, 100.0),
+    );
+    f.number(
+        "Opacity:",
+        "%",
+        |c| (c.watermark.style.opacity * 100.0).round(),
+        |c, v| c.watermark.style.opacity = (v / 100.0).clamp(0.05, 1.0),
+    );
+    f.number(
+        "Margin:",
+        "% of the shorter side",
+        |c| c.watermark.style.margin,
+        |c, v| c.watermark.style.margin = v.clamp(0.0, 25.0),
+    );
+    f.gap();
+    f.watermark_preview();
+    f.note("For a single capture, use Add Watermark in the editor or the Watermark checkbox in the video editor.");
 }
 
 fn uploads(f: &mut Form, config: &Config) {

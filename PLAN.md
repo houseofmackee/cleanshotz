@@ -572,6 +572,31 @@ Group 4 of the October 2026 comparison.
     on a notched display) and printing to a real printer (tested with
     the print panel and PDF).
 
+### M15: Watermarks
+- **Watermarks** (like a TV station's logo): an image or a line of text,
+  with opacity, one of nine positions, size and margin as shares of the
+  picture, in Settings > Watermark with a preview; optionally on every new
+  screenshot and recording.
+- Status: done in 0.8.0. Notes:
+  - One module (`src/watermark.rs`) places and draws it everywhere: the
+    mark (the logo, or the text drawn once at 160 pt) is rendered on the
+    main thread; placing it and drawing it with its opacity is plain
+    CoreGraphics, used for screenshots, pipelines and video frames.
+  - Screenshots: the default watermark is baked into what is saved and
+    copied, and Quick Access keeps the capture without it, so Annotate opens
+    it with the watermark as an editor layer (a `Watermark` shape, always
+    drawn on top, placed in the visible picture on every layout). Dragging
+    it frees it (its center is kept as fractions of the picture, so it
+    still scales); choosing a position anchors it again; corner handles
+    set its size.
+  - Video: frames are drawn on in place between the asset reader and the
+    writer, so a watermarked export re-encodes. New recordings are
+    re-encoded once when they finish, which mixes separate audio tracks.
+  - Studio: the project keeps the style; the compositor draws the mark
+    with Core Image; the package keeps `watermark.png` in case the logo
+    file moves. Studio and the video editor offer anchored positions only;
+    free dragging is in the image editor.
+
 ### Future work
 - **Captions** (from group 3, deferred): subtitles made on the Mac with
   Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor and

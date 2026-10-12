@@ -7,6 +7,8 @@
 //!   events.json    cursor, clicks, keys (see `events`)
 //!   cursors/*.png  the cursor images
 //!   project.json   the edits
+//!   watermark.png  the watermark's mark, when it has one (a copy, in case
+//!                  the logo file moves)
 //! ```
 
 use std::path::{Path, PathBuf};
@@ -18,6 +20,7 @@ pub const SCREEN: &str = "screen.mp4";
 pub const CAMERA: &str = "camera.mov";
 pub const EVENTS: &str = "events.json";
 pub const PROJECT: &str = "project.json";
+pub const WATERMARK: &str = "watermark.png";
 
 pub fn is_package(path: &Path) -> bool {
     path.extension()

@@ -35,6 +35,8 @@ pub enum Step {
     Redact,
     /// Convert to sRGB.
     Srgb,
+    /// Put the watermark from Settings > Watermark on the image.
+    Watermark,
     /// The format for files written after this step, with a quality for
     /// JPEG and WebP (`format webp` alone is lossless).
     Format(ImageFormat, Option<f64>),
@@ -106,6 +108,7 @@ pub fn parse_step(text: &str) -> Result<Step, String> {
         "background" => Ok(Step::Background(arg.map(str::to_string))),
         "redact" => no_arg(Step::Redact),
         "srgb" => no_arg(Step::Srgb),
+        "watermark" => no_arg(Step::Watermark),
         "format" => {
             let arg = arg.ok_or("format needs png, jpeg or webp")?;
             let mut parts = arg.split_whitespace();
@@ -267,6 +270,7 @@ fn describe(step: &Step) -> String {
         Step::Background(_) => "background",
         Step::Redact => "redact",
         Step::Srgb => "srgb",
+        Step::Watermark => "watermark",
         Step::Format(..) => "format",
         Step::Save(_) => "save",
         Step::Copy => "copy",
@@ -299,6 +303,21 @@ impl Job {
                 if let Some(srgb) = image::to_srgb(&self.image) {
                     self.set_image(srgb);
                 }
+                Ok(())
+            }
+            Step::Watermark => {
+                let style = crate::watermark::settings().style;
+                let overlay = on_main(move |_| {
+                    crate::watermark::mark(&style).map(|mark| crate::watermark::Overlay {
+                        mark,
+                        style,
+                        free: None,
+                    })
+                })?;
+                let marked = overlay
+                    .apply(&self.image)
+                    .ok_or("could not draw the watermark")?;
+                self.set_image(marked);
                 Ok(())
             }
             Step::Background(preset) => {
@@ -447,6 +466,7 @@ impl Job {
                                 file,
                                 saved,
                                 png: None,
+                                unmarked: None,
                             },
                         ),
                     }
@@ -517,6 +537,7 @@ mod tests {
         );
         assert_eq!(parse_step("Resize 1x"), Ok(Step::Resize(Resize::OneX)));
         assert_eq!(parse_step("srgb"), Ok(Step::Srgb));
+        assert_eq!(parse_step("watermark"), Ok(Step::Watermark));
         assert!(parse_step("srgb now").is_err());
         assert_eq!(
             parse_step("format webp"),

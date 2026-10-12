@@ -54,6 +54,8 @@ pub struct Renderer {
     pills: Vec<Option<Retained<CIImage>>>,
     context: Retained<CIContext>,
     srgb: Option<CFRetained<CGColorSpace>>,
+    /// The watermark's mark and how to place it.
+    watermark: Option<(Retained<CIImage>, crate::watermark::Style)>,
 }
 
 // SAFETY: Core Image images and contexts are immutable and documented as
@@ -99,6 +101,17 @@ impl Renderer {
             .collect();
         // SAFETY: a context with default options (GPU).
         let context = unsafe { CIContext::contextWithOptions(None) };
+        let watermark = project.watermark.as_ref().and_then(|style| {
+            // The copy in the package when the logo file is gone.
+            let mark = crate::watermark::mark(style)
+                .ok()
+                .or_else(|| image::load(&package.join(super::package::WATERMARK)));
+            if mark.is_none() {
+                tracing::warn!("the watermark could not be drawn");
+            }
+            // SAFETY: a valid image.
+            mark.map(|cg| (unsafe { CIImage::imageWithCGImage(&cg) }, style.clone()))
+        });
         Ok(Self {
             scene,
             output,
@@ -117,6 +130,7 @@ impl Renderer {
             context,
             // SAFETY: reading a CoreGraphics constant.
             srgb: CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })),
+            watermark,
         })
     }
 
@@ -179,6 +193,11 @@ impl Renderer {
                 && let Some(camera) = camera
             {
                 image = self.draw_camera(camera).imageByCompositingOverImage(&image);
+            }
+            if let Some((mark, style)) = &self.watermark {
+                image = self
+                    .draw_watermark(mark, style)
+                    .imageByCompositingOverImage(&image);
             }
             let canvas = CGRect::new(
                 CGPoint::new(0.0, 0.0),
@@ -350,6 +369,32 @@ impl Renderer {
                 ty: y.round(),
             });
             Some(fade(&placed, opacity))
+        }
+    }
+
+    /// The watermark at its place in the frame, with its opacity.
+    fn draw_watermark(&self, mark: &CIImage, style: &crate::watermark::Style) -> Retained<CIImage> {
+        let (w, h) = self.scene.layout.canvas;
+        // SAFETY: Core Image calls on immutable images.
+        unsafe {
+            let extent = mark.extent();
+            let rect = crate::watermark::place(
+                Rect::new(0.0, 0.0, w, h),
+                (extent.size.width, extent.size.height),
+                style,
+                None,
+            );
+            let r = self.ci_rect(rect);
+            let s = r.size.width / extent.size.width.max(1.0);
+            let placed = mark.imageByApplyingTransform(CGAffineTransform {
+                a: s,
+                b: 0.0,
+                c: 0.0,
+                d: s,
+                tx: r.origin.x - extent.origin.x * s,
+                ty: r.origin.y - extent.origin.y * s,
+            });
+            fade(&placed, style.opacity)
         }
     }
 

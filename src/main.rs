@@ -28,6 +28,7 @@ mod ui;
 mod updates;
 mod upload;
 mod video_editor;
+mod watermark;
 
 use std::process::ExitCode;
 
@@ -127,10 +128,36 @@ fn main() -> ExitCode {
                 quality: std::env::var("CSZ_QUALITY")
                     .ok()
                     .and_then(|q| q.parse().ok()),
+                watermark: std::env::var_os("CSZ_WATERMARK").is_some(),
+            };
+            // The watermark from the settings file.
+            let overlay = if plan.watermark {
+                let config = config::Config::load_or_create(&config::config_path());
+                let style = config.map(|c| c.watermark.style).unwrap_or_default();
+                match watermark::mark(&style) {
+                    Ok(mark) => Some(watermark::Overlay {
+                        mark,
+                        style,
+                        free: None,
+                    }),
+                    Err(e) => {
+                        eprintln!("cleanshotz: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                }
+            } else {
+                None
             };
             let preset = preset(plan.resolution, size);
             let gif = (15, gif_width(plan.resolution, size, 1280));
-            match video_editor::export::export(source, &plan, preset, gif, args[2].as_ref()) {
+            match video_editor::export::export(
+                source,
+                &plan,
+                preset,
+                gif,
+                overlay.as_ref(),
+                args[2].as_ref(),
+            ) {
                 Ok(()) => {
                     println!("exported with {preset:?}");
                     ExitCode::SUCCESS

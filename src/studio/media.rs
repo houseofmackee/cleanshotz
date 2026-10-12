@@ -165,6 +165,7 @@ pub fn export(package: &Path, renderer: Arc<Renderer>, output: &Path) -> Result<
             size,
             FPS,
             bitrate(size),
+            None,
             output,
         )
     }

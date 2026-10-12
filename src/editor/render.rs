@@ -239,8 +239,21 @@ pub fn render(doc: &Document, base: &BaseImage, skip: Option<u64>) {
     }
 
     for annotation in &doc.annotations {
-        if Some(annotation.id) != skip {
+        if Some(annotation.id) != skip && !matches!(annotation.shape, Shape::Watermark { .. }) {
             draw_annotation(annotation, base, &layout, &context);
+        }
+    }
+    // Watermarks last, placed in the visible picture as it is now.
+    for annotation in &doc.annotations {
+        if let Shape::Watermark {
+            style,
+            picture,
+            free,
+            ..
+        } = &annotation.shape
+        {
+            let rect = crate::watermark::place(layout.source, picture.size(), style, *free);
+            draw_picture(picture, rect, style.opacity);
         }
     }
     context.restoreGraphicsState();
@@ -359,6 +372,12 @@ pub fn draw_annotation(
             picture,
             opacity,
         } => draw_picture(picture, *rect, *opacity),
+        Shape::Watermark {
+            rect,
+            picture,
+            style,
+            ..
+        } => draw_picture(picture, *rect, style.opacity),
         Shape::Spotlight { rect } => {
             // Dim everything visible except the spotlight.
             let path = NSBezierPath::bezierPathWithRect(draw::ns_rect(layout.source));
