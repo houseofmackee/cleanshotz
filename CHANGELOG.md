@@ -6,6 +6,29 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-12
+
+### Added
+
+- Watermarks: a logo or a line of text in a corner of screenshots and
+  recordings, set up in the new Settings > Watermark tab (image or text,
+  color, dark background, position, size, opacity, margin, with a
+  preview). Its size and margin scale with the picture.
+- Optionally on every new screenshot and recording (and Studio export).
+  Screenshots opened from Quick Access show it as a layer that can be
+  moved, changed or removed for that capture.
+- The editor's ••• menu adds or removes it; a selected watermark has
+  opacity and position menus, stays anchored to its position, and can be
+  dragged anywhere or resized by its corners. Projects keep it (format
+  version 4).
+- A Watermark checkbox in the video editor, a Watermark section in the
+  Studio editor, and a `watermark` pipeline step.
+
+### Changed
+
+- The opacity menu for image layers has finer steps and shows the exact
+  value when it is not one of them.
+
 ## [0.7.0] - 2026-10-12
 
 ### Added
@@ -157,7 +180,8 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.4.1...v0.5.0
