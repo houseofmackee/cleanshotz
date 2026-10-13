@@ -332,11 +332,24 @@ fn json_field(json: &str, name: &str) -> Option<String> {
     Some(rest[..rest.find('"')?].to_string())
 }
 
+/// Staples the notarization ticket to `file`. Fetching the ticket from
+/// Apple sometimes drops the connection, so it tries a few times.
 fn staple(file: &Path) -> Result<()> {
-    run(Command::new("/usr/bin/xcrun")
-        .args(["stapler", "staple"])
-        .arg(file))
-    .with_context(|| format!("stapling {}", file.display()))
+    const ATTEMPTS: u32 = 4;
+    for attempt in 1..=ATTEMPTS {
+        match run(Command::new("/usr/bin/xcrun")
+            .args(["stapler", "staple"])
+            .arg(file))
+        {
+            Ok(()) => return Ok(()),
+            Err(e) if attempt < ATTEMPTS => {
+                eprintln!("stapling failed (attempt {attempt} of {ATTEMPTS}), retrying: {e}");
+                std::thread::sleep(std::time::Duration::from_secs(20));
+            }
+            Err(e) => return Err(e).with_context(|| format!("stapling {}", file.display())),
+        }
+    }
+    unreachable!("the last attempt returns")
 }
 
 /// Info.plist with Sparkle's settings: the feed (the latest release's
