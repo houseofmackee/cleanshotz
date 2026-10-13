@@ -200,12 +200,25 @@ struct Job {
     file: Option<PathBuf>,
     saved: bool,
     link: Option<String>,
+    /// The name of the file the image came from (`run-pipeline` on a
+    /// file), for naming a copy on the clipboard.
+    name: Option<String>,
 }
 
 /// Runs `steps` on a capture. Image work, files and uploads happen on a
 /// background thread, windows on the main thread. Stops at the first
 /// failing step and shows why.
 pub fn run(captured: Captured, settings: &CaptureSettings, steps: Vec<Step>) {
+    run_named(captured, settings, steps, None);
+}
+
+/// Like [`run`], for an image that came from a file called `name`.
+fn run_named(
+    captured: Captured,
+    settings: &CaptureSettings,
+    steps: Vec<Step>,
+    name: Option<String>,
+) {
     let job = Job {
         image: captured.image,
         scale: captured.scale,
@@ -216,6 +229,7 @@ pub fn run(captured: Captured, settings: &CaptureSettings, steps: Vec<Step>) {
         file: None,
         saved: false,
         link: None,
+        name,
     };
     let job = AssertSend(job);
     std::thread::spawn(move || {
@@ -252,7 +266,7 @@ pub fn run_on_file(
 ) -> Result<(), String> {
     let image = image::load(path).ok_or_else(|| format!("{} is not an image", path.display()))?;
     let scale = image::scale_for_path(path);
-    run(
+    run_named(
         Captured {
             image,
             scale,
@@ -260,6 +274,7 @@ pub fn run_on_file(
         },
         settings,
         steps,
+        Some(output::name_of(path)),
     );
     Ok(())
 }
@@ -381,7 +396,17 @@ impl Job {
             Step::Copy => {
                 let png = image::encode(&self.image, ImageFormat::Png, 1.0)
                     .ok_or("could not encode the image")?;
-                on_main(move |_| output::copy_png(&png));
+                // Named like the file it has (or would have).
+                let name = match (&self.file, &self.name) {
+                    (Some(file), _) => output::name_of(file),
+                    (None, Some(name)) => name.clone(),
+                    (None, None) => naming::file_stem(
+                        &self.settings.file_name,
+                        &chrono::Local::now(),
+                        self.scale > 1.0,
+                    ),
+                };
+                on_main(move |_| output::copy_png(&png, &name));
                 Ok(())
             }
             Step::Upload => {

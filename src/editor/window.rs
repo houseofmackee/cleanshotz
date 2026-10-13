@@ -1638,13 +1638,30 @@ impl EditorController {
         render::export(&doc, &self.ivars().base.borrow())
     }
 
+    /// The name a copy gets on the clipboard: the capture's or file's name,
+    /// or a new capture name for clipboard images.
+    fn clipboard_name(&self) -> String {
+        match &*self.ivars().source.borrow() {
+            Source::Capture { file } => output::name_of(file),
+            Source::File { path } | Source::Project { path } => output::name_of(path),
+            Source::Clipboard => {
+                let settings = crate::quick_access::capture_settings();
+                crate::capture::naming::file_stem(
+                    &settings.file_name,
+                    &chrono::Local::now(),
+                    self.ivars().base.borrow().scale > 1.0,
+                )
+            }
+        }
+    }
+
     fn copy_to_clipboard(&self) {
         let Some(image) = self.rendered() else {
             return;
         };
         match crate::capture::image::encode(&image, ImageFormat::Png, 1.0) {
             Some(png) => {
-                output::copy_png(&png);
+                output::copy_png(&png, &self.clipboard_name());
                 self.ivars().session.borrow_mut().dirty = false;
                 tracing::info!("annotated image copied");
             }

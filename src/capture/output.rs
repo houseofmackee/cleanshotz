@@ -125,15 +125,6 @@ fn process(captured: Captured, settings: &CaptureSettings) -> Option<Delivered> 
     if settings.copy_to_clipboard || saved.is_none() {
         png = png.or_else(|| image::encode(&captured.image, ImageFormat::Png, 1.0));
     }
-    if settings.copy_to_clipboard {
-        match &png {
-            Some(png) => {
-                copy_png(png);
-                tracing::info!(width, height, "capture copied to clipboard");
-            }
-            None => tracing::error!("could not encode capture for the clipboard"),
-        }
-    }
     let file = match &saved {
         Some(path) => path.clone(),
         None => {
@@ -153,6 +144,16 @@ fn process(captured: Captured, settings: &CaptureSettings) -> Option<Delivered> 
             path
         }
     };
+    if settings.copy_to_clipboard {
+        match &png {
+            // Named like the file, so pasting keeps its name.
+            Some(png) => {
+                copy_png(png, &name_of(&file));
+                tracing::info!(width, height, "capture copied to clipboard");
+            }
+            None => tracing::error!("could not encode capture for the clipboard"),
+        }
+    }
     Some(Delivered {
         image: captured.image,
         scale: captured.scale,
@@ -200,12 +201,69 @@ pub fn save_to(
     Ok(bytes)
 }
 
-pub fn copy_png(png: &[u8]) {
+/// Puts a PNG on the clipboard as image data and as a file, `name.png`,
+/// so apps that keep file names (chat apps, browsers, Mail, Finder) use
+/// the capture's name instead of "image.png". `name` is a file name
+/// without its extension, normally the capture file's.
+pub fn copy_png(png: &[u8], name: &str) {
+    use objc2::runtime::ProtocolObject;
+    use objc2_app_kit::{NSPasteboardItem, NSPasteboardTypeFileURL, NSPasteboardWriting};
+    use objc2_foundation::{NSArray, NSURL};
+
+    let item = NSPasteboardItem::new();
+    // SAFETY: reading AppKit constants.
+    let (png_type, url_type) = unsafe { (NSPasteboardTypePNG, NSPasteboardTypeFileURL) };
+    item.setData_forType(&NSData::with_bytes(png), png_type);
+    match clipboard_file(png, name) {
+        Ok(path) => {
+            let url = NSURL::fileURLWithPath(&NSString::from_str(&path.to_string_lossy()));
+            if let Some(url) = url.absoluteString() {
+                item.setString_forType(&url, url_type);
+            }
+        }
+        // The image alone still pastes, as "image.png".
+        Err(e) => tracing::warn!(error = %e, "the clipboard image has no file name"),
+    }
     let pasteboard = NSPasteboard::generalPasteboard();
     pasteboard.clearContents();
-    // SAFETY: reading an AppKit constant.
-    let png_type = unsafe { NSPasteboardTypePNG };
-    pasteboard.setData_forType(Some(&NSData::with_bytes(png)), png_type);
+    let item: Retained<ProtocolObject<dyn NSPasteboardWriting>> =
+        ProtocolObject::from_retained(item);
+    pasteboard.writeObjects(&NSArray::from_retained_slice(&[item]));
+}
+
+/// Writes `png` as `name.png` in the clipboard folder, replacing what was
+/// there (the clipboard holds one thing at a time).
+fn clipboard_file(png: &[u8], name: &str) -> Result<PathBuf, String> {
+    let dir = naming::expand_home("~/Library/Caches/CleanShotZ/Clipboard");
+    if dir.exists() {
+        fs::remove_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    }
+    fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let path = dir.join(format!("{}.png", clipboard_name(name)));
+    fs::write(&path, png).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(path)
+}
+
+/// `name` made safe as a file name (no folders, not hidden, not empty).
+pub fn clipboard_name(name: &str) -> String {
+    let cleaned: String = name
+        .trim()
+        .chars()
+        .map(|c| if matches!(c, '/' | ':') { '-' } else { c })
+        .collect();
+    let cleaned = cleaned.trim_start_matches('.').trim();
+    if cleaned.is_empty() {
+        "Screenshot".into()
+    } else {
+        cleaned.to_string()
+    }
+}
+
+/// The name a copy of `path` gets on the clipboard: its file name without
+/// the extension.
+pub fn name_of(path: &Path) -> String {
+    path.file_stem()
+        .map_or_else(String::new, |s| s.to_string_lossy().into_owned())
 }
 
 /// Temporary files for captures that were not saved:
@@ -252,4 +310,20 @@ fn play_shutter(_mtm: MainThreadMarker) {
             sound.play();
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_clipboard_files_like_the_capture() {
+        assert_eq!(
+            name_of(Path::new("/x/CleanShotZ 2026-10-13 at 09.10.00@2x.png")),
+            "CleanShotZ 2026-10-13 at 09.10.00@2x"
+        );
+        assert_eq!(clipboard_name("Report: Q3/final"), "Report- Q3-final");
+        assert_eq!(clipboard_name(" ..hidden "), "hidden");
+        assert_eq!(clipboard_name(""), "Screenshot");
+    }
 }

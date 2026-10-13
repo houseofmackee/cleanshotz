@@ -6,6 +6,13 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Changed
+
+- Copied screenshots carry their file name: pasting into chat apps,
+  browsers, Mail or Finder gives the same name the file has on disk
+  instead of "image.png". Applies to copies from captures, Quick Access,
+  the editor, History, pins and the `copy` pipeline step.
+
 ## [0.8.0] - 2026-10-12
 
 ### Added

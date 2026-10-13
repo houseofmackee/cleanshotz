@@ -982,7 +982,7 @@ fn copy(entry: &Entry) {
             .and_then(|image| crate::capture::image::encode(&image, ImageFormat::Png, 1.0))
     };
     if let Some(png) = png {
-        crate::capture::output::copy_png(&png);
+        crate::capture::output::copy_png(&png, &crate::capture::output::name_of(&entry.path));
     }
 }
 

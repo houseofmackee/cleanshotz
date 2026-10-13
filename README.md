@@ -264,7 +264,11 @@ default. Options live in the `[capture]` section of the settings file:
 | `play_sound` | `true` | Play the macOS screenshot sound |
 | `pipeline` | `""` | A pipeline to run after every screenshot instead (see below) |
 
-The clipboard always gets PNG. WebP files are written in sRGB; lossless
+The clipboard always gets PNG, named like the capture's file: apps that
+keep file names (chat apps, browsers, Mail, Finder) paste
+`CleanShotZ 2026-10-13 at 09.41.02@2x.png` rather than `image.png`. The
+same goes for copies from Quick Access, the editor, History, pins and the
+`copy` pipeline step. WebP files are written in sRGB; lossless
 WebP files are usually noticeably smaller than PNG for screenshots.
 
 ### Step capture

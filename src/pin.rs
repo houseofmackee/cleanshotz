@@ -360,7 +360,7 @@ fn copy(pin: &Pin) {
         .clone()
         .or_else(|| crate::capture::image::encode(&pin.image, ImageFormat::Png, 1.0));
     match png {
-        Some(png) => output::copy_png(&png),
+        Some(png) => output::copy_png(&png, &output::name_of(&pin.file)),
         None => tracing::error!("could not encode pinned screenshot for the clipboard"),
     }
 }

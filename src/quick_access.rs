@@ -520,7 +520,7 @@ fn perform(mtm: MainThreadMarker, id: u64, button: Button) {
         }
         Button::Copy => {
             match item.png() {
-                Some(png) => output::copy_png(&png),
+                Some(png) => output::copy_png(&png, &output::name_of(&item.file())),
                 None => tracing::error!("could not encode capture for the clipboard"),
             }
             close(id, true);
