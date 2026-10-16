@@ -6,6 +6,8 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-10-16
+
 ### Changed
 
 - The editor remembers the annotation color, stroke width and arrow
@@ -195,7 +197,8 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.8.1...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/houseofmackee/cleanshotz/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.6.0...v0.7.0
