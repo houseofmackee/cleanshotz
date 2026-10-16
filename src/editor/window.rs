@@ -174,6 +174,7 @@ define_class!(
         fn color_changed(&self, sender: &NSColorWell) {
             let color = to_color(&sender.color());
             self.ivars().session.borrow_mut().set_color(color);
+            super::remember_color(color);
             if let Some(edit) = self.ivars().text.borrow().as_ref() {
                 edit.field.setTextColor(Some(&render::ns_color(color)));
             }

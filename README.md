@@ -645,8 +645,9 @@ Image.
 | Background | G | Gradient, solid or image backdrop with padding, rounded corners, shadow, aspect ratio and Balance |
 
 Hold Shift for squares, circles and 45-degree lines. Color, width and style
-changes apply to the selected annotation too. Cmd+Z and Shift+Cmd+Z undo and
-redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
+changes apply to the selected annotation too. The color you pick last is
+remembered for the next editor, also after quitting CleanShotZ. Cmd+Z and
+Shift+Cmd+Z undo and redo; Cmd+C copies the result; Cmd+S saves. Save writes over the capture (or,
 for opened images, saves a new capture). The ••• menu has Save As…, Save
 Project…, Pin to Screen, Copy Text, Redact Sensitive Info, Add Image to the
 Right… / Below…, Rotate Right / Left, Flip Horizontally / Vertically,

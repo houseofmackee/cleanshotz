@@ -99,7 +99,10 @@ fn open(mtm: MainThreadMarker, base: BaseImage, doc: Document, source: Source, t
     } else {
         base.with_orientation(doc.orientation)
     };
-    let session = Session::new(doc, width, height);
+    let mut session = Session::new(doc, width, height);
+    if let Some(color) = crate::state::State::load(&crate::state::state_path()).editor_color {
+        session.color = color;
+    }
     let id = registry::next_id();
     let editor = window::EditorController::open(mtm, id, base, session, source, title);
     registry::add(editor);
@@ -154,6 +157,17 @@ thread_local! {
     /// The background last chosen in an editor, for "Add Background".
     static LAST_BACKGROUND: std::cell::RefCell<Option<model::Background>> =
         const { std::cell::RefCell::new(None) };
+}
+
+/// Remembers the annotation color for the next editor, also after a
+/// restart.
+pub fn remember_color(color: model::Color) {
+    let path = crate::state::state_path();
+    let mut state = crate::state::State::load(&path);
+    if state.editor_color != Some(color) {
+        state.editor_color = Some(color);
+        state.save(&path);
+    }
 }
 
 /// Remembers `background` for the next "Add Background".
