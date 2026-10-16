@@ -103,8 +103,19 @@ jobs:
             exit 1
           fi
           cargo xtask dist
-          # Fail rather than publish anything Gatekeeper would block.
-          xcrun stapler validate "target/dist/CleanShotZ-${GITHUB_REF_NAME#v}.dmg"
+          # Fail rather than publish anything Gatekeeper would block. Apple's
+          # ticket server sometimes drops the connection, so try a few times.
+          for attempt in 1 2 3 4; do
+            if xcrun stapler validate "target/dist/CleanShotZ-${GITHUB_REF_NAME#v}.dmg"; then
+              break
+            fi
+            if [ "$attempt" = 4 ]; then
+              echo "::error::the DMG's notarization ticket did not validate"
+              exit 1
+            fi
+            echo "validating failed (attempt $attempt of 4), retrying"
+            sleep 20
+          done
           test -s target/dist/appcast.xml
 
       - name: Publish the release
