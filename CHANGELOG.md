@@ -8,8 +8,9 @@ All notable changes to CleanShotZ. The format follows
 
 ### Changed
 
-- The editor remembers the annotation color you picked last, for new
-  editors and across restarts (kept in `state.toml`).
+- The editor remembers the annotation color, stroke width and arrow
+  style you picked last, for new editors and across restarts (kept in
+  `state.toml`).
 
 ## [0.8.1] - 2026-10-13
 

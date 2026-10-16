@@ -100,8 +100,16 @@ fn open(mtm: MainThreadMarker, base: BaseImage, doc: Document, source: Source, t
         base.with_orientation(doc.orientation)
     };
     let mut session = Session::new(doc, width, height);
-    if let Some(color) = crate::state::State::load(&crate::state::state_path()).editor_color {
+    // What was picked last, also before a restart.
+    let state = crate::state::State::load(&crate::state::state_path());
+    if let Some(color) = state.editor_color {
         session.color = color;
+    }
+    if let Some(width) = state.editor_width {
+        session.width = width.clamp(1.0, 20.0);
+    }
+    if let Some(style) = state.editor_arrow_style {
+        session.arrow_style = style;
     }
     let id = registry::next_id();
     let editor = window::EditorController::open(mtm, id, base, session, source, title);
@@ -159,13 +167,27 @@ thread_local! {
         const { std::cell::RefCell::new(None) };
 }
 
-/// Remembers the annotation color for the next editor, also after a
-/// restart.
-pub fn remember_color(color: model::Color) {
+/// Remembers the session's color, stroke width and arrow style for the
+/// next editor, also after a restart.
+pub fn remember_style(session: &Session) {
     let path = crate::state::state_path();
     let mut state = crate::state::State::load(&path);
-    if state.editor_color != Some(color) {
-        state.editor_color = Some(color);
+    let remembered = (
+        Some(session.color),
+        Some(session.width),
+        Some(session.arrow_style),
+    );
+    if (
+        state.editor_color,
+        state.editor_width,
+        state.editor_arrow_style,
+    ) != remembered
+    {
+        (
+            state.editor_color,
+            state.editor_width,
+            state.editor_arrow_style,
+        ) = remembered;
         state.save(&path);
     }
 }

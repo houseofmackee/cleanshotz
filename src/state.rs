@@ -12,8 +12,11 @@ use crate::capture::geometry::Rect;
 #[serde(default)]
 pub struct State {
     pub last_area: Option<SavedArea>,
-    /// The annotation color last chosen in an editor.
+    /// The annotation color, stroke width and arrow style last chosen in
+    /// an editor.
     pub editor_color: Option<crate::editor::model::Color>,
+    pub editor_width: Option<f64>,
+    pub editor_arrow_style: Option<crate::editor::model::ArrowStyle>,
 }
 
 /// The last selected area, for Capture Previous Area.
@@ -78,6 +81,8 @@ mod tests {
         let state = State {
             last_area: Some(SavedArea::new(7, Rect::new(1.0, 2.0, 30.0, 40.0))),
             editor_color: Some(crate::editor::model::Color::rgb(0.2, 0.4, 1.0)),
+            editor_width: Some(6.0),
+            editor_arrow_style: Some(crate::editor::model::ArrowStyle::Open),
         };
         state.save(&path);
         assert_eq!(State::load(&path), state);

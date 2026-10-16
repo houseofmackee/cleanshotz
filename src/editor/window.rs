@@ -174,7 +174,7 @@ define_class!(
         fn color_changed(&self, sender: &NSColorWell) {
             let color = to_color(&sender.color());
             self.ivars().session.borrow_mut().set_color(color);
-            super::remember_color(color);
+            super::remember_style(&self.ivars().session.borrow());
             if let Some(edit) = self.ivars().text.borrow().as_ref() {
                 edit.field.setTextColor(Some(&render::ns_color(color)));
             }
@@ -194,6 +194,7 @@ define_class!(
                     }
                 } else {
                     session.set_width(value);
+                    super::remember_style(&session);
                 }
             }
             self.refresh();
@@ -218,12 +219,15 @@ define_class!(
                         session.highlight_text = index == 1;
                         wants_text = session.highlight_text;
                     }
-                    Tool::Arrow => session.set_arrow_style(match index {
-                        1 => ArrowStyle::Open,
-                        2 => ArrowStyle::Double,
-                        3 => ArrowStyle::Tapered,
-                        _ => ArrowStyle::Filled,
-                    }),
+                    Tool::Arrow => {
+                        session.set_arrow_style(match index {
+                            1 => ArrowStyle::Open,
+                            2 => ArrowStyle::Double,
+                            3 => ArrowStyle::Tapered,
+                            _ => ArrowStyle::Filled,
+                        });
+                        super::remember_style(&session);
+                    }
                     Tool::Rectangle | Tool::Ellipse => session.set_filled(index == 1),
                     Tool::Text => {
                         let style = if index == 1 {
