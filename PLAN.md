@@ -368,8 +368,10 @@ Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
   new size; projects using either are written as version 2, which 0.1.x
   refuses instead of misplacing annotations. The Raycast extension lives in
   `raycast/` in this repository rather than its own; publishing it is a
-  pull request to Raycast's extensions repository and needs the
-  maintainer's Raycast username as `author`.
+  pull request to Raycast's extensions repository (`npm run publish` in
+  `raycast/`, run from a terminal: it signs in to GitHub interactively),
+  with the maintainer's Raycast username (`houseofmackee`) as `author`.
+  Submitted on 2026-10-25 as raycast/extensions#32766.
 
 ### M12: Editor tools from other capture apps (done)
 Group 2 of the October 2026 comparison, plus CleanShot X's arrow. Each item
@@ -654,7 +656,7 @@ Group 4 of the October 2026 comparison.
   certificate. Since 0.6.0 releases are signed with a Developer ID and
   notarized (the app and the DMG, both stapled), and the release workflow
   updates the Homebrew cask. Sparkle updates are in (released with 0.7.0).
-  Open: publishing the Raycast extension.
+  The Raycast extension is in review (raycast/extensions#32766).
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
@@ -729,8 +731,9 @@ Group 4 of the October 2026 comparison.
 
 ## 6. Next steps
 
-1. **Needs the maintainer's account:** a Raycast username to publish the
-   extension to the Raycast Store.
+1. **Raycast Store:** the extension is submitted for review
+   ([raycast/extensions#32766](https://github.com/raycast/extensions/pull/32766));
+   it is published when Raycast merges it.
 2. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
    an M1, printing to a printer, captions and filler word cuts of real
