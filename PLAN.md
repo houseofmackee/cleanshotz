@@ -632,7 +632,10 @@ Group 4 of the October 2026 comparison.
     longer than 60 ms) lying mostly inside its word's time. A cut runs
     from 30 ms before that island to 40 ms before the next sound, taking
     at most 0.4 s of the pause after it; a filler said without a pause
-    is cut at the word times instead.
+    is cut at the word times instead. The speech threshold sits a third
+    of the way from the quiet floor to the speech level, with the floor
+    taken as at least -60 dB: a recording that starts in digital silence
+    would otherwise set it below what AAC leaves between words.
   - Cuts (`src/studio/timeline.rs`): the project, events, zooms, and
     captions stay in the recording's time; the composition inserts only
     the kept pieces (screen, audio, camera), the compositor maps each

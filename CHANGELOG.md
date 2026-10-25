@@ -6,6 +6,22 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Cut filler words missed fillers in recordings whose sound starts
+  silent: audio compression left the gaps between words above the
+  speech threshold, so neighboring words ran together. The quiet floor is
+  now taken as at least -60 dB.
+- Captions without filler words no longer keep the comma before a filler
+  in the middle of a sentence ("grew by, 18%" is now "grew by 18%"),
+  including for languages whose recognizer puts each word's space after
+  it (such as English (Australia)).
+
+### Changed
+
+- The README's Studio screenshot shows captions and cut filler words,
+  and a short video demonstrates filler words cut, before and after.
+
 ## [0.10.0] - 2026-10-25
 
 ### Added

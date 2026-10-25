@@ -16,7 +16,7 @@ CleanShotZ is in early development; see [CHANGELOG.md](CHANGELOG.md).
 
 | Studio editor | Step capture guide |
 | --- | --- |
-| <img src="docs/screenshots/studio-editor.png" width="460" alt="The Studio editor with a background, cursor and zoom settings and the zoom track"> | <img src="docs/screenshots/step-guide.png" width="340" alt="A step guide with three captured clicks and their captions"> |
+| <img src="docs/screenshots/studio-editor.png" width="460" alt="The Studio editor zoomed in on a report with a caption, the Captions settings with Cut filler words on, and the zoom track with the cut filler words shaded"> | <img src="docs/screenshots/step-guide.png" width="340" alt="A step guide with three captured clicks and their captions"> |
 
 | Capture history | Quick Access Overlay |
 | --- | --- |
@@ -414,7 +414,7 @@ seconds (muted, or the wrong input chosen), a message says so.
 
 ### Studio recordings
 
-<img src="docs/screenshots/studio-editor.png" width="640" alt="The Studio editor">
+<img src="docs/screenshots/studio-editor.png" width="640" alt="The Studio editor zoomed in on a report with a caption, the Captions settings with Cut filler words on, and the zoom track with the cut filler words shaded">
 
 Record Screen (Studio), or Record Screen with Studio mode on in Settings >
 Recording, records the screen without the pointer and keeps the pointer's
@@ -458,7 +458,14 @@ in the Studio editor, where all of them can be changed afterwards:
   and exported subtitles follow. Each cut starts where the filler's sound
   starts and ends just before the next word, and the sound fades briefly
   at each cut so it doesn't click. Words that are only sometimes fillers
-  ("like", "you know") stay.
+  ("like", "you know") stay, and so do fillers the speech recognizer leaves
+  out of its transcript (it occasionally does).
+
+  [<img src="docs/screenshots/filler-words.jpg" width="560" alt="A frame of the demo video: the quarterly report recording labeled Before, 12.9 seconds, with a play label">](docs/videos/filler-words.mp4)
+
+  The same recording with its filler words, then with Cut filler words
+  on ([video with sound](docs/videos/filler-words.mp4), 23 seconds; the
+  voice is synthesized).
 
 Export MP4 renders the result at 1080p, 1440p, 4K or the original size,
 at 60 frames per second and faster than real time, and shows it in Quick
