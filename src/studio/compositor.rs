@@ -56,6 +56,9 @@ pub struct Renderer {
     srgb: Option<CFRetained<CGColorSpace>>,
     /// The watermark's mark and how to place it.
     watermark: Option<(Retained<CIImage>, crate::watermark::Style)>,
+    /// Each shown caption's start, end and box, at [`PILL_FONT`] pixels.
+    captions: Vec<(f64, f64, Retained<CIImage>)>,
+    caption_style: Option<super::project::Captions>,
 }
 
 // SAFETY: Core Image images and contexts are immutable and documented as
@@ -131,6 +134,24 @@ impl Renderer {
             // SAFETY: reading a CoreGraphics constant.
             srgb: CGColorSpace::with_name(Some(unsafe { kCGColorSpaceSRGB })),
             watermark,
+            captions: project
+                .captions
+                .as_ref()
+                .filter(|c| c.visible)
+                .map(|c| {
+                    c.cues
+                        .iter()
+                        .filter_map(|cue| {
+                            let cg = caption_image(&cue.text)?;
+                            // SAFETY: a valid image.
+                            Some((cue.start, cue.end, unsafe {
+                                CIImage::imageWithCGImage(&cg)
+                            }))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            caption_style: project.captions.clone().filter(|c| c.visible),
         })
     }
 
@@ -193,6 +214,9 @@ impl Renderer {
                 && let Some(camera) = camera
             {
                 image = self.draw_camera(camera).imageByCompositingOverImage(&image);
+            }
+            if let Some(caption) = self.draw_caption(t) {
+                image = caption.imageByCompositingOverImage(&image);
             }
             if let Some((mark, style)) = &self.watermark {
                 image = self
@@ -369,6 +393,43 @@ impl Renderer {
                 ty: y.round(),
             });
             Some(fade(&placed, opacity))
+        }
+    }
+
+    /// The caption showing at `t`, centered at the bottom (or top), above
+    /// the pressed keys when they are on the same side.
+    fn draw_caption(&self, t: f64) -> Option<Retained<CIImage>> {
+        let style = self.caption_style.as_ref()?;
+        let (_, _, image) = self
+            .captions
+            .iter()
+            .find(|(start, end, _)| t >= *start && t < *end)?;
+        let (w, h) = self.scene.layout.canvas;
+        // SAFETY: Core Image calls on immutable images.
+        unsafe {
+            let extent = image.extent();
+            let font = h * 0.042 * style.size.clamp(0.6, 2.0);
+            let s = (font / PILL_FONT).min(w * 0.9 / extent.size.width.max(1.0));
+            let (width, height) = (extent.size.width * s, extent.size.height * s);
+            let mut margin = h * 0.06;
+            if self.scene.keys.visible && self.scene.keys.top == style.top {
+                // Clear of the keys' pill (see `draw_key`).
+                margin += (h * 0.065 * self.scene.keys.size.clamp(0.6, 2.0)).max(24.0) + h * 0.02;
+            }
+            let y = if style.top {
+                h - margin - height
+            } else {
+                margin
+            };
+            let placed = image.imageByApplyingTransform(CGAffineTransform {
+                a: s,
+                b: 0.0,
+                c: 0.0,
+                d: s,
+                tx: ((w - width) / 2.0).round(),
+                ty: y.round(),
+            });
+            Some(placed)
         }
     }
 
@@ -603,6 +664,55 @@ fn pill_image(label: &str) -> Option<CFRetained<CGImage>> {
         crate::ui::draw::Weight::Semibold,
         &NSColor::whiteColor(),
     );
+    context.flushGraphics();
+    NSGraphicsContext::setCurrentContext(previous.as_deref());
+    objc2_core_graphics::CGBitmapContextCreateImage(Some(&cg))
+}
+
+/// A caption's box: its text in up to two centered lines, white on a dark
+/// rounded background, at [`PILL_FONT`] pixels.
+fn caption_image(text: &str) -> Option<CFRetained<CGImage>> {
+    use crate::ui::draw::{self, Weight};
+    use objc2_app_kit::{NSColor, NSGraphicsContext};
+
+    let lines = crate::captions::lines(text);
+    if lines.iter().all(|l| l.trim().is_empty()) {
+        return None;
+    }
+    let sizes: Vec<_> = lines
+        .iter()
+        .map(|l| draw::text_size(l, PILL_FONT, Weight::Semibold))
+        .collect();
+    let line_height = sizes.iter().map(|s| s.height).fold(0.0, f64::max);
+    let text_width = sizes.iter().map(|s| s.width).fold(0.0, f64::max);
+    let (pad_x, pad_y) = (PILL_FONT * 0.5, PILL_FONT * 0.25);
+    let (w, h) = (
+        (text_width + 2.0 * pad_x).ceil(),
+        (line_height * lines.len() as f64 + 2.0 * pad_y).ceil(),
+    );
+    let cg = image::bitmap_context(w as usize, h as usize, None)?;
+    CGContext::translate_ctm(Some(&cg), 0.0, h);
+    CGContext::scale_ctm(Some(&cg), 1.0, -1.0);
+    let context = NSGraphicsContext::graphicsContextWithCGContext_flipped(&cg, true);
+    let previous = NSGraphicsContext::currentContext();
+    NSGraphicsContext::setCurrentContext(Some(&context));
+    draw::fill_rounded(
+        Rect::new(0.0, 0.0, w, h),
+        PILL_FONT * 0.3,
+        &NSColor::colorWithWhite_alpha(0.05, 0.78),
+    );
+    for (i, (line, size)) in lines.iter().zip(&sizes).enumerate() {
+        draw::draw_text(
+            line,
+            Point::new(
+                ((w - size.width) / 2.0).round(),
+                (pad_y + line_height * i as f64).round(),
+            ),
+            PILL_FONT,
+            Weight::Semibold,
+            &NSColor::whiteColor(),
+        );
+    }
     context.flushGraphics();
     NSGraphicsContext::setCurrentContext(previous.as_deref());
     objc2_core_graphics::CGBitmapContextCreateImage(Some(&cg))

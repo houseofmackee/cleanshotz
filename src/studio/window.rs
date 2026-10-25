@@ -33,8 +33,9 @@ const ROW: f64 = 30.0;
 /// The zoom track's height.
 const TRACK: f64 = 52.0;
 const MIN_HEIGHT: f64 = 600.0;
-/// The inspector's full height (it scrolls in shorter windows).
-const INSPECTOR_HEIGHT: f64 = 1390.0;
+/// Room to lay out the inspector in; it is then cut to what its sections
+/// use (it scrolls in shorter windows).
+const INSPECTOR_HEIGHT: f64 = 2000.0;
 
 /// A choice in the background menu.
 #[derive(Clone)]
@@ -59,6 +60,7 @@ struct Ui {
     camera: Option<CameraControls>,
     keys: Option<KeyControls>,
     watermark: WatermarkControls,
+    captions: CaptionControls,
     zoom_level: Retained<NSSlider>,
     zoom_follow: Retained<NSButton>,
     zoom_delete: Retained<NSButton>,
@@ -79,6 +81,17 @@ struct WatermarkControls {
     show: Retained<NSButton>,
     position: Retained<NSPopUpButton>,
     size: Retained<NSSlider>,
+}
+
+struct CaptionControls {
+    language: Retained<NSPopUpButton>,
+    make: Retained<NSButton>,
+    status: Retained<NSTextField>,
+    show: Retained<NSButton>,
+    place: Retained<NSPopUpButton>,
+    size: Retained<NSSlider>,
+    edit: Retained<NSButton>,
+    export: Retained<NSButton>,
 }
 
 struct KeyControls {
@@ -105,6 +118,10 @@ pub struct Ivars {
     observer: OnceCell<Retained<AnyObject>>,
     /// The zoom selected in the track.
     selected: std::cell::Cell<Option<usize>>,
+    /// The caption languages in the language menu, in order.
+    languages: RefCell<Vec<String>>,
+    /// Captions are being made.
+    transcribing: std::cell::Cell<bool>,
 }
 
 impl Ivars {
@@ -163,6 +180,21 @@ define_class!(
         fn regenerate_zooms(&self, _sender: &AnyObject) {
             self.regenerate();
         }
+
+        #[unsafe(method(makeCaptions:))]
+        fn make_captions_action(&self, _sender: &AnyObject) {
+            self.make_captions();
+        }
+
+        #[unsafe(method(editCaptions:))]
+        fn edit_captions_action(&self, _sender: &AnyObject) {
+            super::captions::open(self.mtm(), self.ivars().id);
+        }
+
+        #[unsafe(method(exportSubtitles:))]
+        fn export_subtitles_action(&self, _sender: &AnyObject) {
+            self.export_subtitles();
+        }
     }
 );
 
@@ -191,6 +223,8 @@ impl StudioEditor {
             track: OnceCell::new(),
             observer: OnceCell::new(),
             selected: std::cell::Cell::new(None),
+            languages: RefCell::new(Vec::new()),
+            transcribing: std::cell::Cell::new(false),
         });
         // SAFETY: NSObject's designated initializer.
         let this: Retained<Self> = unsafe { msg_send![super(this), init] };
@@ -312,12 +346,15 @@ impl StudioEditor {
         );
         scroll.setDocumentView(Some(&inspector));
         content.addSubview(&scroll);
-        let ui = self.build_inspector(mtm, &inspector, INSPECTOR_HEIGHT);
+        let (ui, used) = self.build_inspector(mtm, &inspector, INSPECTOR_HEIGHT);
+        // The controls keep their distance from the top.
+        inspector.setFrameSize(NSSize::new(INSPECTOR, used));
         // Start at the top.
         let clip = scroll.contentView();
-        clip.scrollToPoint(NSPoint::new(0.0, (INSPECTOR_HEIGHT - height).max(0.0)));
+        clip.scrollToPoint(NSPoint::new(0.0, (used - height).max(0.0)));
         scroll.reflectScrolledClipView(&clip);
         let _ = self.ivars().ui.set(ui);
+        self.load_languages();
         let _ = self.ivars().player.set(player);
         let _ = self.ivars().item.set(item);
         let _ = self.ivars().window.set(window.clone());
@@ -328,7 +365,9 @@ impl StudioEditor {
         Ok(())
     }
 
-    fn build_inspector(&self, mtm: MainThreadMarker, inspector: &NSView, height: f64) -> Ui {
+    /// Lays out the controls from the top of `inspector`; also returns the
+    /// height they use.
+    fn build_inspector(&self, mtm: MainThreadMarker, inspector: &NSView, height: f64) -> (Ui, f64) {
         let target: &AnyObject = self.as_ref();
         let top = NSAutoresizingMaskOptions::ViewMinYMargin;
         let mut y = height - 44.0;
@@ -570,6 +609,64 @@ impl StudioEditor {
             }
         };
 
+        heading("Captions", y);
+        y -= ROW + 2.0;
+        let captions = {
+            label("Language:", y);
+            let language = popup(&[t!("Loading…")], y);
+            y -= ROW;
+            let make = button(
+                "Make Captions",
+                sel!(makeCaptions:),
+                y,
+                x + 96.0,
+                width - 96.0,
+            );
+            y -= ROW;
+            let status = NSTextField::wrappingLabelWithString(&NSString::from_str(""), mtm);
+            status.setFont(Some(&NSFont::systemFontOfSize(11.0)));
+            status.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
+            place(
+                &status,
+                NSRect::new(NSPoint::new(x, y - 8.0), NSSize::new(width, 30.0)),
+            );
+            y -= ROW + 4.0;
+            let show = check("Show captions", y);
+            y -= ROW;
+            label("Place:", y);
+            let place_menu = popup(&crate::i18n::labels(&["Bottom", "Top"]), y);
+            y -= ROW;
+            label("Size:", y);
+            let size = slider(0.6, 2.0, y);
+            y -= ROW;
+            let edit = button(
+                "Edit Captions…",
+                sel!(editCaptions:),
+                y,
+                x + 96.0,
+                width - 96.0,
+            );
+            y -= ROW + 2.0;
+            let export = button(
+                "Export Subtitles…",
+                sel!(exportSubtitles:),
+                y,
+                x + 96.0,
+                width - 96.0,
+            );
+            y -= ROW + 14.0;
+            CaptionControls {
+                language,
+                make,
+                status,
+                show,
+                place: place_menu,
+                size,
+                edit,
+                export,
+            }
+        };
+
         heading("Export", y);
         y -= ROW + 2.0;
         label("Output:", y);
@@ -604,7 +701,7 @@ impl StudioEditor {
             NSRect::new(NSPoint::new(x, y), NSSize::new(width, 18.0)),
         );
 
-        Ui {
+        let ui = Ui {
             background,
             padding,
             corners,
@@ -618,6 +715,7 @@ impl StudioEditor {
             camera,
             keys,
             watermark,
+            captions,
             zoom_level,
             zoom_follow,
             zoom_delete,
@@ -625,7 +723,8 @@ impl StudioEditor {
             output,
             export,
             status,
-        }
+        };
+        (ui, height - y + 16.0)
     }
 
     /// The background menu's titles, remembering what each item applies.
@@ -727,6 +826,32 @@ impl StudioEditor {
             c.size.setDoubleValue(style.size);
             c.shape
                 .selectItemAtIndex((style.shape == crate::config::CameraShape::Rounded) as isize);
+        }
+        let captions = project.captions.as_ref();
+        let can_caption = crate::captions::available() && !self.ivars().transcribing.get();
+        ui.captions.language.setEnabled(can_caption);
+        ui.captions.make.setEnabled(can_caption);
+        ui.captions
+            .make
+            .setTitle(&NSString::from_str(&if captions.is_some() {
+                t!("Make Captions Again")
+            } else {
+                t!("Make Captions")
+            }));
+        for control in [
+            &*ui.captions.show as &objc2_app_kit::NSControl,
+            &ui.captions.edit,
+            &ui.captions.export,
+        ] {
+            control.setEnabled(captions.is_some());
+        }
+        let shown = captions.is_some_and(|c| c.visible);
+        ui.captions.place.setEnabled(shown);
+        ui.captions.size.setEnabled(shown);
+        ui.captions.show.setState(on(shown));
+        if let Some(c) = captions {
+            ui.captions.place.selectItemAtIndex(c.top as isize);
+            ui.captions.size.setDoubleValue(c.size);
         }
         let watermark = project.watermark.as_ref();
         ui.watermark.show.setState(on(watermark.is_some()));
@@ -844,6 +969,11 @@ impl StudioEditor {
                 crate::config::CameraShape::Circle
             };
         }
+        if let Some(c) = project.captions.as_mut() {
+            c.visible = ui.captions.show.state() == NSControlStateValueOn;
+            c.top = ui.captions.place.indexOfSelectedItem() == 1;
+            c.size = (ui.captions.size.doubleValue() * 10.0).round() / 10.0;
+        }
         project.watermark = if ui.watermark.show.state() == NSControlStateValueOn {
             // Turned on: the watermark from the settings.
             let mut style = project
@@ -909,6 +1039,258 @@ impl StudioEditor {
             }
         }
         Ok(())
+    }
+
+    /// Fills the caption language menu, in the background (asking for the
+    /// languages takes a moment).
+    fn load_languages(&self) {
+        if !crate::captions::available() {
+            if let Some(ui) = self.ivars().ui.get() {
+                ui.captions.language.removeAllItems();
+                ui.captions
+                    .language
+                    .addItemWithTitle(&NSString::from_str(&t!("Not available")));
+                ui.captions
+                    .status
+                    .setStringValue(&NSString::from_str(&t!("Captions need macOS 26 or later.")));
+            }
+            return;
+        }
+        let id = self.ivars().id;
+        std::thread::spawn(move || {
+            let locales = crate::captions::locales();
+            dispatch2::DispatchQueue::main().exec_async(move || {
+                if let Some(editor) = super::registry::get(id) {
+                    editor.show_languages(&locales);
+                }
+            });
+        });
+    }
+
+    fn show_languages(&self, locales: &crate::captions::Locales) {
+        let Some(ui) = self.ivars().ui.get() else {
+            return;
+        };
+        let current = objc2_foundation::NSLocale::currentLocale();
+        let name = |id: &str| {
+            current
+                .localizedStringForLocaleIdentifier(&NSString::from_str(id))
+                .to_string()
+        };
+        let mut languages = locales.supported.clone();
+        languages.sort_by_key(|id| name(id));
+        ui.captions.language.removeAllItems();
+        for id in &languages {
+            let mut title = name(id);
+            if locales.installed.contains(id) {
+                title.push_str(" ✓");
+            }
+            ui.captions
+                .language
+                .addItemWithTitle(&NSString::from_str(&title));
+        }
+        // The recording's captions' language, else the Mac's.
+        let chosen = self
+            .ivars()
+            .project
+            .borrow()
+            .captions
+            .as_ref()
+            .map(|c| c.language.clone())
+            .filter(|l| languages.contains(l))
+            .or_else(|| {
+                crate::captions::preferred(locales, &current.localeIdentifier().to_string())
+            });
+        if let Some(index) = chosen.and_then(|c| languages.iter().position(|l| *l == c)) {
+            ui.captions.language.selectItemAtIndex(index as isize);
+        }
+        ui.captions
+            .language
+            .setToolTip(Some(&NSString::from_str(&t!(
+                "✓ means the language is on this Mac; others are downloaded the first time"
+            ))));
+        *self.ivars().languages.borrow_mut() = languages;
+        if !self.ivars().transcribing.get() {
+            self.show_caption_count();
+        }
+    }
+
+    fn set_caption_status(&self, text: &str) {
+        if let Some(ui) = self.ivars().ui.get() {
+            ui.captions.status.setStringValue(&NSString::from_str(text));
+        }
+    }
+
+    /// Shows how many captions there are (nothing without captions).
+    fn show_caption_count(&self) {
+        let count = self.caption_cues().len();
+        self.set_caption_status(&match count {
+            0 => String::new(),
+            1 => t!("1 caption"),
+            n => t!("{n} captions", n),
+        });
+    }
+
+    /// Transcribes the recording in the chosen language, in the background.
+    fn make_captions(&self) {
+        let mtm = self.mtm();
+        let Some(ui) = self.ivars().ui.get() else {
+            return;
+        };
+        let index = ui.captions.language.indexOfSelectedItem().max(0) as usize;
+        let Some(locale) = self.ivars().languages.borrow().get(index).cloned() else {
+            return;
+        };
+        if self.ivars().project.borrow().captions.is_some()
+            && !crate::editor::skip_confirmations()
+            && crate::app::alert::show(
+                mtm,
+                "Make the captions again?",
+                "Any changes you made to the captions are replaced.",
+                &["Make Again", "Cancel"],
+            ) != 0
+        {
+            return;
+        }
+        self.ivars().transcribing.set(true);
+        self.set_caption_status(&t!("Making captions…"));
+        self.sync_controls();
+        let id = self.ivars().id;
+        let screen = package::screen(&self.ivars().package);
+        std::thread::spawn(move || {
+            let progress = move |fraction: f64| {
+                let percent = (fraction * 100.0).round();
+                dispatch2::DispatchQueue::main().exec_async(move || {
+                    if let Some(editor) = super::registry::get(id) {
+                        editor.set_caption_status(&t!(
+                            "Downloading the language for captions: {percent}%",
+                            percent
+                        ));
+                    }
+                });
+            };
+            let result = crate::captions::transcribe(&screen, &locale, &progress);
+            dispatch2::DispatchQueue::main().exec_async(move || {
+                if let Some(editor) = super::registry::get(id) {
+                    editor.captions_made(locale, result);
+                }
+            });
+        });
+    }
+
+    fn captions_made(&self, locale: String, result: Result<Vec<crate::captions::Word>, String>) {
+        self.ivars().transcribing.set(false);
+        match result {
+            Ok(words) => {
+                let cues = crate::captions::make_cues(&words);
+                if cues.is_empty() {
+                    self.set_caption_status(&t!("No speech was found in the recording."));
+                } else {
+                    let mut project = self.ivars().project.borrow().clone();
+                    let style = project.captions.take().unwrap_or_default();
+                    project.captions = Some(super::project::Captions {
+                        language: locale,
+                        cues,
+                        visible: true,
+                        ..style
+                    });
+                    match self.set_project(project) {
+                        Ok(()) => self.show_caption_count(),
+                        Err(e) => self.set_caption_status(&e),
+                    }
+                }
+            }
+            Err(e) => {
+                tracing::error!(error = %e, "captions not made");
+                self.set_caption_status(&e);
+            }
+        }
+        super::captions::refresh(self.ivars().id);
+        self.sync_controls();
+    }
+
+    /// The window's title: the recording's name.
+    pub fn window_title(&self) -> Option<String> {
+        self.ivars().window.get().map(|w| w.title().to_string())
+    }
+
+    /// Plays the preview from `t` seconds (a caption in the captions
+    /// window).
+    pub fn play_from(&self, t: f64) {
+        self.seek(t);
+        if let Some(player) = self.ivars().player.get() {
+            // SAFETY: plain player control on the main thread.
+            unsafe { player.play() };
+        }
+    }
+
+    /// The captions' cues, for the captions window.
+    pub fn caption_cues(&self) -> Vec<crate::captions::Cue> {
+        self.ivars()
+            .project
+            .borrow()
+            .captions
+            .as_ref()
+            .map(|c| c.cues.clone())
+            .unwrap_or_default()
+    }
+
+    /// Replaces the captions' cues (edited in the captions window).
+    pub fn set_caption_cues(&self, cues: Vec<crate::captions::Cue>) {
+        let mut project = self.ivars().project.borrow().clone();
+        if let Some(c) = project.captions.as_mut() {
+            c.cues = cues;
+            match self.set_project(project) {
+                Ok(()) => self.show_caption_count(),
+                Err(e) => tracing::error!(error = %e, "caption change not applied"),
+            }
+        }
+    }
+
+    /// Saves the captions as SRT, or WebVTT for a `.vtt` name.
+    fn export_subtitles(&self) {
+        let mtm = self.mtm();
+        let cues = self.caption_cues();
+        if cues.is_empty() {
+            return;
+        }
+        let stem = self
+            .ivars()
+            .package
+            .file_stem()
+            .map_or_else(|| "Captions".into(), |s| s.to_string_lossy().into_owned());
+        let panel = objc2_app_kit::NSSavePanel::savePanel(mtm);
+        panel.setNameFieldStringValue(&NSString::from_str(&format!("{stem}.srt")));
+        panel.setMessage(Some(&NSString::from_str(&t!(
+            "Saved as SRT, or as WebVTT when the name ends in .vtt."
+        ))));
+        objc2_app_kit::NSApplication::sharedApplication(mtm).activate();
+        if panel.runModal() != objc2_app_kit::NSModalResponseOK {
+            return;
+        }
+        let Some(path) = panel.URL().and_then(|u| u.path()) else {
+            return;
+        };
+        let path = std::path::PathBuf::from(path.to_string());
+        let vtt = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("vtt"));
+        let text = if vtt {
+            crate::captions::vtt(&cues)
+        } else {
+            crate::captions::srt(&cues)
+        };
+        match std::fs::write(&path, text) {
+            Ok(()) => crate::ui::toast::show(mtm, &t!("Subtitles saved")),
+            Err(e) => {
+                crate::app::alert::show(
+                    mtm,
+                    "Could not save the subtitles",
+                    &format!("{}: {e}", path.display()),
+                    &["OK"],
+                );
+            }
+        }
     }
 
     pub fn duration(&self) -> f64 {

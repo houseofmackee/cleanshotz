@@ -597,10 +597,28 @@ Group 4 of the October 2026 comparison.
     file moves. Studio and the video editor offer anchored positions only;
     free dragging is in the image editor.
 
-### Future work
-- **Captions** (from group 3, deferred): subtitles made on the Mac with
-  Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor and
-  burned in or exported as SRT.
+### M16: Captions
+- **Captions** for Studio recordings: subtitles made on the Mac with
+  Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor, and
+  burned in or exported as SRT or WebVTT.
+- Status: done (unreleased). Notes:
+  - `swift/Captions.swift` wraps SpeechAnalyzer behind three C functions
+    (available, locales, transcribe); `build.rs` compiles it with the
+    App Intents into one static library and sets `cfg(captions)`, so the
+    app still builds (without captions) when Swift is missing. Results
+    pass to Rust as JSON. A language's model is downloaded on first use
+    through `AssetInventory`, with progress shown in the sidebar.
+  - Recordings with separate microphone and system audio tracks are mixed
+    into a temporary M4A first, since `AVAudioFile` reads only the first
+    track.
+  - `src/captions.rs` groups the timed words into cues (a sentence end,
+    84 characters, 6 seconds, or a pause over 1.2 seconds ends a cue;
+    short cues are stretched to 1 second without overlapping) and writes
+    SRT and WebVTT with two balanced lines.
+  - The project keeps the language, cues, and style; the compositor
+    pre-renders each cue as an image and moves it clear of the keys when
+    both are on the same side. The captions window
+    (`src/studio/captions.rs`) edits the text in place.
 
 ### Distribution
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo
@@ -686,11 +704,11 @@ Group 4 of the October 2026 comparison.
 
 ## 6. Next steps
 
-1. **Captions** (see Future work); needs macOS 26 for SpeechAnalyzer.
-2. **Needs the maintainer's account:** a Raycast username to publish the
+1. **Needs the maintainer's account:** a Raycast username to publish the
    extension to the Raycast Store.
-3. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
+2. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
    preview; translating the History window's context menu titles.
-4. **Not yet tested on real hardware:** Studio and the panel before
+3. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
-   an M1, notch cropping on a notched display, and printing to a printer.
+   an M1, notch cropping on a notched display, printing to a printer, and
+   captions of real speech (tested with synthesized speech).

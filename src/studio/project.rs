@@ -25,6 +25,35 @@ pub struct Project {
     pub keys: KeysStyle,
     /// A logo or text in a corner of the frame (see [`crate::watermark`]).
     pub watermark: Option<crate::watermark::Style>,
+    /// What is said, made with [`crate::captions`].
+    pub captions: Option<Captions>,
+}
+
+/// A recording's captions and how they look.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Captions {
+    /// The language they were made in (`en_US`).
+    pub language: String,
+    pub cues: Vec<crate::captions::Cue>,
+    /// Shown in the preview and the export.
+    pub visible: bool,
+    /// At the top of the frame instead of the bottom.
+    pub top: bool,
+    /// 0.6 to 2 times the usual size.
+    pub size: f64,
+}
+
+impl Default for Captions {
+    fn default() -> Self {
+        Self {
+            language: String::new(),
+            cues: Vec::new(),
+            visible: true,
+            top: false,
+            size: 1.0,
+        }
+    }
 }
 
 /// Where a recording's camera goes.
@@ -110,6 +139,7 @@ impl Default for Project {
             camera: CameraStyle::default(),
             keys: KeysStyle::default(),
             watermark: None,
+            captions: None,
         }
     }
 }

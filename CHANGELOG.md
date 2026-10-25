@@ -6,6 +6,21 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Captions for Studio recordings (macOS 26 or later): Make Captions
+  transcribes the recording on the Mac with Apple's SpeechAnalyzer, in
+  the language you pick. Captions can be shown at the bottom or top in
+  any size, are burned into the export, can be corrected, played from,
+  or removed in Edit Captions…, and can be exported as SRT or WebVTT.
+
+### Changed
+
+- The Studio editor's sidebar is only as tall as its sections, so it no
+  longer ends in empty space when a recording has no camera or keys.
+- The release workflow retries checking the notarization ticket when
+  Apple's servers drop the connection.
+
 ## [0.8.2] - 2026-10-16
 
 ### Changed

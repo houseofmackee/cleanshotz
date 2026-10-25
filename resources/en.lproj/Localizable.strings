@@ -18,6 +18,9 @@
 /* src/editor/window.rs */
 "1 annotation" = "1 annotation";
 
+/* src/studio/window.rs */
+"1 caption" = "1 caption";
+
 /* src/history/window.rs */
 "1 capture" = "1 capture";
 
@@ -104,6 +107,9 @@
 /* src/action.rs */
 "Annotate Clipboard Image" = "Annotate Clipboard Image";
 
+/* src/studio/window.rs */
+"Any changes you made to the captions are replaced." = "Any changes you made to the captions are replaced.";
+
 /* src/action.rs */
 "Arrange Pinned Screenshots" = "Arrange Pinned Screenshots";
 
@@ -161,11 +167,20 @@
 /* src/settings/mod.rs */
 "Camera:" = "Camera:";
 
-/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs, src/video_editor/window.rs */
+/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs, src/studio/window.rs, src/video_editor/window.rs */
 "Cancel" = "Cancel";
+
+/* src/studio/captions.rs */
+"Caption at {time}" = "Caption at {time}";
 
 /* src/steps/window.rs */
 "Caption for {label}" = "Caption for {label}";
+
+/* src/studio/window.rs */
+"Captions need macOS 26 or later." = "Captions need macOS 26 or later.";
+
+/* src/studio/captions.rs */
+"Captions: {name}" = "Captions: {name}";
 
 /* src/action.rs */
 "Capture Area" = "Capture Area";
@@ -323,6 +338,9 @@
 /* src/editor/window.rs */
 "Could not save the GIF" = "Could not save the GIF";
 
+/* src/studio/window.rs */
+"Could not save the subtitles" = "Could not save the subtitles";
+
 /* src/settings/mod.rs */
 "Could not save to the Keychain" = "Could not save to the Keychain";
 
@@ -361,6 +379,9 @@
 
 /* src/editor/window.rs */
 "Double Arrow" = "Double Arrow";
+
+/* src/studio/window.rs */
+"Downloading the language for captions: {percent}%" = "Downloading the language for captions: {percent}%";
 
 /* src/studio/track.rs */
 "Drag a zoom to move it or its edges to resize it. Double-click to add one; Delete removes the selected one." = "Drag a zoom to move it or its edges to resize it. Double-click to add one; Delete removes the selected one.";
@@ -587,6 +608,9 @@
 /* src/settings/mod.rs */
 "Link:" = "Link:";
 
+/* src/studio/window.rs */
+"Loading…" = "Loading…";
+
 /* src/editor/window.rs */
 "Looking for sensitive info…" = "Looking for sensitive info…";
 
@@ -598,6 +622,21 @@
 
 /* src/editor/tools.rs */
 "Magnify" = "Magnify";
+
+/* src/studio/window.rs */
+"Make Again" = "Make Again";
+
+/* src/studio/window.rs */
+"Make Captions" = "Make Captions";
+
+/* src/studio/window.rs */
+"Make Captions Again" = "Make Captions Again";
+
+/* src/studio/window.rs */
+"Make the captions again?" = "Make the captions again?";
+
+/* src/studio/window.rs */
+"Making captions…" = "Making captions…";
 
 /* src/settings/mod.rs */
 "Margin:" = "Margin:";
@@ -647,6 +686,9 @@
 /* src/editor/window.rs */
 "No sensitive info found" = "No sensitive info found";
 
+/* src/studio/window.rs */
+"No speech was found in the recording." = "No speech was found in the recording.";
+
 /* src/steps/session.rs */
 "No steps were captured" = "No steps were captured";
 
@@ -661,6 +703,9 @@
 
 /* src/settings/mod.rs, src/studio/window.rs */
 "None" = "None";
+
+/* src/studio/window.rs */
+"Not available" = "Not available";
 
 /* src/history/window.rs */
 "Note" = "Note";
@@ -917,6 +962,9 @@
 /* src/editor/window.rs, src/video_editor/window.rs */
 "Saved" = "Saved";
 
+/* src/studio/window.rs */
+"Saved as SRT, or as WebVTT when the name ends in .vtt." = "Saved as SRT, or as WebVTT when the name ends in .vtt.";
+
 /* src/action.rs */
 "Screen Recording" = "Screen Recording";
 
@@ -1042,6 +1090,9 @@
 
 /* src/settings/mod.rs */
 "Studio:" = "Studio:";
+
+/* src/studio/window.rs */
+"Subtitles saved" = "Subtitles saved";
 
 /* src/settings/mod.rs */
 "System audio" = "System audio";
@@ -1226,6 +1277,9 @@
 /* src/editor/window.rs */
 "{n} annotations" = "{n} annotations";
 
+/* src/studio/window.rs */
+"{n} captions" = "{n} captions";
+
 /* src/history/window.rs */
 "{n} captures" = "{n} captures";
 
@@ -1252,3 +1306,6 @@
 
 /* src/settings/mod.rs */
 "© Your Name" = "© Your Name";
+
+/* src/studio/window.rs */
+"✓ means the language is on this Mac; others are downloaded the first time" = "✓ means the language is on this Mac; others are downloaded the first time";

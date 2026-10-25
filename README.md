@@ -73,7 +73,9 @@ The old entries in System Settings > Privacy & Security can be removed.
 No account, no telemetry, no crash reporting. CleanShotZ only uses the
 network for uploads you configure and, if you allow it, update checks: they
 fetch `appcast.xml` from GitHub Releases and send nothing about your Mac
-(Sparkle's system profiling is off).
+(Sparkle's system profiling is off). Captions are made on the Mac; the
+only network use is macOS downloading a language's speech model from Apple
+the first time it is used.
 
 ## Development
 
@@ -434,6 +436,14 @@ in the Studio editor, where all of them can be changed afterwards:
   [Watermarks](#watermarks)). New Studio recordings start with it when it
   is on for new recordings; the package keeps a copy of the mark, so the
   export still has it if the logo file moves.
+- **Captions** (macOS 26 or later): Make Captions turns what is said in
+  the recording into subtitles, on your Mac, with Apple's speech
+  recognition. Pick the language first (✓ marks languages already on the
+  Mac; others are downloaded from Apple once, the first time). Captions
+  show at the bottom or top in any size, and are burned into the export.
+  Edit Captions… lists them with their times to correct the wording,
+  play from one, or remove one. Export Subtitles… saves them as SRT, or
+  as WebVTT when the name ends in `.vtt`.
 
 Export MP4 renders the result at 1080p, 1440p, 4K or the original size,
 at 60 frames per second and faster than real time, and shows it in Quick

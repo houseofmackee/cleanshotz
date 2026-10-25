@@ -3,6 +3,7 @@
 //! backgrounds and the camera can be changed after recording. A recording
 //! is a `.cszrec` package (see [`package`]).
 
+mod captions;
 pub mod capture;
 pub mod compositor;
 pub mod events;

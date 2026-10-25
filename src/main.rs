@@ -4,6 +4,7 @@ mod i18n;
 
 mod action;
 mod app;
+mod captions;
 mod capture;
 mod cli;
 mod command;
@@ -94,6 +95,43 @@ fn main() -> ExitCode {
                 ExitCode::FAILURE
             }
         },
+        #[cfg(debug_assertions)]
+        Some("--dev-captions") if args.len() >= 2 => {
+            // Transcribes a file and prints its captions as SRT.
+            let locales = captions::locales();
+            let locale = args.get(2).cloned().or_else(|| {
+                captions::preferred(
+                    &locales,
+                    &objc2_foundation::NSLocale::currentLocale()
+                        .localeIdentifier()
+                        .to_string(),
+                )
+            });
+            let Some(locale) = locale else {
+                eprintln!("cleanshotz: captions are not available on this Mac");
+                return ExitCode::FAILURE;
+            };
+            let started = std::time::Instant::now();
+            match captions::transcribe(std::path::Path::new(&args[1]), &locale, &|p| {
+                eprintln!("downloading the {locale} model: {:.0}%", p * 100.0)
+            }) {
+                Ok(words) => {
+                    let cues = captions::make_cues(&words);
+                    eprintln!(
+                        "{} words, {} cues in {:.1} s ({locale})",
+                        words.len(),
+                        cues.len(),
+                        started.elapsed().as_secs_f64()
+                    );
+                    print!("{}", captions::srt(&cues));
+                    ExitCode::SUCCESS
+                }
+                Err(e) => {
+                    eprintln!("cleanshotz: {e}");
+                    ExitCode::FAILURE
+                }
+            }
+        }
         #[cfg(debug_assertions)]
         Some("--dev-video-export") if args.len() == 8 => {
             use video_editor::plan::*;
