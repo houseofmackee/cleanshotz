@@ -186,7 +186,7 @@ impl ZoomTrack {
             &this,
             // SAFETY: reading an AppKit constant.
             unsafe { objc2_app_kit::NSAccessibilityGroupRole },
-            "Zooms",
+            &t!("Zooms"),
             Some(&t!(
                 "Drag a zoom to move it or its edges to resize it. Double-click to add one; Delete removes the selected one."
             )),

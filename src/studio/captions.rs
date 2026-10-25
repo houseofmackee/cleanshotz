@@ -226,6 +226,7 @@ impl CaptionsWindow {
             list.addSubview(&field);
             fields.push(field);
 
+            // `description` is translated.
             let symbol = |name: &str, description: &str, action, x: f64| {
                 // SAFETY: the action exists on the controller.
                 let button = unsafe {
@@ -239,13 +240,13 @@ impl CaptionsWindow {
                 button.setImage(
                     NSImage::imageWithSystemSymbolName_accessibilityDescription(
                         &NSString::from_str(name),
-                        Some(&NSString::from_str(&crate::i18n::tr(description))),
+                        Some(&NSString::from_str(description)),
                     )
                     .as_deref(),
                 );
                 button.setBordered(false);
                 button.setTag(i as isize);
-                button.setToolTip(Some(&NSString::from_str(&crate::i18n::tr(description))));
+                button.setToolTip(Some(&NSString::from_str(description)));
                 button.setFrame(NSRect::new(
                     NSPoint::new(x, y + 3.0),
                     NSSize::new(28.0, 24.0),
@@ -253,10 +254,15 @@ impl CaptionsWindow {
                 button.setAutoresizingMask(right);
                 list.addSubview(&button);
             };
-            symbol("play.fill", "Play from here", sel!(play:), width - 68.0);
+            symbol(
+                "play.fill",
+                &t!("Play from here"),
+                sel!(play:),
+                width - 68.0,
+            );
             symbol(
                 "minus.circle",
-                "Remove this caption",
+                &t!("Remove this caption"),
                 sel!(remove:),
                 width - 36.0,
             );

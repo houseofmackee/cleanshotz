@@ -409,8 +409,7 @@ impl StudioEditor {
             inspector.addSubview(view);
         };
         let heading = |text: &str, y: f64| {
-            let label =
-                NSTextField::labelWithString(&NSString::from_str(&crate::i18n::tr(text)), mtm);
+            let label = NSTextField::labelWithString(&NSString::from_str(text), mtm);
             label.setFont(Some(&NSFont::boldSystemFontOfSize(13.0)));
             place(
                 &label,
@@ -418,8 +417,7 @@ impl StudioEditor {
             );
         };
         let label = |text: &str, y: f64| {
-            let label =
-                NSTextField::labelWithString(&NSString::from_str(&crate::i18n::tr(text)), mtm);
+            let label = NSTextField::labelWithString(&NSString::from_str(text), mtm);
             place(
                 &label,
                 NSRect::new(NSPoint::new(x, y + 3.0), NSSize::new(92.0, 18.0)),
@@ -469,7 +467,7 @@ impl StudioEditor {
             // SAFETY: the action exists on the editor.
             let b = unsafe {
                 NSButton::checkboxWithTitle_target_action(
-                    &NSString::from_str(&crate::i18n::tr(text)),
+                    &NSString::from_str(text),
                     Some(target),
                     Some(sel!(changed:)),
                     mtm,
@@ -485,20 +483,20 @@ impl StudioEditor {
             b
         };
 
-        heading("Background", y);
+        heading(&t!("Background"), y);
         y -= ROW + 2.0;
-        label("Fill:", y);
+        label(&t!("Fill:"), y);
         let background = popup(&self.background_titles(), y);
         y -= ROW;
-        label("Padding:", y);
+        label(&t!("Padding:"), y);
         let padding = slider(0.0, 200.0, y);
         y -= ROW;
-        label("Corners:", y);
+        label(&t!("Corners:"), y);
         let corners = slider(0.0, 40.0, y);
         y -= ROW;
-        let shadow = check("Shadow", y);
+        let shadow = check(&t!("Shadow"), y);
         y -= ROW;
-        label("Size:", y);
+        label(&t!("Size:"), y);
         let aspect = popup(
             &Aspect::ALL
                 .iter()
@@ -508,30 +506,30 @@ impl StudioEditor {
         );
         y -= ROW + 14.0;
 
-        heading("Cursor", y);
+        heading(&t!("Cursor"), y);
         y -= ROW + 2.0;
-        let cursor = check("Show the cursor", y);
+        let cursor = check(&t!("Show the cursor"), y);
         y -= ROW;
-        label("Size:", y);
+        label(&t!("Size:"), y);
         let cursor_size = slider(0.5, 3.0, y);
         y -= ROW;
-        label("Smoothing:", y);
+        label(&t!("Smoothing:"), y);
         let smoothing = slider(0.0, 1.0, y);
         y -= ROW;
-        let hide_idle = check("Hide when idle", y);
+        let hide_idle = check(&t!("Hide when idle"), y);
         y -= ROW;
-        label("Clicks:", y);
+        label(&t!("Clicks:"), y);
         let clicks = popup(&crate::i18n::labels(&["None", "Ring", "Ripple"]), y);
         y -= ROW + 14.0;
 
-        heading("Zoom", y);
+        heading(&t!("Zoom"), y);
         y -= ROW + 2.0;
-        label("Level:", y);
+        label(&t!("Level:"), y);
         let zoom_level = slider(super::zoom::MIN_LEVEL, super::zoom::MAX_LEVEL, y);
         // SAFETY: the action exists on the editor.
         unsafe { zoom_level.setAction(Some(sel!(zoomChanged:))) };
         y -= ROW;
-        let zoom_follow = check("Follow the cursor", y);
+        let zoom_follow = check(&t!("Follow the cursor"), y);
         // SAFETY: the action exists on the editor.
         unsafe { zoom_follow.setAction(Some(sel!(zoomChanged:))) };
         y -= ROW;
@@ -539,7 +537,7 @@ impl StudioEditor {
             // SAFETY: the action exists on the editor.
             let b = unsafe {
                 NSButton::buttonWithTitle_target_action(
-                    &NSString::from_str(&crate::i18n::tr(title)),
+                    &NSString::from_str(title),
                     Some(target),
                     Some(action),
                     mtm,
@@ -549,7 +547,7 @@ impl StudioEditor {
             b
         };
         let zoom_pick = button(
-            "Choose Point in Preview",
+            &t!("Choose Point in Preview"),
             sel!(pickZoomPoint:),
             y,
             x + 96.0,
@@ -559,17 +557,23 @@ impl StudioEditor {
             "Click the preview where the selected zoom should stay"
         ))));
         y -= ROW + 2.0;
-        let zoom_delete = button("Delete Zoom", sel!(deleteZoom:), y, x + 96.0, width - 96.0);
+        let zoom_delete = button(
+            &t!("Delete Zoom"),
+            sel!(deleteZoom:),
+            y,
+            x + 96.0,
+            width - 96.0,
+        );
         y -= ROW + 2.0;
         button(
-            "Make Automatic Zooms Again",
+            &t!("Make Automatic Zooms Again"),
             sel!(regenerateZooms:),
             y,
             x,
             width,
         );
         y -= ROW;
-        let motion_blur = check("Motion blur", y);
+        let motion_blur = check(&t!("Motion blur"), y);
         y -= ROW;
         let hint = NSTextField::wrappingLabelWithString(
             &NSString::from_str(&t!(
@@ -586,11 +590,11 @@ impl StudioEditor {
         y -= ROW + 20.0;
 
         let camera = self.ivars().events.camera.is_some().then(|| {
-            heading("Camera", y);
+            heading(&t!("Camera"), y);
             y -= ROW + 2.0;
-            let show = check("Show the camera", y);
+            let show = check(&t!("Show the camera"), y);
             y -= ROW;
-            label("Corner:", y);
+            label(&t!("Corner:"), y);
             let corner = popup(
                 &super::project::Corner::ALL
                     .iter()
@@ -599,10 +603,10 @@ impl StudioEditor {
                 y,
             );
             y -= ROW;
-            label("Size:", y);
+            label(&t!("Size:"), y);
             let size = slider(0.12, 0.45, y);
             y -= ROW;
-            label("Shape:", y);
+            label(&t!("Shape:"), y);
             let shape = popup(&crate::i18n::labels(&["Circle", "Rounded Square"]), y);
             y -= ROW + 14.0;
             CameraControls {
@@ -613,25 +617,25 @@ impl StudioEditor {
             }
         });
         let keys = (!self.ivars().events.keys.is_empty()).then(|| {
-            heading("Keys", y);
+            heading(&t!("Keys"), y);
             y -= ROW + 2.0;
-            let show = check("Show pressed keys", y);
+            let show = check(&t!("Show pressed keys"), y);
             y -= ROW;
-            label("Place:", y);
+            label(&t!("Place:"), y);
             let place = popup(&crate::i18n::labels(&["Bottom", "Top"]), y);
             y -= ROW;
-            label("Size:", y);
+            label(&t!("Size:"), y);
             let size = slider(0.6, 2.0, y);
             y -= ROW + 14.0;
             KeyControls { show, place, size }
         });
 
-        heading("Watermark", y);
+        heading(&t!("Watermark"), y);
         y -= ROW + 2.0;
         let watermark = {
-            let show = check("Show the watermark", y);
+            let show = check(&t!("Show the watermark"), y);
             y -= ROW;
-            label("Position:", y);
+            label(&t!("Position:"), y);
             let position = popup(
                 &crate::watermark::Position::ALL
                     .iter()
@@ -640,7 +644,7 @@ impl StudioEditor {
                 y,
             );
             y -= ROW;
-            label("Size:", y);
+            label(&t!("Size:"), y);
             let size = slider(5.0, 40.0, y);
             y -= ROW + 14.0;
             WatermarkControls {
@@ -650,14 +654,14 @@ impl StudioEditor {
             }
         };
 
-        heading("Captions", y);
+        heading(&t!("Captions"), y);
         y -= ROW + 2.0;
         let captions = {
-            label("Language:", y);
+            label(&t!("Language:"), y);
             let language = popup(&[t!("Loading…")], y);
             y -= ROW;
             let make = button(
-                "Make Captions",
+                &t!("Make Captions"),
                 sel!(makeCaptions:),
                 y,
                 x + 96.0,
@@ -672,18 +676,18 @@ impl StudioEditor {
                 NSRect::new(NSPoint::new(x, y - 8.0), NSSize::new(width, 30.0)),
             );
             y -= ROW + 4.0;
-            let cut_fillers = check("Cut filler words", y);
+            let cut_fillers = check(&t!("Cut filler words"), y);
             y -= ROW;
-            let show = check("Show captions", y);
+            let show = check(&t!("Show captions"), y);
             y -= ROW;
-            label("Place:", y);
+            label(&t!("Place:"), y);
             let place_menu = popup(&crate::i18n::labels(&["Bottom", "Top"]), y);
             y -= ROW;
-            label("Size:", y);
+            label(&t!("Size:"), y);
             let size = slider(0.6, 2.0, y);
             y -= ROW;
             let edit = button(
-                "Edit Captions…",
+                &t!("Edit Captions…"),
                 sel!(editCaptions:),
                 y,
                 x + 96.0,
@@ -691,7 +695,7 @@ impl StudioEditor {
             );
             y -= ROW + 2.0;
             let export = button(
-                "Export Subtitles…",
+                &t!("Export Subtitles…"),
                 sel!(exportSubtitles:),
                 y,
                 x + 96.0,
@@ -711,9 +715,9 @@ impl StudioEditor {
             }
         };
 
-        heading("Export", y);
+        heading(&t!("Export"), y);
         y -= ROW + 2.0;
-        label("Output:", y);
+        label(&t!("Output:"), y);
         let output = popup(
             &OutputSize::ALL
                 .iter()

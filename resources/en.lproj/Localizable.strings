@@ -45,6 +45,9 @@
 /* src/editor/model.rs */
 "4:5 Portrait (Instagram)" = "4:5 Portrait (Instagram)";
 
+/* src/studio/project.rs */
+"4K" = "4K";
+
 /* src/editor/model.rs */
 "9:16 Story (Instagram, TikTok)" = "9:16 Story (Instagram, TikTok)";
 
@@ -137,7 +140,7 @@
 /* src/settings/mod.rs */
 "Automatic" = "Automatic";
 
-/* src/editor/tools.rs */
+/* src/editor/tools.rs, src/studio/window.rs */
 "Background" = "Background";
 
 /* src/editor/window.rs */
@@ -149,8 +152,14 @@
 /* src/editor/tools.rs */
 "Blur" = "Blur";
 
-/* src/studio/window.rs */
+/* src/studio/window.rs, src/watermark.rs */
 "Bottom" = "Bottom";
+
+/* src/studio/project.rs, src/watermark.rs */
+"Bottom Left" = "Bottom Left";
+
+/* src/studio/project.rs, src/watermark.rs */
+"Bottom Right" = "Bottom Right";
 
 /* src/settings/mod.rs */
 "Bottom left" = "Bottom left";
@@ -161,7 +170,7 @@
 /* src/settings/mod.rs */
 "Bucket:" = "Bucket:";
 
-/* src/action.rs */
+/* src/action.rs, src/studio/window.rs */
 "Camera" = "Camera";
 
 /* src/record/overlays.rs */
@@ -187,6 +196,9 @@
 
 /* src/steps/window.rs */
 "Caption for {label}" = "Caption for {label}";
+
+/* src/studio/window.rs */
+"Captions" = "Captions";
 
 /* src/studio/window.rs */
 "Captions need macOS 26 or later." = "Captions need macOS 26 or later.";
@@ -223,6 +235,9 @@
 
 /* src/history/window.rs */
 "Captures and recordings will appear here" = "Captures and recordings will appear here";
+
+/* src/watermark.rs */
+"Center" = "Center";
 
 /* src/action.rs */
 "Check for Updates…" = "Check for Updates…";
@@ -299,6 +314,9 @@
 /* src/settings/mod.rs */
 "Clicks" = "Clicks";
 
+/* src/studio/window.rs */
+"Clicks:" = "Clicks:";
+
 /* src/settings/mod.rs */
 "Client ID:" = "Client ID:";
 
@@ -347,8 +365,14 @@
 /* src/settings/mod.rs */
 "Copy to the clipboard" = "Copy to the clipboard";
 
+/* src/studio/window.rs */
+"Corner:" = "Corner:";
+
 /* src/editor/window.rs */
 "Corners" = "Corners";
+
+/* src/studio/window.rs */
+"Corners:" = "Corners:";
 
 /* src/settings/mod.rs */
 "Correct words with a dictionary" = "Correct words with a dictionary";
@@ -395,8 +419,14 @@
 /* src/settings/mod.rs */
 "Crop the notch from full-screen apps" = "Crop the notch from full-screen apps";
 
+/* src/studio/window.rs */
+"Cursor" = "Cursor";
+
 /* src/settings/mod.rs */
 "Cursor highlight" = "Cursor highlight";
+
+/* src/studio/window.rs */
+"Cut filler words" = "Cut filler words";
 
 /* src/studio/window.rs */
 "Cuts “um”, “uh” and similar sounds from the recording." = "Cuts “um”, “uh” and similar sounds from the recording.";
@@ -406,6 +436,9 @@
 
 /* src/history/window.rs */
 "Delete" = "Delete";
+
+/* src/studio/window.rs */
+"Delete Zoom" = "Delete Zoom";
 
 /* src/editor/window.rs */
 "Delete “{name}”" = "Delete “{name}”";
@@ -443,6 +476,9 @@
 /* src/history/window.rs */
 "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating." = "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating.";
 
+/* src/studio/window.rs */
+"Edit Captions…" = "Edit Captions…";
+
 /* src/history/window.rs */
 "Edit Video" = "Edit Video";
 
@@ -458,7 +494,7 @@
 /* src/settings/mod.rs */
 "Every setting is also in this file. After editing it, choose Reload Settings in the menu." = "Every setting is also in this file. After editing it, choose Reload Settings in the menu.";
 
-/* src/steps/window.rs */
+/* src/steps/window.rs, src/studio/window.rs */
 "Export" = "Export";
 
 /* src/editor/window.rs */
@@ -466,6 +502,9 @@
 
 /* src/studio/window.rs */
 "Export MP4" = "Export MP4";
+
+/* src/studio/window.rs */
+"Export Subtitles…" = "Export Subtitles…";
 
 /* src/studio/window.rs */
 "Export failed" = "Export failed";
@@ -484,6 +523,9 @@
 
 /* src/settings/mod.rs */
 "File name:" = "File name:";
+
+/* src/studio/window.rs */
+"Fill:" = "Fill:";
 
 /* src/editor/window.rs */
 "Filled" = "Filled";
@@ -505,6 +547,9 @@
 
 /* src/settings/mod.rs */
 "Folder:" = "Folder:";
+
+/* src/studio/window.rs */
+"Follow the cursor" = "Follow the cursor";
 
 /* src/settings/mod.rs */
 "For R2, MinIO and others, for example https://<account>.r2.cloudflarestorage.com." = "For R2, MinIO and others, for example https://<account>.r2.cloudflarestorage.com.";
@@ -575,6 +620,9 @@
 /* src/settings/mod.rs */
 "Hide notification banners in recordings" = "Hide notification banners in recordings";
 
+/* src/studio/window.rs */
+"Hide when idle" = "Hide when idle";
+
 /* src/settings/mod.rs */
 "High" = "High";
 
@@ -632,8 +680,14 @@
 /* src/settings/mod.rs */
 "Keep them on separate tracks" = "Keep them on separate tracks";
 
+/* src/studio/window.rs */
+"Keys" = "Keys";
+
 /* src/settings/mod.rs */
 "Keystrokes:" = "Keystrokes:";
+
+/* src/studio/window.rs */
+"Language:" = "Language:";
 
 /* src/settings/mod.rs */
 "Languages:" = "Languages:";
@@ -646,6 +700,12 @@
 
 /* src/action.rs */
 "Launch at Login" = "Launch at Login";
+
+/* src/watermark.rs */
+"Left" = "Left";
+
+/* src/studio/window.rs */
+"Level:" = "Level:";
 
 /* src/editor/tools.rs */
 "Line" = "Line";
@@ -673,6 +733,9 @@
 
 /* src/studio/window.rs */
 "Make Again" = "Make Again";
+
+/* src/studio/window.rs */
+"Make Automatic Zooms Again" = "Make Automatic Zooms Again";
 
 /* src/studio/window.rs */
 "Make Captions" = "Make Captions";
@@ -715,6 +778,9 @@
 
 /* src/record/session.rs */
 "Microphone level" = "Microphone level";
+
+/* src/studio/window.rs */
+"Motion blur" = "Motion blur";
 
 /* src/settings/mod.rs */
 "Mouse pointer" = "Mouse pointer";
@@ -818,7 +884,7 @@
 /* src/settings/mod.rs */
 "Or run a pipeline of steps instead: add one to [pipelines] in the settings file." = "Or run a pipeline of steps instead: add one to [pipelines] in the settings file.";
 
-/* src/editor/window.rs */
+/* src/editor/window.rs, src/studio/project.rs, src/video_editor/plan.rs */
 "Original Size" = "Original Size";
 
 /* src/settings/mod.rs */
@@ -826,6 +892,9 @@
 
 /* src/editor/window.rs */
 "Outline" = "Outline";
+
+/* src/studio/window.rs */
+"Output:" = "Output:";
 
 /* src/steps/window.rs */
 "PDF…" = "PDF…";
@@ -841,6 +910,9 @@
 
 /* src/editor/window.rs */
 "Padding" = "Padding";
+
+/* src/studio/window.rs */
+"Padding:" = "Padding:";
 
 /* src/editor/window.rs */
 "Paste or add a second image first, to compare with" = "Paste or add a second image first, to compare with";
@@ -869,6 +941,9 @@
 /* src/editor/tools.rs */
 "Pixelate" = "Pixelate";
 
+/* src/studio/window.rs */
+"Place:" = "Place:";
+
 /* src/editor/window.rs */
 "Plain Text" = "Plain Text";
 
@@ -878,7 +953,10 @@
 /* src/settings/mod.rs */
 "Play a sound" = "Play a sound";
 
-/* src/settings/mod.rs */
+/* src/studio/captions.rs */
+"Play from here" = "Play from here";
+
+/* src/settings/mod.rs, src/studio/window.rs */
 "Position:" = "Position:";
 
 /* src/editor/window.rs, src/history/window.rs */
@@ -977,6 +1055,9 @@
 /* src/editor/window.rs */
 "Remove Watermark" = "Remove Watermark";
 
+/* src/studio/captions.rs */
+"Remove this caption" = "Remove this caption";
+
 /* src/settings/mod.rs */
 "Removed it from {action}." = "Removed it from {action}.";
 
@@ -988,6 +1069,9 @@
 
 /* src/action.rs */
 "Restore Recently Closed" = "Restore Recently Closed";
+
+/* src/watermark.rs */
+"Right" = "Right";
 
 /* src/studio/window.rs */
 "Ring" = "Ring";
@@ -1103,8 +1187,11 @@
 /* src/action.rs */
 "Settings…" = "Settings…";
 
-/* src/editor/window.rs */
+/* src/editor/window.rs, src/studio/window.rs */
 "Shadow" = "Shadow";
+
+/* src/studio/window.rs */
+"Shape:" = "Shape:";
 
 /* src/settings/mod.rs */
 "Shortcuts" = "Shortcuts";
@@ -1115,11 +1202,20 @@
 /* src/settings/mod.rs */
 "Show a thumbnail after each capture" = "Show a thumbnail after each capture";
 
+/* src/studio/window.rs */
+"Show captions" = "Show captions";
+
 /* src/history/window.rs */
 "Show in Finder" = "Show in Finder";
 
-/* src/settings/mod.rs */
+/* src/studio/window.rs */
+"Show pressed keys" = "Show pressed keys";
+
+/* src/settings/mod.rs, src/studio/window.rs */
 "Show the camera" = "Show the camera";
+
+/* src/studio/window.rs */
+"Show the cursor" = "Show the cursor";
 
 /* src/settings/mod.rs */
 "Show the magnifier" = "Show the magnifier";
@@ -1127,14 +1223,20 @@
 /* src/settings/mod.rs */
 "Show the mouse pointer" = "Show the mouse pointer";
 
+/* src/studio/window.rs */
+"Show the watermark" = "Show the watermark";
+
 /* src/settings/mod.rs */
 "Show:" = "Show:";
 
 /* src/scroll/session.rs */
 "Size limit reached · click Done" = "Size limit reached · click Done";
 
-/* src/settings/mod.rs */
+/* src/settings/mod.rs, src/studio/window.rs */
 "Size:" = "Size:";
+
+/* src/studio/window.rs */
+"Smoothing:" = "Smoothing:";
 
 /* src/editor/window.rs */
 "Snap to Text" = "Snap to Text";
@@ -1250,8 +1352,14 @@
 /* src/steps/window.rs */
 "Title" = "Title";
 
-/* src/studio/window.rs */
+/* src/studio/window.rs, src/watermark.rs */
 "Top" = "Top";
+
+/* src/studio/project.rs, src/watermark.rs */
+"Top Left" = "Top Left";
+
+/* src/studio/project.rs, src/watermark.rs */
+"Top Right" = "Top Right";
 
 /* src/editor/window.rs */
 "Trim plain margins so the capture sits in the middle" = "Trim plain margins so the capture sits in the middle";
@@ -1295,7 +1403,7 @@
 /* src/settings/mod.rs */
 "Video codec:" = "Video codec:";
 
-/* src/settings/mod.rs, src/video_editor/window.rs */
+/* src/settings/mod.rs, src/studio/window.rs, src/video_editor/window.rs */
 "Watermark" = "Watermark";
 
 /* src/settings/mod.rs */
@@ -1309,6 +1417,12 @@
 
 /* src/record/ready.rs */
 "Window recordings leave the camera out" = "Window recordings leave the camera out";
+
+/* src/studio/window.rs */
+"Zoom" = "Zoom";
+
+/* src/studio/track.rs */
+"Zooms" = "Zooms";
 
 /* src/history/window.rs */
 "bug, design" = "bug, design";

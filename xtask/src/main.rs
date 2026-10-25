@@ -923,6 +923,9 @@ const TITLE_FILES: &[&str] = &[
     "src/editor/model.rs",
     "src/editor/tools.rs",
     "src/settings/mod.rs",
+    "src/studio/project.rs",
+    "src/video_editor/plan.rs",
+    "src/watermark.rs",
 ];
 
 /// Writes `resources/en.lproj/Localizable.strings` from the source.

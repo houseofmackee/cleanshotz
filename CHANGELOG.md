@@ -20,6 +20,9 @@ All notable changes to CleanShotZ. The format follows
 - The History window's context menu, filters, empty-window messages, and
   VoiceOver actions can be translated (they are in
   `Localizable.strings`).
+- The Studio editor's sidebar, captions window, and zoom track, and the
+  names of watermark positions, camera corners, and export sizes, are
+  now listed in `Localizable.strings` for translators.
 
 ## [0.9.0] - 2026-10-25
 
