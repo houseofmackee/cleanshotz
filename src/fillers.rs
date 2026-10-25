@@ -78,22 +78,34 @@ pub fn is_filler(text: &str, locale: &str) -> bool {
 }
 
 /// `words` without the filler words, for caption text: a sentence a
-/// filler started begins with a capital again, and a sentence end on a
-/// filler moves to the word before it.
+/// filler started begins with a capital again, a sentence end on a filler
+/// moves to the word before it, and the comma before a filler within a
+/// sentence goes with it ("grew by, um, 18%" is "grew by 18%"; after a
+/// sentence's first word the comma stays: "So, um, here" is "So, here").
 pub fn without(words: &[Word], locale: &str) -> Vec<Word> {
     let mut kept: Vec<Word> = Vec::new();
     let mut capitalize = false;
+    // Where the sentence being kept starts in `kept`.
+    let mut sentence = 0;
     for word in words {
         let text = word.text.trim();
         if is_filler(text, locale) {
             if text.starts_with(char::is_uppercase) {
                 capitalize = true;
             }
+            if kept.len() > sentence + 1
+                && let Some(last) = kept.last_mut()
+            {
+                last.text =
+                    replace_end(&last.text, |end| end.strip_suffix(',').map(str::to_string));
+            }
             if let Some(end) = text.chars().last().filter(|c| matches!(c, '.' | '?' | '!'))
                 && let Some(last) = kept.last_mut()
                 && !last.text.trim_end().ends_with(['.', '?', '!', '…'])
             {
-                last.text = format!("{}{end}", last.text.trim_end_matches([',', ';', ':']));
+                last.text = replace_end(&last.text, |text| {
+                    Some(format!("{}{end}", text.trim_end_matches([',', ';', ':'])))
+                });
                 capitalize = true;
             }
             continue;
@@ -112,19 +124,40 @@ pub fn without(words: &[Word], locale: &str) -> Vec<Word> {
             }
             capitalize = false;
         }
+        let ends = word.text.trim_end().ends_with(['.', '?', '!', '…']);
         kept.push(word);
+        if ends {
+            sentence = kept.len();
+        }
     }
     kept
 }
 
+/// `text` with `change` applied to it without its trailing spaces (the
+/// recognizer puts a word's space before or after it); unchanged when
+/// `change` gives `None`.
+fn replace_end(text: &str, change: impl Fn(&str) -> Option<String>) -> String {
+    let trimmed = text.trim_end();
+    match change(trimmed) {
+        Some(changed) => format!("{changed}{}", &text[trimmed.len()..]),
+        None => text.to_string(),
+    }
+}
+
+/// The quiet floor is taken as at least this loud (decibels): about a
+/// quiet room through a microphone. Digital silence (a recording that
+/// starts silent) would otherwise put the threshold below what audio
+/// compression leaves between words.
+const MIN_FLOOR: f32 = -60.0;
+
 /// The loudness above which a 10 ms stretch is speech: a third of the way
-/// from the quiet floor (the 10th percentile) to the speech level (the
-/// 90th), in decibels.
+/// from the quiet floor (the 10th percentile, at least [`MIN_FLOOR`]) to
+/// the speech level (the 90th), in decibels.
 fn threshold(levels: &[f32]) -> f32 {
     let mut db: Vec<f32> = levels.iter().map(|l| 20.0 * l.max(1e-6).log10()).collect();
     db.sort_by(f32::total_cmp);
     let at = |q: f64| db[((db.len() - 1) as f64 * q) as usize];
-    let (floor, speech) = (at(0.1), at(0.9));
+    let (floor, speech) = (at(0.1).max(MIN_FLOOR), at(0.9));
     let db = floor + (speech - floor).max(12.0) / 3.0;
     10f32.powf(db / 20.0)
 }
@@ -279,6 +312,41 @@ mod tests {
             text(without(&spoken, "en_US")),
             "So, here is the report. Revenue grew. Churn fell."
         );
+        // Commas around a filler within a sentence go with it.
+        let spoken = words(&[
+            ("Revenue", 0.0, 0.5),
+            (" grew", 0.5, 0.8),
+            (" by,", 0.8, 1.0),
+            (" um,", 1.0, 1.5),
+            (" 18%.", 1.5, 2.0),
+            (" And", 2.0, 2.2),
+            (" churn,", 2.2, 2.6),
+            (" hmm,", 2.6, 3.0),
+            (" went", 3.0, 3.2),
+            (" down.", 3.2, 3.5),
+        ]);
+        assert_eq!(
+            text(without(&spoken, "en_US")),
+            "Revenue grew by 18%. And churn went down."
+        );
+        // The same with each word's space after it, as some languages'
+        // models give them.
+        let spoken = words(&[
+            ("Uh, ", 0.0, 0.4),
+            ("revenue ", 0.4, 0.8),
+            ("grew ", 0.8, 1.0),
+            ("by, ", 1.0, 1.2),
+            ("um, ", 1.2, 1.5),
+            ("18%, ", 1.5, 2.0),
+            ("and ", 2.0, 2.2),
+            ("churn, ", 2.2, 2.6),
+            ("hmm. ", 2.6, 3.0),
+            ("Done.", 3.0, 3.5),
+        ]);
+        assert_eq!(
+            text(without(&spoken, "en_AU")),
+            "Revenue grew by 18%, and churn. Done."
+        );
     }
 
     /// Loudness at 100 per second: `loud` stretches (seconds) at 0.3,
@@ -360,6 +428,37 @@ mod tests {
         assert!(
             (cut.start - 0.42).abs() < 0.011 && (cut.end - 0.86).abs() < 0.011,
             "{cut:?}"
+        );
+    }
+
+    #[test]
+    fn finds_word_gaps_in_compressed_sound_after_digital_silence() {
+        // A silent start (digital zero) and gaps left at -85 dB by audio
+        // compression, with small bumps: still three separate islands.
+        let db = |d: f32| 10f32.powf(d / 20.0);
+        let mut sound = vec![1e-7f32; 100];
+        for (i, (len, loud)) in [(40, true), (25, false), (30, true), (25, false), (40, true)]
+            .iter()
+            .enumerate()
+        {
+            for k in 0..*len {
+                sound.push(if *loud {
+                    db(-20.0)
+                } else {
+                    db(if (k + i) % 4 == 0 { -82.0 } else { -88.0 })
+                });
+            }
+        }
+        let spoken = words(&[
+            (" by,", 1.0, 1.4),
+            (" um,", 1.4, 2.0),
+            (" eighteen", 2.0, 2.6),
+        ]);
+        let cuts = cuts(&spoken, &sound, "en_US");
+        assert_eq!(cuts.len(), 1, "{cuts:?}");
+        assert!(
+            (cuts[0].start - 1.62).abs() < 0.011 && (cuts[0].end - 2.16).abs() < 0.011,
+            "{cuts:?}"
         );
     }
 

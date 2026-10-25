@@ -125,6 +125,9 @@ fn main() -> ExitCode {
                         cues.len(),
                         started.elapsed().as_secs_f64()
                     );
+                    for w in words {
+                        eprintln!("word {:6.2} {:6.2} {:?}", w.start, w.end, w.text);
+                    }
                     for cut in fillers::cuts(words, &transcript.levels, &locale) {
                         eprintln!("filler cut {:.2} to {:.2}", cut.start, cut.end);
                     }
