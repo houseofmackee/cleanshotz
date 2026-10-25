@@ -362,6 +362,9 @@
 /* src/settings/mod.rs */
 "Cursor highlight" = "Cursor highlight";
 
+/* src/studio/window.rs */
+"Cuts “um”, “uh” and similar sounds from the recording." = "Cuts “um”, “uh” and similar sounds from the recording.";
+
 /* src/settings/mod.rs */
 "Dark background behind the text" = "Dark background behind the text";
 
@@ -633,6 +636,12 @@
 "Make Captions Again" = "Make Captions Again";
 
 /* src/studio/window.rs */
+"Make captions to find filler words such as “um” and “uh”." = "Make captions to find filler words such as “um” and “uh”.";
+
+/* src/studio/window.rs */
+"Make the captions again to find filler words." = "Make the captions again to find filler words.";
+
+/* src/studio/window.rs */
 "Make the captions again?" = "Make the captions again?";
 
 /* src/studio/window.rs */
@@ -682,6 +691,9 @@
 
 /* src/history/window.rs */
 "No Rating" = "No Rating";
+
+/* src/studio/window.rs */
+"No filler words were found." = "No filler words were found.";
 
 /* src/editor/window.rs */
 "No sensitive info found" = "No sensitive info found";
@@ -1249,6 +1261,15 @@
 
 /* src/video_editor/window.rs */
 "up to {size}" = "up to {size}";
+
+/* src/studio/window.rs */
+"{captions}, 1 filler word ({seconds} s)" = "{captions}, 1 filler word ({seconds} s)";
+
+/* src/studio/window.rs */
+"{captions}, no filler words" = "{captions}, no filler words";
+
+/* src/studio/window.rs */
+"{captions}, {n} filler words ({seconds} s)" = "{captions}, {n} filler words ({seconds} s)";
 
 /* src/settings/mod.rs */
 "{date} and {time} are replaced with the capture's date and time." = "{date} and {time} are replaced with the capture's date and time.";

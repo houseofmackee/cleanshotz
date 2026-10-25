@@ -208,9 +208,12 @@ fn export_reencoded(
         encode(
             &composition,
             &video_composition,
-            (width, height),
-            fps,
-            plan.bitrate(source_size, fps),
+            None,
+            Encoding {
+                size: (width, height),
+                fps,
+                bitrate: plan.bitrate(source_size, fps),
+            },
             watermark,
             output,
         )
@@ -240,9 +243,19 @@ pub fn watermark_in_place(path: &Path, watermark: &Overlay) -> Result<(), String
     result
 }
 
+/// How an export's video is encoded.
+pub struct Encoding {
+    /// In pixels.
+    pub size: (usize, usize),
+    pub fps: f64,
+    /// Bits per second.
+    pub bitrate: u64,
+}
+
 /// Encodes `composition` through `video_composition` (which draws the
-/// frames at `size` pixels) to an MP4 at `output`, with all audio tracks
-/// mixed into one stereo track, and `watermark` on every frame.
+/// frames at `encoding.size` pixels) to an MP4 at `output`, with all audio tracks
+/// mixed into one stereo track (through `audio_mix`, when given), and
+/// `watermark` on every frame.
 ///
 /// # Safety
 ///
@@ -250,12 +263,16 @@ pub fn watermark_in_place(path: &Path, watermark: &Overlay) -> Result<(), String
 pub unsafe fn encode(
     composition: &AVMutableComposition,
     video_composition: &objc2_av_foundation::AVMutableVideoComposition,
-    (width, height): (usize, usize),
-    fps: f64,
-    bitrate: u64,
+    audio_mix: Option<&objc2_av_foundation::AVAudioMix>,
+    encoding: Encoding,
     watermark: Option<&Overlay>,
     output: &Path,
 ) -> Result<(), String> {
+    let Encoding {
+        size: (width, height),
+        fps,
+        bitrate,
+    } = encoding;
     use objc2_av_foundation::{
         AVAssetReader, AVAssetReaderAudioMixOutput, AVAssetReaderOutput,
         AVAssetReaderVideoCompositionOutput, AVAssetWriter, AVAssetWriterInput,
@@ -316,6 +333,7 @@ pub unsafe fn encode(
                         ("AVLinearPCMIsNonInterleaved", number(0.0)),
                     ])),
                 );
+            out.setAudioMix(audio_mix);
             reader.addOutput(&out);
             out
         });

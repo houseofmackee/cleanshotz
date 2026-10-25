@@ -13,6 +13,11 @@ All notable changes to CleanShotZ. The format follows
   the language you pick. Captions can be shown at the bottom or top in
   any size, are burned into the export, can be corrected, played from,
   or removed in Edit Captions…, and can be exported as SRT or WebVTT.
+- Cut filler words in Studio recordings: Make Captions finds "um",
+  "uh", "erm", and similar sounds (in seven languages) and leaves them
+  out of the captions, and "Cut filler words" removes them from the
+  preview, the export, and exported subtitles, with short fades at the
+  cuts. The zoom track shows what is cut.
 
 ### Changed
 

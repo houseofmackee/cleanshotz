@@ -11,6 +11,7 @@ pub mod media;
 pub mod package;
 pub mod project;
 pub mod scene;
+pub mod timeline;
 mod track;
 mod window;
 pub mod zoom;

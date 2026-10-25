@@ -236,6 +236,15 @@ impl ZoomTrack {
         let duration = editor.duration();
         let lane = self.lane();
         draw::fill_rounded(lane, 6.0, &NSColor::colorWithWhite_alpha(0.5, 0.15));
+        // What is cut (filler words) is left out of the result.
+        let cut = NSColor::systemRedColor().colorWithAlphaComponent(0.3);
+        for span in editor.cuts() {
+            let (a, b) = (
+                self.x_at(span.start, duration),
+                self.x_at(span.end, duration),
+            );
+            draw::fill_rect(Rect::new(a, lane.y, (b - a).max(1.0), lane.height), &cut);
+        }
         let selected = editor.selected_zoom();
         let accent = NSColor::controlAccentColor();
         for (i, zoom) in editor.zooms().iter().enumerate() {

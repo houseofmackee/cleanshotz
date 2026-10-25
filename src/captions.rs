@@ -15,6 +15,16 @@ pub struct Word {
     pub end: f64,
 }
 
+/// What was said in a recording: the words, and the loudness of the sound
+/// (see [`crate::fillers::LEVELS_PER_SECOND`]).
+#[derive(Clone, Debug, Default, PartialEq, Deserialize)]
+pub struct Transcript {
+    #[serde(default)]
+    pub words: Vec<Word>,
+    #[serde(default)]
+    pub levels: Vec<f32>,
+}
+
 /// One caption on screen from `start` to `end` (seconds).
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct Cue {
@@ -170,7 +180,7 @@ mod speech {
     use std::ffi::{CStr, CString, c_char, c_void};
     use std::path::Path;
 
-    use super::{Locales, Word};
+    use super::{Locales, Transcript};
 
     type Progress = extern "C" fn(*mut c_void, f64);
 
@@ -221,11 +231,11 @@ mod speech {
         path: &Path,
         locale: &str,
         progress: &dyn Fn(f64),
-    ) -> Result<Vec<Word>, String> {
+    ) -> Result<Transcript, String> {
         #[derive(serde::Deserialize)]
         struct Outcome {
-            #[serde(default)]
-            words: Vec<Word>,
+            #[serde(flatten)]
+            transcript: Transcript,
             error: Option<String>,
         }
         let path = CString::new(path.to_string_lossy().as_bytes()).map_err(|e| e.to_string())?;
@@ -245,7 +255,7 @@ mod speech {
             serde_json::from_str(&json).map_err(|e| format!("unexpected transcription: {e}"))?;
         match outcome.error {
             Some(e) => Err(e),
-            None => Ok(outcome.words),
+            None => Ok(outcome.transcript),
         }
     }
 }
@@ -254,7 +264,7 @@ mod speech {
 mod speech {
     use std::path::Path;
 
-    use super::{Locales, Word};
+    use super::{Locales, Transcript};
 
     pub fn available() -> bool {
         false
@@ -268,7 +278,7 @@ mod speech {
         _path: &Path,
         _locale: &str,
         _progress: &dyn Fn(f64),
-    ) -> Result<Vec<Word>, String> {
+    ) -> Result<Transcript, String> {
         Err("this build of CleanShotZ cannot make captions".into())
     }
 }
@@ -285,13 +295,13 @@ pub fn locales() -> Locales {
 }
 
 /// The words said in the audio of `path` (a recording), in `locale`
-/// (`en_US`). Downloads the language's model the first time, reporting
+/// (`en_US`), and its loudness. Downloads the language's model the first time, reporting
 /// `progress` from 0 to 1. Blocks; call it off the main thread.
 pub fn transcribe(
     path: &std::path::Path,
     locale: &str,
     progress: &dyn Fn(f64),
-) -> Result<Vec<Word>, String> {
+) -> Result<Transcript, String> {
     speech::transcribe(path, locale, progress)
 }
 

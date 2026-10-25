@@ -87,6 +87,7 @@ struct CaptionControls {
     language: Retained<NSPopUpButton>,
     make: Retained<NSButton>,
     status: Retained<NSTextField>,
+    cut_fillers: Retained<NSButton>,
     show: Retained<NSButton>,
     place: Retained<NSPopUpButton>,
     size: Retained<NSSlider>,
@@ -111,7 +112,8 @@ pub struct Ivars {
     choices: RefCell<Vec<BackgroundChoice>>,
     window: OnceCell<Retained<NSWindow>>,
     player: OnceCell<Retained<AVPlayer>>,
-    item: OnceCell<Retained<AVPlayerItem>>,
+    /// Replaced when the cuts change.
+    item: RefCell<Option<Retained<AVPlayerItem>>>,
     ui: OnceCell<Ui>,
     track: OnceCell<Retained<ZoomTrack>>,
     /// The playhead observer, removed when the window closes.
@@ -218,7 +220,7 @@ impl StudioEditor {
             choices: RefCell::new(Vec::new()),
             window: OnceCell::new(),
             player: OnceCell::new(),
-            item: OnceCell::new(),
+            item: RefCell::new(None),
             ui: OnceCell::new(),
             track: OnceCell::new(),
             observer: OnceCell::new(),
@@ -278,6 +280,7 @@ impl StudioEditor {
             let item = AVPlayerItem::playerItemWithAsset(&prepared.composition, mtm);
             let video: &AVVideoComposition = &prepared.video;
             item.setVideoComposition(Some(video));
+            item.setAudioMix(prepared.audio.as_deref());
             let player = AVPlayer::playerWithPlayerItem(Some(&item), mtm);
             let view = AVPlayerView::initWithFrame(
                 AVPlayerView::alloc(mtm),
@@ -356,7 +359,7 @@ impl StudioEditor {
         let _ = self.ivars().ui.set(ui);
         self.load_languages();
         let _ = self.ivars().player.set(player);
-        let _ = self.ivars().item.set(item);
+        *self.ivars().item.borrow_mut() = Some(item);
         let _ = self.ivars().window.set(window.clone());
         self.sync_controls();
 
@@ -631,6 +634,8 @@ impl StudioEditor {
                 NSRect::new(NSPoint::new(x, y - 8.0), NSSize::new(width, 30.0)),
             );
             y -= ROW + 4.0;
+            let cut_fillers = check("Cut filler words", y);
+            y -= ROW;
             let show = check("Show captions", y);
             y -= ROW;
             label("Place:", y);
@@ -659,6 +664,7 @@ impl StudioEditor {
                 language,
                 make,
                 status,
+                cut_fillers,
                 show,
                 place: place_menu,
                 size,
@@ -845,6 +851,23 @@ impl StudioEditor {
         ] {
             control.setEnabled(captions.is_some());
         }
+        let fillers = captions.and_then(|c| c.fillers.as_ref());
+        ui.captions
+            .cut_fillers
+            .setEnabled(fillers.is_some_and(|f| !f.is_empty()) && !self.ivars().transcribing.get());
+        ui.captions.cut_fillers.setState(on(
+            project.cut_fillers && fillers.is_some_and(|f| !f.is_empty())
+        ));
+        ui.captions
+            .cut_fillers
+            .setToolTip(Some(&NSString::from_str(&match fillers {
+                _ if captions.is_none() => {
+                    t!("Make captions to find filler words such as “um” and “uh”.")
+                }
+                None => t!("Make the captions again to find filler words."),
+                Some(f) if f.is_empty() => t!("No filler words were found."),
+                Some(_) => t!("Cuts “um”, “uh” and similar sounds from the recording."),
+            })));
         let shown = captions.is_some_and(|c| c.visible);
         ui.captions.place.setEnabled(shown);
         ui.captions.size.setEnabled(shown);
@@ -973,6 +996,7 @@ impl StudioEditor {
             c.visible = ui.captions.show.state() == NSControlStateValueOn;
             c.top = ui.captions.place.indexOfSelectedItem() == 1;
             c.size = (ui.captions.size.doubleValue() * 10.0).round() / 10.0;
+            project.cut_fillers = ui.captions.cut_fillers.state() == NSControlStateValueOn;
         }
         project.watermark = if ui.watermark.show.state() == NSControlStateValueOn {
             // Turned on: the watermark from the settings.
@@ -1012,6 +1036,7 @@ impl StudioEditor {
     /// change in the preview.
     fn set_project(&self, project: Project) -> Result<(), String> {
         let ivars = self.ivars();
+        let before = ivars.renderer.borrow().timeline().clone();
         let renderer = Arc::new(Renderer::new(
             &ivars.package,
             &ivars.events,
@@ -1023,13 +1048,31 @@ impl StudioEditor {
         save_watermark(&ivars.package, project.watermark.as_ref());
         *ivars.project.borrow_mut() = project;
         *ivars.renderer.borrow_mut() = renderer.clone();
-        let (Some(item), Some(player)) = (ivars.item.get(), ivars.player.get()) else {
+        let item = ivars.item.borrow().clone();
+        let (Some(item), Some(player)) = (item, ivars.player.get()) else {
             return Ok(());
         };
         // SAFETY: AVFoundation objects on the main thread.
         unsafe {
+            let timeline = renderer.timeline().clone();
             let prepared = media::prepare(&ivars.package, renderer)?;
             let video: &AVVideoComposition = &prepared.video;
+            if timeline != before {
+                // Other cuts: a new item, at the same moment of the recording.
+                let at = before.to_recording(player.currentTime().seconds());
+                let item = AVPlayerItem::playerItemWithAsset(&prepared.composition, self.mtm());
+                item.setVideoComposition(Some(video));
+                item.setAudioMix(prepared.audio.as_deref());
+                player.replaceCurrentItemWithPlayerItem(Some(&item));
+                *ivars.item.borrow_mut() = Some(item);
+                let zero = CMTime::with_seconds(0.0, 600);
+                player.seekToTime_toleranceBefore_toleranceAfter(
+                    CMTime::with_seconds(timeline.to_output(at), 600),
+                    zero,
+                    zero,
+                );
+                return Ok(());
+            }
             item.setVideoComposition(Some(video));
             // Redraw the current frame when paused.
             if player.rate() == 0.0 {
@@ -1121,13 +1164,37 @@ impl StudioEditor {
         }
     }
 
-    /// Shows how many captions there are (nothing without captions).
+    /// Shows how many captions and filler words there are (nothing
+    /// without captions).
     fn show_caption_count(&self) {
         let count = self.caption_cues().len();
-        self.set_caption_status(&match count {
-            0 => String::new(),
+        let captions = match count {
+            0 => return self.set_caption_status(""),
             1 => t!("1 caption"),
             n => t!("{n} captions", n),
+        };
+        let fillers = self
+            .ivars()
+            .project
+            .borrow()
+            .captions
+            .as_ref()
+            .and_then(|c| c.fillers.clone());
+        self.set_caption_status(&match fillers.as_deref() {
+            None => captions,
+            Some([]) => t!("{captions}, no filler words", captions),
+            Some(f) => {
+                let seconds = format!("{:.1}", f.iter().map(|s| s.end - s.start).sum::<f64>());
+                match f.len() {
+                    1 => t!("{captions}, 1 filler word ({seconds} s)", captions, seconds),
+                    n => t!(
+                        "{captions}, {n} filler words ({seconds} s)",
+                        captions,
+                        n,
+                        seconds
+                    ),
+                }
+            }
         });
     }
 
@@ -1178,11 +1245,13 @@ impl StudioEditor {
         });
     }
 
-    fn captions_made(&self, locale: String, result: Result<Vec<crate::captions::Word>, String>) {
+    fn captions_made(&self, locale: String, result: Result<crate::captions::Transcript, String>) {
         self.ivars().transcribing.set(false);
         match result {
-            Ok(words) => {
-                let cues = crate::captions::make_cues(&words);
+            Ok(transcript) => {
+                let words = &transcript.words;
+                let cues = crate::captions::make_cues(&crate::fillers::without(words, &locale));
+                let fillers = crate::fillers::cuts(words, &transcript.levels, &locale);
                 if cues.is_empty() {
                     self.set_caption_status(&t!("No speech was found in the recording."));
                 } else {
@@ -1192,6 +1261,7 @@ impl StudioEditor {
                         language: locale,
                         cues,
                         visible: true,
+                        fillers: Some(fillers),
                         ..style
                     });
                     match self.set_project(project) {
@@ -1250,7 +1320,16 @@ impl StudioEditor {
     /// Saves the captions as SRT, or WebVTT for a `.vtt` name.
     fn export_subtitles(&self) {
         let mtm = self.mtm();
-        let cues = self.caption_cues();
+        // In the exported video's time.
+        let timeline = self.ivars().renderer.borrow().timeline().clone();
+        let cues: Vec<crate::captions::Cue> = self
+            .caption_cues()
+            .into_iter()
+            .filter_map(|c| {
+                let (start, end) = timeline.span_to_output(c.start, c.end)?;
+                Some(crate::captions::Cue { start, end, ..c })
+            })
+            .collect();
         if cues.is_empty() {
             return;
         }
@@ -1310,17 +1389,27 @@ impl StudioEditor {
         self.sync_controls();
     }
 
-    /// The playhead, in seconds.
+    /// The playhead, in the recording's time (seconds).
     pub fn current_time(&self) -> f64 {
-        self.ivars()
+        let t = self
+            .ivars()
             .player
             .get()
             // SAFETY: reading the player's time.
             .map_or(0.0, |p| unsafe { p.currentTime().seconds() })
-            .max(0.0)
+            .max(0.0);
+        self.ivars().renderer.borrow().timeline().to_recording(t)
     }
 
+    /// The parts of the recording cut from the result.
+    pub fn cuts(&self) -> Vec<crate::fillers::Span> {
+        self.ivars().renderer.borrow().timeline().cuts()
+    }
+
+    /// Moves the playhead to `t` in the recording's time (in a cut: to
+    /// where the result goes on).
     pub fn seek(&self, t: f64) {
+        let t = self.ivars().renderer.borrow().timeline().to_output(t);
         if let Some(player) = self.ivars().player.get() {
             // SAFETY: seeking a player on the main thread.
             unsafe {

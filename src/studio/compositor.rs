@@ -59,6 +59,8 @@ pub struct Renderer {
     /// Each shown caption's start, end and box, at [`PILL_FONT`] pixels.
     captions: Vec<(f64, f64, Retained<CIImage>)>,
     caption_style: Option<super::project::Captions>,
+    /// What is left after the cuts; frames are asked for in its time.
+    timeline: super::timeline::Timeline,
 }
 
 // SAFETY: Core Image images and contexts are immutable and documented as
@@ -152,7 +154,13 @@ impl Renderer {
                 })
                 .unwrap_or_default(),
             caption_style: project.captions.clone().filter(|c| c.visible),
+            timeline: super::timeline::Timeline::new(duration, &project.cuts()),
         })
+    }
+
+    /// The parts of the recording kept, and where they go.
+    pub fn timeline(&self) -> &super::timeline::Timeline {
+        &self.timeline
     }
 
     /// The view at `t`.
@@ -894,7 +902,11 @@ fn compose_request(request: &AVAsynchronousVideoCompositionRequest) -> Result<()
             .renderContext()
             .newPixelBuffer()
             .ok_or("no output buffer")?;
-        let t = request.compositionTime().seconds();
+        // The events, zooms and captions are in the recording's time.
+        let t = ivars
+            .renderer
+            .timeline()
+            .to_recording(request.compositionTime().seconds());
         // Outside the camera recording's time there is no camera frame.
         let camera = ivars.camera.and_then(|id| request.sourceFrameByTrackID(id));
         ivars

@@ -619,6 +619,21 @@ Group 4 of the October 2026 comparison.
     pre-renders each cue as an image and moves it clear of the keys when
     both are on the same side. The captions window
     (`src/studio/captions.rs`) edits the text in place.
+  - Filler words (`src/fillers.rs`): the transcriber keeps hesitation
+    sounds ("Um", "uh", "hmm"; "erm" comes back as "Um"), so they are
+    found in its words, per language ("um" is a word in Portuguese, "er"
+    in German). Its word times are approximate (a word's sound can run
+    0.3 s into the next word's time), so Swift also returns the sound's
+    RMS every 10 ms; the filler is the island of sound (between silences
+    longer than 60 ms) lying mostly inside its word's time. A cut runs
+    from 30 ms before that island to 40 ms before the next sound, taking
+    at most 0.4 s of the pause after it; a filler said without a pause
+    is cut at the word times instead.
+  - Cuts (`src/studio/timeline.rs`): the project, events, zooms, and
+    captions stay in the recording's time; the composition inserts only
+    the kept pieces (screen, audio, camera), the compositor maps each
+    frame's time back, and the window maps the playhead. The audio mix
+    fades 20 ms out and in at each join.
 
 ### Distribution
 - Status: the release workflow (`.github/workflows/release.yml`), `cargo

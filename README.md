@@ -444,6 +444,15 @@ in the Studio editor, where all of them can be changed afterwards:
   Edit Captions… lists them with their times to correct the wording,
   play from one, or remove one. Export Subtitles… saves them as SRT, or
   as WebVTT when the name ends in `.vtt`.
+- **Filler words:** Make Captions also finds hesitation sounds such as
+  "um", "uh", "erm", and "hmm" (in English, German, French, Spanish,
+  Italian, Dutch, and Portuguese), and leaves them out of the captions.
+  "Cut filler words" removes them from the recording, with the pause after
+  each one; the track under the video shows what is cut, and the export
+  and exported subtitles follow. Each cut starts where the filler's sound
+  starts and ends just before the next word, and the sound fades briefly
+  at each cut so it doesn't click. Words that are only sometimes fillers
+  ("like", "you know") stay.
 
 Export MP4 renders the result at 1080p, 1440p, 4K or the original size,
 at 60 frames per second and faster than real time, and shows it in Quick

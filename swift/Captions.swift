@@ -21,6 +21,8 @@ private struct Word: Encodable {
 
 private struct Outcome: Encodable {
     var words: [Word] = []
+    /// The loudness (RMS, 0 to 1) of every 10 ms of the sound.
+    var levels: [Float] = []
     var error: String?
 }
 
@@ -73,8 +75,8 @@ public func captionsLocales() -> UnsafeMutablePointer<CChar>? {
 }
 
 /// Transcribes the audio of `path` (an audio or video file) in `locale`, as
-/// JSON: `{"words": [{"text": " Hello", "start": 0.5, "end": 0.9}, ...]}`,
-/// or `{"error": "..."}`. Downloads the language's model first if needed,
+/// JSON: `{"words": [{"text": " Hello", "start": 0.5, "end": 0.9}, ...],
+/// "levels": [0.01, ...]}`, or `{"error": "..."}`. Downloads the language's model first if needed,
 /// reporting `progress`.
 @_cdecl("cleanshotz_captions_transcribe")
 public func captionsTranscribe(
@@ -91,9 +93,10 @@ public func captionsTranscribe(
     nonisolated(unsafe) let context = context
     let outcome = blocking {
         do {
-            return Outcome(words: try await transcribe(url, identifier) { fraction in
+            let (words, levels) = try await transcribe(url, identifier) { fraction in
                 progress?(context, fraction)
-            })
+            }
+            return Outcome(words: words, levels: levels)
         } catch {
             return Outcome(error: error.localizedDescription)
         }
@@ -106,7 +109,7 @@ private func transcribe(
     _ url: URL,
     _ identifier: String,
     progress: @escaping @Sendable (Double) -> Void
-) async throws -> [Word] {
+) async throws -> ([Word], [Float]) {
     guard
         let locale = await SpeechTranscriber.supportedLocale(
             equivalentTo: Locale(identifier: identifier))
@@ -131,6 +134,7 @@ private func transcribe(
     defer {
         if let temporary { try? FileManager.default.removeItem(at: temporary) }
     }
+    let levels = try loudness(of: AVAudioFile(forReading: audio.url))
     let analyzer = try await SpeechAnalyzer(
         inputAudioFile: audio, modules: [transcriber], finishAfterFile: true)
     _ = analyzer
@@ -142,7 +146,39 @@ private func transcribe(
             words.append(Word(text: text, start: range.start.seconds, end: range.end.seconds))
         }
     }
-    return words
+    return (words, levels)
+}
+
+/// The RMS loudness of every 10 ms of `file`, all channels together.
+private func loudness(of file: AVAudioFile) throws -> [Float] {
+    let format = file.processingFormat
+    let window = max(1, Int(format.sampleRate / 100))
+    let channels = Int(format.channelCount)
+    guard
+        let buffer = AVAudioPCMBuffer(
+            pcmFormat: format, frameCapacity: AVAudioFrameCount(window * 100))
+    else { return [] }
+    var levels: [Float] = []
+    var sum: Float = 0
+    var count = 0
+    while file.framePosition < file.length {
+        try file.read(into: buffer)
+        let frames = Int(buffer.frameLength)
+        guard frames > 0, let data = buffer.floatChannelData else { break }
+        for i in 0..<frames {
+            for c in 0..<channels {
+                let v = data[c][i]
+                sum += v * v
+            }
+            count += 1
+            if count == window {
+                levels.append((sum / Float(window * channels)).squareRoot())
+                sum = 0
+                count = 0
+            }
+        }
+    }
+    return levels
 }
 
 /// The file to read: `url` itself when it has one audio track, otherwise

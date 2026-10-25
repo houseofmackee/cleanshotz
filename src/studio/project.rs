@@ -27,6 +27,18 @@ pub struct Project {
     pub watermark: Option<crate::watermark::Style>,
     /// What is said, made with [`crate::captions`].
     pub captions: Option<Captions>,
+    /// Cut the filler words the captions found ([`Captions::fillers`]).
+    pub cut_fillers: bool,
+}
+
+impl Project {
+    /// The parts of the recording left out of the result.
+    pub fn cuts(&self) -> Vec<crate::fillers::Span> {
+        match &self.captions {
+            Some(c) if self.cut_fillers => c.fillers.clone().unwrap_or_default(),
+            _ => Vec::new(),
+        }
+    }
 }
 
 /// A recording's captions and how they look.
@@ -42,6 +54,9 @@ pub struct Captions {
     pub top: bool,
     /// 0.6 to 2 times the usual size.
     pub size: f64,
+    /// Where filler words ("um") were said, which [`Project::cut_fillers`]
+    /// cuts; `None` for captions made before filler words were found.
+    pub fillers: Option<Vec<crate::fillers::Span>>,
 }
 
 impl Default for Captions {
@@ -52,6 +67,7 @@ impl Default for Captions {
             visible: true,
             top: false,
             size: 1.0,
+            fillers: None,
         }
     }
 }
@@ -140,6 +156,7 @@ impl Default for Project {
             keys: KeysStyle::default(),
             watermark: None,
             captions: None,
+            cut_fillers: false,
         }
     }
 }

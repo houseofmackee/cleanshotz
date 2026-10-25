@@ -11,6 +11,7 @@ mod command;
 mod config;
 mod desktop_icons;
 mod editor;
+mod fillers;
 mod history;
 mod logging;
 mod ocr;
@@ -115,14 +116,18 @@ fn main() -> ExitCode {
             match captions::transcribe(std::path::Path::new(&args[1]), &locale, &|p| {
                 eprintln!("downloading the {locale} model: {:.0}%", p * 100.0)
             }) {
-                Ok(words) => {
-                    let cues = captions::make_cues(&words);
+                Ok(transcript) => {
+                    let words = &transcript.words;
+                    let cues = captions::make_cues(&fillers::without(words, &locale));
                     eprintln!(
                         "{} words, {} cues in {:.1} s ({locale})",
                         words.len(),
                         cues.len(),
                         started.elapsed().as_secs_f64()
                     );
+                    for cut in fillers::cuts(words, &transcript.levels, &locale) {
+                        eprintln!("filler cut {:.2} to {:.2}", cut.start, cut.end);
+                    }
                     print!("{}", captions::srt(&cues));
                     ExitCode::SUCCESS
                 }
