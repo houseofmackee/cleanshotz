@@ -63,6 +63,7 @@ struct Ui {
     captions: CaptionControls,
     zoom_level: Retained<NSSlider>,
     zoom_follow: Retained<NSButton>,
+    zoom_pick: Retained<NSButton>,
     zoom_delete: Retained<NSButton>,
     motion_blur: Retained<NSButton>,
     output: Retained<NSPopUpButton>,
@@ -116,6 +117,10 @@ pub struct Ivars {
     item: RefCell<Option<Retained<AVPlayerItem>>>,
     ui: OnceCell<Ui>,
     track: OnceCell<Retained<ZoomTrack>>,
+    /// The preview.
+    view: OnceCell<Retained<AVPlayerView>>,
+    /// Over the preview while choosing where a zoom stays.
+    picker: RefCell<Option<Retained<super::pick::PickOverlay>>>,
     /// The playhead observer, removed when the window closes.
     observer: OnceCell<Retained<AnyObject>>,
     /// The zoom selected in the track.
@@ -155,6 +160,16 @@ define_class!(
             }
             super::registry::remove(self.ivars().id);
         }
+
+        #[unsafe(method(windowDidResize:))]
+        fn window_did_resize(&self, _notification: &NSNotification) {
+            if let (Some(picker), Some(view)) =
+                (self.ivars().picker.borrow().as_ref(), self.ivars().view.get())
+            {
+                // SAFETY: reading the player view's video rectangle.
+                picker.set_video(unsafe { view.videoBounds() });
+            }
+        }
     }
 
     impl StudioEditor {
@@ -171,6 +186,15 @@ define_class!(
         #[unsafe(method(zoomChanged:))]
         fn zoom_changed(&self, _sender: &AnyObject) {
             self.apply_zoom_controls();
+        }
+
+        #[unsafe(method(pickZoomPoint:))]
+        fn pick_zoom_point(&self, _sender: &AnyObject) {
+            if self.ivars().picker.borrow().is_some() {
+                self.stop_picking();
+            } else {
+                self.start_picking();
+            }
         }
 
         #[unsafe(method(deleteZoom:))]
@@ -223,6 +247,8 @@ impl StudioEditor {
             item: RefCell::new(None),
             ui: OnceCell::new(),
             track: OnceCell::new(),
+            view: OnceCell::new(),
+            picker: RefCell::new(None),
             observer: OnceCell::new(),
             selected: std::cell::Cell::new(None),
             languages: RefCell::new(Vec::new()),
@@ -298,6 +324,7 @@ impl StudioEditor {
                 | NSAutoresizingMaskOptions::ViewHeightSizable,
         );
         content.addSubview(&view);
+        let _ = self.ivars().view.set(view.clone());
         let track = ZoomTrack::new(
             mtm,
             self.ivars().id,
@@ -521,6 +548,17 @@ impl StudioEditor {
             place(&b, NSRect::new(NSPoint::new(left, y), NSSize::new(w, 28.0)));
             b
         };
+        let zoom_pick = button(
+            "Choose Point in Preview",
+            sel!(pickZoomPoint:),
+            y,
+            x + 96.0,
+            width - 96.0,
+        );
+        zoom_pick.setToolTip(Some(&NSString::from_str(&t!(
+            "Click the preview where the selected zoom should stay"
+        ))));
+        y -= ROW + 2.0;
         let zoom_delete = button("Delete Zoom", sel!(deleteZoom:), y, x + 96.0, width - 96.0);
         y -= ROW + 2.0;
         button(
@@ -724,6 +762,7 @@ impl StudioEditor {
             captions,
             zoom_level,
             zoom_follow,
+            zoom_pick,
             zoom_delete,
             motion_blur,
             output,
@@ -903,9 +942,13 @@ impl StudioEditor {
         for control in [
             &*ui.zoom_level as &objc2_app_kit::NSControl,
             &ui.zoom_follow,
+            &ui.zoom_pick,
             &ui.zoom_delete,
         ] {
             control.setEnabled(selected.is_some());
+        }
+        if selected.is_none() && self.ivars().picker.borrow().is_some() {
+            self.stop_picking();
         }
         if let Some(zoom) = selected {
             ui.zoom_level.setDoubleValue(zoom.level);
@@ -1498,6 +1541,78 @@ impl StudioEditor {
         project.zooms.sort_by(|a, b| a.start.total_cmp(&b.start));
         ivars.selected.set(None);
         self.apply(project);
+    }
+
+    /// Puts the picker over the preview, to choose where the selected zoom
+    /// stays.
+    fn start_picking(&self) {
+        let (Some(view), Some(window)) = (self.ivars().view.get(), self.ivars().window.get())
+        else {
+            return;
+        };
+        if self.ivars().selected.get().is_none() {
+            return;
+        }
+        if let Some(player) = self.ivars().player.get() {
+            // SAFETY: plain player control on the main thread.
+            unsafe { player.pause() };
+        }
+        // SAFETY: reading the player view's video rectangle.
+        let video = unsafe { view.videoBounds() };
+        let picker =
+            super::pick::PickOverlay::new(self.mtm(), self.ivars().id, view.frame(), video);
+        picker.setAutoresizingMask(view.autoresizingMask());
+        if let Some(content) = window.contentView() {
+            content.addSubview_positioned_relativeTo(
+                &picker,
+                objc2_app_kit::NSWindowOrderingMode::Above,
+                Some(view),
+            );
+        }
+        window.makeFirstResponder(Some(&picker));
+        window.invalidateCursorRectsForView(&picker);
+        *self.ivars().picker.borrow_mut() = Some(picker);
+        if let Some(ui) = self.ivars().ui.get() {
+            ui.zoom_pick
+                .setTitle(&NSString::from_str(&t!("Cancel Choosing")));
+        }
+    }
+
+    pub fn stop_picking(&self) {
+        if let Some(picker) = self.ivars().picker.borrow_mut().take() {
+            picker.removeFromSuperview();
+        }
+        if let Some(ui) = self.ivars().ui.get() {
+            ui.zoom_pick
+                .setTitle(&NSString::from_str(&t!("Choose Point in Preview")));
+        }
+    }
+
+    /// The selected zoom stays on what the preview shows at `at`
+    /// (fractions of the video from its top left); the preview then shows
+    /// the middle of the zoom, fully zoomed in.
+    pub fn point_picked(&self, at: (f64, f64)) {
+        self.stop_picking();
+        let Some(index) = self.ivars().selected.get() else {
+            return;
+        };
+        let point = self
+            .ivars()
+            .renderer
+            .borrow()
+            .recording_point(self.current_time(), at);
+        let mut project = self.ivars().project.borrow().clone();
+        let Some(zoom) = project.zooms.get_mut(index) else {
+            return;
+        };
+        zoom.focus = Focus::Fixed {
+            x: point.x,
+            y: point.y,
+        };
+        zoom.auto = false;
+        let middle = (zoom.start + zoom.end) / 2.0;
+        self.apply(project);
+        self.seek(middle);
     }
 
     /// Reads the selected zoom's controls.

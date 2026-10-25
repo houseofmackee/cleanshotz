@@ -6,6 +6,18 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Choose where a Studio zoom stays by clicking the preview: select the
+  zoom, click Choose Point in Preview, then click the spot (Escape
+  cancels). The preview then shows the middle of the zoom.
+
+### Changed
+
+- A Studio zoom that stays put is centered on its point (as far as the
+  recording's edges allow), instead of stopping once the point is near
+  the middle.
+
 ## [0.9.0] - 2026-10-25
 
 ### Added

@@ -189,21 +189,26 @@ impl Camera {
                 .map(|z| (z, z.amount(t)))
                 .filter(|(_, a)| *a > 0.0)
                 .max_by(|a, b| a.1.total_cmp(&b.1));
-            let (level, target) = match active {
+            let (level, target, fixed) = match active {
                 Some((zoom, amount)) => {
                     let level = 1.0 + (zoom.level.clamp(MIN_LEVEL, MAX_LEVEL) - 1.0) * amount;
-                    let target = match zoom.focus {
-                        Focus::Fixed { x, y } => Point::new(x, y),
-                        Focus::Cursor => cursor(t + LOOK_AHEAD).or(cursor(t)).unwrap_or(center),
-                    };
-                    (level, target)
+                    match zoom.focus {
+                        Focus::Fixed { x, y } => (level, Point::new(x, y), true),
+                        Focus::Cursor => (
+                            level,
+                            cursor(t + LOOK_AHEAD).or(cursor(t)).unwrap_or(center),
+                            false,
+                        ),
+                    }
                 }
-                None => (1.0, whole),
+                None => (1.0, whole, false),
             };
             // Dead zone: the cursor may move within the middle part of the
-            // view without the view following.
+            // view without the view following. A fixed point is centered.
             let (half_w, half_h) = (size.0 / level / 2.0, size.1 / level / 2.0);
-            let goal = if level > 1.0 + 1e-6 {
+            let goal = if fixed {
+                target
+            } else if level > 1.0 + 1e-6 {
                 let (dx, dy) = (target.x - center.x, target.y - center.y);
                 let (zone_w, zone_h) = (half_w * 0.4, half_h * 0.4);
                 Point::new(
@@ -377,5 +382,27 @@ mod tests {
         });
         let view = camera.view(6.0).unwrap();
         assert!((view.center.x - 500.0).abs() < 1.0 && (view.center.y - 300.0).abs() < 1.0);
+        // Off center: centered on it (no dead zone), as far as the edges
+        // allow (at 2x the center stays within 250..750 by 150..450).
+        let off = |x: f64, y: f64| {
+            let zooms = [Zoom {
+                focus: Focus::Fixed { x, y },
+                ..zooms[0]
+            }];
+            Camera::new(&zooms, (1000.0, 600.0), 10.0, 60.0, |_| None)
+                .view(6.0)
+                .unwrap()
+                .center
+        };
+        let c = off(650.0, 380.0);
+        assert!(
+            (c.x - 650.0).abs() < 1.0 && (c.y - 380.0).abs() < 1.0,
+            "{c:?}"
+        );
+        let c = off(980.0, 20.0);
+        assert!(
+            (c.x - 750.0).abs() < 1.0 && (c.y - 150.0).abs() < 1.0,
+            "{c:?}"
+        );
     }
 }

@@ -427,8 +427,10 @@ in the Studio editor, where all of them can be changed afterwards:
   follow the pointer (looking a little ahead, so they arrive in time).
   The track under the video shows them: drag one to move it or its edges
   to resize it, double-click to add one, Delete to remove it. Each has a
-  level (1.25 to 4 times) and follows the pointer or stays put. Motion blur
-  is optional.
+  level (1.25 to 4 times) and follows the pointer or stays put. To choose
+  where a zoom stays, select it, click Choose Point in Preview, and click
+  that spot in the preview (Escape cancels); the zoom centers on it as far
+  as the recording's edges allow. Motion blur is optional.
 - **Camera** (when it was on): its corner, size and shape, or hidden.
 - **Keys** (when shown while recording): at the bottom or top, any size,
   or hidden.

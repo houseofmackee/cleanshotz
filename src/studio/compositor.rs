@@ -168,6 +168,17 @@ impl Renderer {
         self.scene.view(t)
     }
 
+    /// The point of the recorded area (points) shown at `(x, y)` in the
+    /// frame at `t` (the recording's time), as fractions of the frame's
+    /// width and height from its top left.
+    pub fn recording_point(&self, t: f64, (x, y): (f64, f64)) -> crate::capture::geometry::Point {
+        let (w, h) = self.scene.layout.canvas;
+        self.scene.canvas_to_recording(
+            crate::capture::geometry::Point::new(x * w, y * h),
+            self.scene.view(t),
+        )
+    }
+
     /// The rendered frame size in pixels.
     pub fn output(&self) -> (usize, usize) {
         self.output

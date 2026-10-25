@@ -357,6 +357,18 @@ impl Scene {
         )
     }
 
+    /// The point of the recorded area shown at `c` on the canvas through
+    /// `view` (the reverse of [`Self::to_canvas`]), kept inside the area.
+    pub fn canvas_to_recording(&self, c: Point, view: View) -> Point {
+        let left = view.center.x - self.area.0 / view.level / 2.0;
+        let top = view.center.y - self.area.1 / view.level / 2.0;
+        let per_point = view.level * self.scale;
+        Point::new(
+            (left + (c.x - self.layout.video.x) / per_point).clamp(0.0, self.area.0),
+            (top + (c.y - self.layout.video.y) / per_point).clamp(0.0, self.area.1),
+        )
+    }
+
     pub fn frame(&self, t: f64) -> Frame {
         let style = self.style;
         let view = self.view(t);
@@ -562,5 +574,26 @@ mod tests {
         assert_eq!(frame.clicks.len(), 1);
         assert!((frame.clicks[0].progress - 0.2).abs() < 1e-9);
         assert!(scene.frame(1.2).clicks.is_empty());
+    }
+
+    #[test]
+    fn maps_canvas_points_back_to_the_recording() {
+        let events = Events {
+            scale: 2.0,
+            ..Events::default()
+        };
+        let scene = Scene::new(&events, &Project::default(), (1000.0, 800.0), 1.0);
+        let zoomed = View {
+            level: 2.0,
+            center: Point::new(300.0, 150.0),
+        };
+        for view in [scene.view(0.0), zoomed] {
+            let p = Point::new(123.0, 234.0);
+            let back = scene.canvas_to_recording(scene.to_canvas(p, view), view);
+            assert!((back.x - p.x).abs() < 1e-9 && (back.y - p.y).abs() < 1e-9);
+        }
+        // On the background, outside the recording: its nearest edge.
+        let corner = scene.canvas_to_recording(Point::new(0.0, 0.0), scene.view(0.0));
+        assert_eq!(corner, Point::new(0.0, 0.0));
     }
 }

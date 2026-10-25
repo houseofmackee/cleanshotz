@@ -170,6 +170,9 @@
 /* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs, src/studio/window.rs, src/video_editor/window.rs */
 "Cancel" = "Cancel";
 
+/* src/studio/window.rs */
+"Cancel Choosing" = "Cancel Choosing";
+
 /* src/studio/captions.rs */
 "Caption at {time}" = "Caption at {time}";
 
@@ -212,6 +215,9 @@
 /* src/settings/mod.rs */
 "Check for updates automatically" = "Check for updates automatically";
 
+/* src/studio/window.rs */
+"Choose Point in Preview" = "Choose Point in Preview";
+
 /* src/settings/mod.rs */
 "Choose the camera and microphone before recording" = "Choose the camera and microphone before recording";
 
@@ -248,6 +254,9 @@
 /* src/steps/mod.rs */
 "Click in {app}." = "Click in {app}.";
 
+/* src/studio/window.rs */
+"Click the preview where the selected zoom should stay" = "Click the preview where the selected zoom should stay";
+
 /* src/steps/mod.rs */
 "Click the “{name}” field." = "Click the “{name}” field.";
 
@@ -259,6 +268,12 @@
 
 /* src/capture/flow.rs */
 "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel" = "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel";
+
+/* src/studio/pick.rs */
+"Click where the zoom should stay" = "Click where the zoom should stay";
+
+/* src/studio/pick.rs */
+"Click where the zoom should stay. Esc cancels." = "Click where the zoom should stay. Esc cancels.";
 
 /* src/steps/mod.rs */
 "Click “{name}”." = "Click “{name}”.";

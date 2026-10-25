@@ -9,6 +9,7 @@ pub mod compositor;
 pub mod events;
 pub mod media;
 pub mod package;
+mod pick;
 pub mod project;
 pub mod scene;
 pub mod timeline;

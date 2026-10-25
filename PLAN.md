@@ -721,8 +721,8 @@ Group 4 of the October 2026 comparison.
 
 1. **Needs the maintainer's account:** a Raycast username to publish the
    extension to the Raycast Store.
-2. **Smaller gaps:** picking a Studio zoom's fixed point by clicking the
-   preview; translating the History window's context menu titles.
+2. **Smaller gaps:** translating the History window's context menu
+   titles.
 3. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
    an M1, notch cropping on a notched display, printing to a printer, and
