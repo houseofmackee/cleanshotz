@@ -3,7 +3,14 @@
 Raycast commands for [CleanShotZ](https://github.com/houseofmackee/cleanshotz),
 the free and open source screenshot app for macOS. Every command opens a
 `cleanshotz://` URL, so CleanShotZ must be installed; nothing else is
-needed.
+needed. Install it with [Homebrew](https://brew.sh):
+
+```sh
+brew install --cask houseofmackee/tap/cleanshotz
+```
+
+or download it from the
+[releases](https://github.com/houseofmackee/cleanshotz/releases).
 
 | Command | What it does |
 | --- | --- |
@@ -33,6 +40,3 @@ npm run dev     # loads the extension into Raycast
 npm run build
 npm run lint
 ```
-
-Before publishing to the Raycast Store, set `author` in `package.json` to
-your Raycast username (`npm run lint` checks it).
