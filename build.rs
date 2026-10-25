@@ -7,7 +7,8 @@
 //!   Rust sees `cfg(captions)`.
 //!
 //! Without a Swift compiler the app builds without either; nothing else
-//! in Rust depends on them.
+//! in Rust depends on them. `CLEANSHOTZ_REQUIRE_CAPTIONS` makes a build
+//! without captions an error (releases set it).
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -23,9 +24,17 @@ fn main() {
     println!("cargo:rerun-if-changed={INTENTS}");
     println!("cargo:rerun-if-changed={CAPTIONS}");
     println!("cargo:rerun-if-env-changed=CLEANSHOTZ_NO_INTENTS");
+    println!("cargo:rerun-if-env-changed=CLEANSHOTZ_REQUIRE_CAPTIONS");
     println!("cargo::rustc-check-cfg=cfg(captions)");
-    if let Err(e) = build_swift() {
-        println!("cargo:warning=building without the Swift parts: {e}");
+    let captions = match build_swift() {
+        Ok(captions) => captions,
+        Err(e) => {
+            println!("cargo:warning=building without the Swift parts: {e}");
+            false
+        }
+    };
+    if !captions && std::env::var_os("CLEANSHOTZ_REQUIRE_CAPTIONS").is_some() {
+        panic!("CLEANSHOTZ_REQUIRE_CAPTIONS is set, but captions could not be built (they need Xcode 26 or later)");
     }
 }
 
@@ -71,7 +80,8 @@ impl Swift {
     }
 }
 
-fn build_swift() -> Result<(), String> {
+/// Builds the Swift parts; returns whether captions are in.
+fn build_swift() -> Result<bool, String> {
     let swift = Swift {
         root: PathBuf::from(std::env::var("CARGO_MANIFEST_DIR").map_err(|e| e.to_string())?),
         out: PathBuf::from(std::env::var("OUT_DIR").map_err(|e| e.to_string())?),
@@ -79,15 +89,19 @@ fn build_swift() -> Result<(), String> {
         swiftc: output(Command::new("xcrun").args(["--find", "swiftc"]))?,
     };
     let mut objects = Vec::new();
-    match swift.compile(CAPTIONS, "CleanShotZCaptions", &[]) {
+    let captions = match swift.compile(CAPTIONS, "CleanShotZCaptions", &[]) {
         Ok(object) => {
             objects.push(object);
             println!("cargo:rustc-cfg=captions");
             println!("cargo:rustc-link-lib=framework=Speech");
             println!("cargo:rustc-link-lib=framework=AVFoundation");
+            true
         }
-        Err(e) => println!("cargo:warning=building without captions: {e}"),
-    }
+        Err(e) => {
+            println!("cargo:warning=building without captions: {e}");
+            false
+        }
+    };
     if std::env::var_os("CLEANSHOTZ_NO_INTENTS").is_none() {
         match build_intents(&swift) {
             Ok(object) => {
@@ -98,7 +112,7 @@ fn build_swift() -> Result<(), String> {
         }
     }
     if objects.is_empty() {
-        return Ok(());
+        return Ok(false);
     }
 
     let library = swift.out.join("libCleanShotZSwift.a");
@@ -120,7 +134,7 @@ fn build_swift() -> Result<(), String> {
     println!("cargo:rustc-link-search=native={}", toolchain_lib.display());
     println!("cargo:rustc-link-search=native={}/usr/lib/swift", swift.sdk);
     println!("cargo:rustc-link-arg=-Wl,-rpath,/usr/lib/swift");
-    Ok(())
+    Ok(captions)
 }
 
 fn build_intents(swift: &Swift) -> Result<PathBuf, String> {

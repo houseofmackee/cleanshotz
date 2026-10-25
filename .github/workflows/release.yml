@@ -24,10 +24,13 @@ permissions:
 
 env:
   CARGO_TERM_COLOR: always
+  # Captions need the macOS 26 SDK (Xcode 26); fail rather than release
+  # without them.
+  CLEANSHOTZ_REQUIRE_CAPTIONS: 1
 
 jobs:
   release:
-    runs-on: macos-15
+    runs-on: macos-26
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@stable
