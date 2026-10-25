@@ -34,7 +34,9 @@ fn main() {
         }
     };
     if !captions && std::env::var_os("CLEANSHOTZ_REQUIRE_CAPTIONS").is_some() {
-        panic!("CLEANSHOTZ_REQUIRE_CAPTIONS is set, but captions could not be built (they need Xcode 26 or later)");
+        panic!(
+            "CLEANSHOTZ_REQUIRE_CAPTIONS is set, but captions could not be built (they need Xcode 26 or later)"
+        );
     }
 }
 
