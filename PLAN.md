@@ -601,7 +601,7 @@ Group 4 of the October 2026 comparison.
 - **Captions** for Studio recordings: subtitles made on the Mac with
   Apple's SpeechAnalyzer (macOS 26), editable in the Studio editor, and
   burned in or exported as SRT or WebVTT.
-- Status: done (unreleased). Notes:
+- Status: done in 0.9.0. Notes:
   - `swift/Captions.swift` wraps SpeechAnalyzer behind three C functions
     (available, locales, transcribe); `build.rs` compiles it with the
     App Intents into one static library and sets `cfg(captions)`, so the
