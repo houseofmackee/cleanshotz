@@ -17,6 +17,9 @@ All notable changes to CleanShotZ. The format follows
 - A Studio zoom that stays put is centered on its point (as far as the
   recording's edges allow), instead of stopping once the point is near
   the middle.
+- The History window's context menu, filters, empty-window messages, and
+  VoiceOver actions can be translated (they are in
+  `Localizable.strings`).
 
 ## [0.9.0] - 2026-10-25
 

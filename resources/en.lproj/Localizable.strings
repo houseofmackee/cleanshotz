@@ -81,6 +81,9 @@
 /* src/settings/mod.rs */
 "After capture:" = "After capture:";
 
+/* src/history/window.rs */
+"All" = "All";
+
 /* src/settings/mod.rs */
 "All keys" = "All keys";
 
@@ -104,8 +107,14 @@
 /* src/app/mod.rs */
 "An editor window has changes that were not saved or copied." = "An editor window has changes that were not saved or copied.";
 
+/* src/history/window.rs */
+"Annotate" = "Annotate";
+
 /* src/action.rs */
 "Annotate Clipboard Image" = "Annotate Clipboard Image";
+
+/* src/history/window.rs */
+"Annotate…" = "Annotate…";
 
 /* src/studio/window.rs */
 "Any changes you made to the captions are replaced." = "Any changes you made to the captions are replaced.";
@@ -208,6 +217,12 @@
 
 /* src/settings/mod.rs */
 "Capture:" = "Capture:";
+
+/* src/history/window.rs */
+"Captures" = "Captures";
+
+/* src/history/window.rs */
+"Captures and recordings will appear here" = "Captures and recordings will appear here";
 
 /* src/action.rs */
 "Check for Updates…" = "Check for Updates…";
@@ -320,6 +335,12 @@
 /* src/ocr/mod.rs */
 "Copied: {text}" = "Copied: {text}";
 
+/* src/history/window.rs */
+"Copy" = "Copy";
+
+/* src/history/window.rs */
+"Copy Link" = "Copy Link";
+
 /* src/editor/window.rs */
 "Copy Text" = "Copy Text";
 
@@ -383,6 +404,9 @@
 /* src/settings/mod.rs */
 "Dark background behind the text" = "Dark background behind the text";
 
+/* src/history/window.rs */
+"Delete" = "Delete";
+
 /* src/editor/window.rs */
 "Delete “{name}”" = "Delete “{name}”";
 
@@ -418,6 +442,12 @@
 
 /* src/history/window.rs */
 "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating." = "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating.";
+
+/* src/history/window.rs */
+"Edit Video" = "Edit Video";
+
+/* src/history/window.rs */
+"Edit Video…" = "Edit Video…";
 
 /* src/editor/tools.rs */
 "Ellipse" = "Ellipse";
@@ -707,6 +737,9 @@
 /* src/history/window.rs */
 "No Rating" = "No Rating";
 
+/* src/history/window.rs */
+"No captures match your search" = "No captures match your search";
+
 /* src/studio/window.rs */
 "No filler words were found." = "No filler words were found.";
 
@@ -757,6 +790,9 @@
 
 /* src/settings/mod.rs */
 "Opacity:" = "Opacity:";
+
+/* src/history/window.rs */
+"Open" = "Open";
 
 /* src/editor/window.rs */
 "Open Arrow" = "Open Arrow";
@@ -821,7 +857,7 @@
 /* src/editor/window.rs */
 "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions." = "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions.";
 
-/* src/editor/window.rs */
+/* src/editor/window.rs, src/history/window.rs */
 "Pin to Screen" = "Pin to Screen";
 
 /* src/pin.rs */
@@ -836,13 +872,16 @@
 /* src/editor/window.rs */
 "Plain Text" = "Plain Text";
 
+/* src/history/window.rs */
+"Play" = "Play";
+
 /* src/settings/mod.rs */
 "Play a sound" = "Play a sound";
 
 /* src/settings/mod.rs */
 "Position:" = "Position:";
 
-/* src/editor/window.rs */
+/* src/editor/window.rs, src/history/window.rs */
 "Print…" = "Print…";
 
 /* src/settings/mod.rs */
@@ -905,6 +944,9 @@
 /* src/history/window.rs, src/quick_access.rs */
 "Recording, {length}" = "Recording, {length}";
 
+/* src/history/window.rs */
+"Recordings" = "Recordings";
+
 /* src/settings/mod.rs */
 "Recordings and Studio exports" = "Recordings and Studio exports";
 
@@ -925,6 +967,9 @@
 
 /* src/action.rs */
 "Reload Settings" = "Reload Settings";
+
+/* src/history/window.rs */
+"Remove Rating" = "Remove Rating";
 
 /* src/steps/window.rs */
 "Remove Step" = "Remove Step";
@@ -1004,7 +1049,7 @@
 /* src/history/window.rs, src/quick_access.rs */
 "Screenshot, {width} by {height} pixels" = "Screenshot, {width} by {height} pixels";
 
-/* src/settings/mod.rs */
+/* src/history/window.rs, src/settings/mod.rs */
 "Screenshots" = "Screenshots";
 
 /* src/settings/mod.rs */
@@ -1070,6 +1115,9 @@
 /* src/settings/mod.rs */
 "Show a thumbnail after each capture" = "Show a thumbnail after each capture";
 
+/* src/history/window.rs */
+"Show in Finder" = "Show in Finder";
+
 /* src/settings/mod.rs */
 "Show the camera" = "Show the camera";
 
@@ -1096,6 +1144,12 @@
 
 /* src/editor/tools.rs */
 "Spotlight" = "Spotlight";
+
+/* src/history/window.rs */
+"Star" = "Star";
+
+/* src/history/window.rs */
+"Starred" = "Starred";
 
 /* src/settings/mod.rs */
 "Startup:" = "Startup:";
@@ -1132,6 +1186,9 @@
 
 /* src/history/window.rs */
 "Tags and Note" = "Tags and Note";
+
+/* src/history/window.rs */
+"Tags and Note…" = "Tags and Note…";
 
 /* src/editor/window.rs */
 "Tapered Arrow" = "Tapered Arrow";
@@ -1210,6 +1267,9 @@
 
 /* src/app/mod.rs */
 "Update to CleanShotZ {version}…" = "Update to CleanShotZ {version}…";
+
+/* src/history/window.rs */
+"Upload" = "Upload";
 
 /* src/settings/mod.rs */
 "Upload every capture automatically" = "Upload every capture automatically";

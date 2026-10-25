@@ -220,11 +220,11 @@ impl HistoryWindow {
 
         let show = NSSegmentedControl::new(mtm);
         show.setSegmentCount(4);
-        for (i, label) in ["All", "Screenshots", "Recordings", "Starred"]
+        for (i, label) in crate::i18n::labels(&["All", "Screenshots", "Recordings", "Starred"])
             .iter()
             .enumerate()
         {
-            show.setLabel_forSegment(&NSString::from_str(&crate::i18n::tr(label)), i as isize);
+            show.setLabel_forSegment(&NSString::from_str(label), i as isize);
         }
         show.setSelectedSegment(0);
         // SAFETY: the action exists on HistoryWindow.
@@ -357,28 +357,35 @@ impl HistoryWindow {
                 .expect("an accessibility element");
                 let recording = item.entry.kind.is_recording();
                 let mut commands = vec![
-                    (if recording { "Play" } else { "Open" }, tag::OPEN),
-                    (if recording { "Edit Video" } else { "Annotate" }, tag::EDIT),
-                    ("Copy", tag::COPY),
-                    ("Show in Finder", tag::SHOW_IN_FINDER),
+                    (if recording { t!("Play") } else { t!("Open") }, tag::OPEN),
+                    (
+                        if recording {
+                            t!("Edit Video")
+                        } else {
+                            t!("Annotate")
+                        },
+                        tag::EDIT,
+                    ),
+                    (t!("Copy"), tag::COPY),
+                    (t!("Show in Finder"), tag::SHOW_IN_FINDER),
                 ];
                 if !recording {
-                    commands.push(("Pin to Screen", tag::PIN));
-                    commands.push(("Print…", tag::PRINT));
+                    commands.push((t!("Pin to Screen"), tag::PIN));
+                    commands.push((t!("Print…"), tag::PRINT));
                 }
                 if crate::upload::enabled() {
-                    commands.push(("Upload", tag::UPLOAD));
+                    commands.push((t!("Upload"), tag::UPLOAD));
                 }
                 if item.entry.link.is_some() {
-                    commands.push(("Copy Link", tag::COPY_LINK));
+                    commands.push((t!("Copy Link"), tag::COPY_LINK));
                 }
-                commands.push(("Tags and Note…", tag::TAGS));
+                commands.push((t!("Tags and Note…"), tag::TAGS));
                 commands.push(if item.entry.rating > 0 {
-                    ("Remove Rating", tag::RATE)
+                    (t!("Remove Rating"), tag::RATE)
                 } else {
-                    ("Star", tag::RATE + 1)
+                    (t!("Star"), tag::RATE + 1)
                 });
-                commands.push(("Delete", tag::DELETE));
+                commands.push((t!("Delete"), tag::DELETE));
                 let actions: Vec<Retained<NSAccessibilityCustomAction>> = commands
                     .into_iter()
                     .filter(|(_, t)| item.exists || !needs_file(*t))
@@ -391,7 +398,7 @@ impl HistoryWindow {
                         });
                         NSAccessibilityCustomAction::initWithName_handler(
                             NSAccessibilityCustomAction::alloc(),
-                            &NSString::from_str(&crate::i18n::tr(name)),
+                            &NSString::from_str(&name),
                             Some(&block),
                         )
                     })
@@ -409,7 +416,7 @@ impl HistoryWindow {
             grid,
             // SAFETY: reading an AppKit constant.
             unsafe { objc2_app_kit::NSAccessibilityListRole },
-            "Captures",
+            &t!("Captures"),
             Some(&t!(
                 "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating."
             )),
@@ -483,14 +490,14 @@ impl HistoryWindow {
                 .get()
                 .is_some_and(|s| s.stringValue().length() > 0)
             {
-                "No captures match your search"
+                t!("No captures match your search")
             } else {
-                "Captures and recordings will appear here"
+                t!("Captures and recordings will appear here")
             };
-            let size = draw::text_size(message, 15.0, Weight::Medium);
+            let size = draw::text_size(&message, 15.0, Weight::Medium);
             let bounds = self.ivars().grid.get().map_or(dirty, |g| g.bounds());
             draw::draw_text(
-                message,
+                &message,
                 Point::new((bounds.size.width - size.width) / 2.0, 80.0),
                 15.0,
                 Weight::Medium,
@@ -651,30 +658,34 @@ impl HistoryWindow {
             menu.addItem(&menu_item);
         };
         let exists = item.exists;
-        add(if recording { "Play" } else { "Open" }, tag::OPEN, exists);
         add(
-            if recording {
-                "Edit Video…"
+            &if recording { t!("Play") } else { t!("Open") },
+            tag::OPEN,
+            exists,
+        );
+        add(
+            &if recording {
+                t!("Edit Video…")
             } else {
-                "Annotate…"
+                t!("Annotate…")
             },
             tag::EDIT,
             exists && item.entry.kind != Kind::Gif,
         );
-        add("Copy", tag::COPY, exists);
-        add("Show in Finder", tag::SHOW_IN_FINDER, exists);
+        add(&t!("Copy"), tag::COPY, exists);
+        add(&t!("Show in Finder"), tag::SHOW_IN_FINDER, exists);
         if !recording {
-            add("Pin to Screen", tag::PIN, exists);
-            add("Print…", tag::PRINT, exists);
+            add(&t!("Pin to Screen"), tag::PIN, exists);
+            add(&t!("Print…"), tag::PRINT, exists);
         }
         if crate::upload::enabled() {
-            add("Upload", tag::UPLOAD, exists);
+            add(&t!("Upload"), tag::UPLOAD, exists);
         }
         if item.entry.link.is_some() {
-            add("Copy Link", tag::COPY_LINK, true);
+            add(&t!("Copy Link"), tag::COPY_LINK, true);
         }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
-        add("Tags and Note…", tag::TAGS, true);
+        add(&t!("Tags and Note…"), tag::TAGS, true);
         let rating = NSMenu::new(mtm);
         for stars in 0..=5u8 {
             let title = if stars == 0 {
@@ -708,7 +719,7 @@ impl HistoryWindow {
         rating_item.setSubmenu(Some(&rating));
         menu.addItem(&rating_item);
         menu.addItem(&NSMenuItem::separatorItem(mtm));
-        add("Delete", tag::DELETE, true);
+        add(&t!("Delete"), tag::DELETE, true);
         menu
     }
 
