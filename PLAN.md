@@ -138,7 +138,7 @@ detectors, config) is kept free of AppKit so it is unit-testable with `cargo tes
 Each milestone ends with a usable build and tests for its pure-Rust parts.
 
 ### M0: Scaffolding (done)
-- Cargo workspace setup, lints (`clippy -D warnings`), `rustfmt`, CI (GitHub Actions on `macos-14`).
+- Cargo workspace setup, lints (`clippy -D warnings`), `rustfmt`, CI (GitHub Actions; on `macos-26` since 0.9.0, for the macOS 26 SDK that captions need).
 - `xtask bundle` producing a signed `.app` with `Info.plist` (`LSUIElement`,
   `NSScreenCaptureUsageDescription`, `NSMicrophoneUsageDescription`,
   `NSCameraUsageDescription`, URL scheme `cleanshotz`).
@@ -316,8 +316,12 @@ Each milestone ends with a usable build and tests for its pure-Rust parts.
   and `t!` marks the rest. Messages assembled at runtime use `t!` with
   named placeholders (`t!("{n} captures", n)`), filled in after
   translation; dates and file sizes use the system formatters. `cargo
-  xtask strings` extracts the template. Error details from the CLI, URL
-  scheme, pipelines and uploads stay English.
+  xtask strings` extracts the template; `n!` lists names that are also
+  identifiers (built-in backgrounds) and are translated where shown.
+  `cargo xtask strings --check` (in CI) fails when the template is stale
+  or a literal reaches an AppKit text method without `t!`. Error details
+  from the CLI, URL scheme, pipelines and uploads stay English, as do
+  default file names.
 - Performance (release build, measured): idle 0% CPU with no idle
   wakeups; ready about 0.15 s after launch; a full-resolution fullscreen
   capture is saved in about 0.28 s (mostly PNG encoding); memory stays
@@ -723,5 +727,7 @@ Group 4 of the October 2026 comparison.
    extension to the Raycast Store.
 2. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
-   an M1, notch cropping on a notched display, printing to a printer, and
-   captions of real speech (tested with synthesized speech).
+   an M1, notch cropping on a notched display, printing to a printer,
+   captions and filler word cuts of real speech (tested with synthesized
+   speech), and launching on macOS 14 and 15 (releases are built with the
+   macOS 26 SDK since 0.9.0).

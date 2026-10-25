@@ -79,7 +79,9 @@ the first time it is used.
 
 ## Development
 
-Requires a Rust toolchain (stable).
+Requires a Rust toolchain (stable). The Shortcuts actions need Xcode, and
+captions need Xcode 26 or later (the macOS 26 SDK); without them the app
+builds without those features (CI and releases require captions).
 
 ```sh
 cargo xtask run          # build, bundle into target/debug/CleanShotZ.app, launch
@@ -87,6 +89,8 @@ cargo xtask bundle       # bundle only
 cargo xtask bundle --release
 cargo test --workspace
 cargo clippy --workspace --all-targets -- -D warnings
+cargo xtask strings      # update resources/en.lproj/Localizable.strings
+cargo xtask strings --check
 ```
 
 `cargo xtask bundle --test` builds a separate "CleanShotZ Test" app with
