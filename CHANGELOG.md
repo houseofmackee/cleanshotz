@@ -6,6 +6,14 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Full-screen captures of a full-screen app on a notched display no
+  longer keep a thin black line at the top: full-screen apps can start a
+  point below the camera housing's safe area (33 points under a 32-point
+  inset on a 14-inch MacBook Pro), and up to 4 more black points are now
+  cropped with the band.
+
 ## [0.10.1] - 2026-10-25
 
 ### Fixed

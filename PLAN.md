@@ -572,8 +572,11 @@ Group 4 of the October 2026 comparison.
     captured just after the click, so it shows the click's effect (a
     checked box, a selected tab).
   - Starred captures are exempt from history pruning.
-  - Not tested on real hardware: notch cropping (needs a full-screen app
-    on a notched display) and printing to a real printer (tested with
+  - Notch cropping was tested on a 14-inch MacBook Pro (32-point safe
+    area): full-screen apps start 33 points down there, so up to 4 more
+    black points under the safe area are cropped too; with the menu bar
+    showing nothing is cropped.
+  - Not tested on real hardware: printing to a real printer (tested with
     the print panel and PDF).
 
 ### M15: Watermarks
@@ -730,7 +733,6 @@ Group 4 of the October 2026 comparison.
    extension to the Raycast Store.
 2. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
-   an M1, notch cropping on a notched display, printing to a printer,
-   captions and filler word cuts of real speech (tested with synthesized
-   speech), and launching on macOS 14 and 15 (releases are built with the
-   macOS 26 SDK since 0.9.0).
+   an M1, printing to a printer, captions and filler word cuts of real
+   speech (tested with synthesized speech), and launching on macOS 14 and
+   15 (releases are built with the macOS 26 SDK since 0.9.0).

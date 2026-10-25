@@ -91,16 +91,23 @@ pub fn capture_fullscreen(
     let notch = screen.safeAreaInsets().top;
     let image = match settings
         .crop_notch
-        .then(|| without_black_band(&image, (notch * scale).round() as usize))
+        .then(|| {
+            without_black_band(
+                &image,
+                (notch * scale).round() as usize,
+                (BAND_SLACK * scale).round() as usize,
+            )
+        })
         .flatten()
     {
-        Some(cropped) => {
-            tracing::info!(points = notch, "notch band cropped");
+        Some((cropped, rows)) => {
+            let points = rows as f64 / scale;
+            tracing::info!(points, "notch band cropped");
             source = Rect::new(
                 source.x,
-                source.y + notch,
+                source.y + points,
                 source.width,
-                source.height - notch,
+                source.height - points,
             );
             cropped
         }
@@ -118,26 +125,55 @@ pub fn capture_fullscreen(
     Ok(())
 }
 
-/// `image` without its top `rows` pixels, if those are black from edge to
-/// edge; `None` otherwise (or when there are none).
+/// Full-screen apps can start a little below the safe area (33 points
+/// under a 32-point inset on a 14-inch MacBook Pro); up to this many more
+/// black points are cropped with the band.
+const BAND_SLACK: f64 = 4.0;
+
+/// `image` without its black band at the top, and the band's height in
+/// pixels: at least `rows` rows black from edge to edge, plus up to
+/// `slack` more black rows right under them. `None` when those `rows` are
+/// not all black (or there are none).
 fn without_black_band(
     image: &objc2_core_graphics::CGImage,
     rows: usize,
-) -> Option<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>> {
+    slack: usize,
+) -> Option<(
+    objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>,
+    usize,
+)> {
     let (w, h) = image::pixel_size(image);
-    if rows == 0 || rows >= h / 4 {
+    if rows == 0 || rows + slack >= h / 4 {
         return None;
     }
-    let band = image::crop(image, Rect::new(0.0, 0.0, w as f64, rows as f64), 1.0)?;
-    let (_, _, pixels) = image::to_pixels(&band)?;
-    if !is_black(&pixels) {
-        return None;
-    }
-    image::crop(
+    let top = image::crop(
         image,
-        Rect::new(0.0, rows as f64, w as f64, (h - rows) as f64),
+        Rect::new(0.0, 0.0, w as f64, (rows + slack) as f64),
         1.0,
-    )
+    )?;
+    let (_, _, pixels) = image::to_pixels(&top)?;
+    let band = black_rows(&pixels, w, rows, slack)?;
+    let cropped = image::crop(
+        image,
+        Rect::new(0.0, band as f64, w as f64, (h - band) as f64),
+        1.0,
+    )?;
+    Some((cropped, band))
+}
+
+/// How many of the top rows of `pixels` (BGRA, `width` per row) are black:
+/// the first `rows` must be, then up to `slack` more count. `None` when
+/// the first `rows` are not.
+fn black_rows(pixels: &[u32], width: usize, rows: usize, slack: usize) -> Option<usize> {
+    if width == 0 || !is_black(pixels.get(..width * rows)?) {
+        return None;
+    }
+    let more = pixels[width * rows..]
+        .chunks(width)
+        .take(slack)
+        .take_while(|row| is_black(row))
+        .count();
+    Some(rows + more)
 }
 
 /// Whether every pixel (BGRA) is black, give or take a little noise.
@@ -314,13 +350,28 @@ mod tests {
             *p = 0xFF02_0202;
         }
         let image = image::from_pixels(w, h, &pixels).unwrap();
-        let cropped = without_black_band(&image, 10).expect("the band is cropped");
-        assert_eq!(image::pixel_size(&cropped), (40, 90));
+        let (cropped, rows) = without_black_band(&image, 10, 0).expect("the band is cropped");
+        assert_eq!((image::pixel_size(&cropped), rows), ((40, 90), 10));
         // A menu bar (light pixels in the band) stays.
         pixels[5] = 0xFFFF_FFFF;
         let with_menu_bar = image::from_pixels(w, h, &pixels).unwrap();
-        assert!(without_black_band(&with_menu_bar, 10).is_none());
+        assert!(without_black_band(&with_menu_bar, 10, 4).is_none());
         // No band on displays without a camera housing.
-        assert!(without_black_band(&image, 0).is_none());
+        assert!(without_black_band(&image, 0, 4).is_none());
+    }
+
+    #[test]
+    fn takes_a_few_more_black_rows_under_the_safe_area() {
+        let (w, black, light) = (4usize, 0xFF00_0000u32, 0xFFF0_F0F0u32);
+        let rows = |n_black: usize, n_light: usize| {
+            let mut p = vec![black; w * n_black];
+            p.extend(vec![light; w * n_light]);
+            p
+        };
+        // A 32-row safe area, with the app's content starting at row 34.
+        assert_eq!(black_rows(&rows(34, 8), w, 32, 8), Some(34));
+        // Dark content right under the band: at most `slack` more rows go.
+        assert_eq!(black_rows(&rows(60, 0), w, 32, 8), Some(40));
+        assert_eq!(black_rows(&rows(31, 10), w, 32, 8), None);
     }
 }
