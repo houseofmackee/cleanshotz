@@ -471,10 +471,10 @@ impl SettingsWindow {
                         && crate::upload::keychain::get(name).is_some();
                     let field = text_field(view);
                     field.setStringValue(ns_string!(""));
-                    field.setPlaceholderString(Some(&NSString::from_str(if stored {
-                        "Saved in the Keychain"
+                    field.setPlaceholderString(Some(&NSString::from_str(&if stored {
+                        t!("Saved in the Keychain")
                     } else {
-                        "Not set"
+                        t!("Not set")
                     })));
                 }
                 Bind::Folder(get, _) | Bind::ImageFile(get, _) => {
@@ -703,7 +703,7 @@ fn choose_image(mtm: MainThreadMarker) -> Option<String> {
 }
 
 fn choose_path(panel: &NSOpenPanel) -> Option<String> {
-    panel.setPrompt(Some(ns_string!("Choose")));
+    panel.setPrompt(Some(&NSString::from_str(&t!("Choose"))));
     if panel.runModal() != objc2_app_kit::NSModalResponseOK {
         return None;
     }
@@ -920,11 +920,11 @@ impl<'a> Form<'a> {
         clear.setImage(
             NSImage::imageWithSystemSymbolName_accessibilityDescription(
                 ns_string!("xmark.circle.fill"),
-                Some(ns_string!("Remove shortcut")),
+                Some(&NSString::from_str(&t!("Remove shortcut"))),
             )
             .as_deref(),
         );
-        clear.setToolTip(Some(ns_string!("Remove shortcut")));
+        clear.setToolTip(Some(&NSString::from_str(&t!("Remove shortcut"))));
         self.bind(&clear, Bind::ClearShortcut(action));
         let label = format!("{}:", tr(action.title()).trim_end_matches('…'));
         self.row(

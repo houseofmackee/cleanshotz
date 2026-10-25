@@ -305,7 +305,7 @@ fn control_bar(mtm: MainThreadMarker) -> (Retained<NSPanel>, Retained<NSTextFiel
         // process.
         let b = unsafe {
             NSButton::buttonWithTitle_target_action(
-                &NSString::from_str(&crate::i18n::tr(title)),
+                &NSString::from_str(title),
                 Some(target),
                 Some(action),
                 mtm,
@@ -314,8 +314,8 @@ fn control_bar(mtm: MainThreadMarker) -> (Retained<NSPanel>, Retained<NSTextFiel
         b.setFrame(NSRect::new(NSPoint::new(x, 8.0), NSSize::new(w, 28.0)));
         background.addSubview(&b);
     };
-    button("Done", sel!(done:), 326.0, 64.0);
-    button("Cancel", sel!(cancel:), 394.0, 66.0);
+    button(&t!("Done"), sel!(done:), 326.0, 64.0);
+    button(&t!("Cancel"), sel!(cancel:), 394.0, 66.0);
     panel.orderFrontRegardless();
     let text = t!("Click through the task; each click is a step.");
     status.setStringValue(&NSString::from_str(&text));

@@ -18,7 +18,7 @@ use objc2_av_foundation::{AVPlayer, AVPlayerItem};
 use objc2_av_kit::{AVPlayerView, AVPlayerViewControlsStyle, AVPlayerViewTrimResult};
 use objc2_core_media::{CMTime, CMTimeFlags};
 use objc2_foundation::{
-    NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL, ns_string,
+    NSNotification, NSObjectProtocol, NSPoint, NSRect, NSSize, NSString, NSURL,
 };
 
 use super::crop::CropView;
@@ -145,9 +145,9 @@ define_class!(
         fn crop_action(&self, _sender: &AnyObject) {
             let editing = self
                 .ivars()
-                .crop_button
+                .crop_view
                 .get()
-                .is_some_and(|b| b.title().to_string() == "Done");
+                .is_some_and(|v| v.is_editing());
             if editing {
                 self.end_cropping();
             } else {
@@ -156,7 +156,7 @@ define_class!(
                     unsafe { player.pause() };
                 }
                 if let Some(button) = self.ivars().crop_button.get() {
-                    button.setTitle(ns_string!("Done"));
+                    button.setTitle(&NSString::from_str(&t!("Done")));
                 }
                 if let Some(view) = self.ivars().crop_view.get() {
                     view.set_editing(true);
@@ -387,14 +387,14 @@ impl VideoEditor {
             place(view, x, w, left);
             view.setFrameOrigin(NSPoint::new(x, y));
         };
-        let trim = button("Trim…", sel!(trim:));
+        let trim = button(&t!("Trim…"), sel!(trim:));
         row(&trim, 12.0, 80.0, top);
-        let crop = button("Crop…", sel!(cropAction:));
+        let crop = button(&t!("Crop…"), sel!(cropAction:));
         row(&crop, 98.0, 80.0, top);
         // SAFETY: the action exists on VideoEditor.
         let mute = unsafe {
             NSButton::checkboxWithTitle_target_action(
-                &NSString::from_str("Mute"),
+                &NSString::from_str(&t!("Mute")),
                 Some(target),
                 Some(sel!(muteChanged:)),
                 mtm,
@@ -409,7 +409,8 @@ impl VideoEditor {
         let speed = popup(&speed_titles, sel!(speedChanged:));
         speed.selectItemAtIndex(plan::SPEEDS.iter().position(|s| *s == 1.0).unwrap_or(0) as isize);
         row(&speed, 258.0, 116.0, top);
-        let titles: Vec<&str> = Resolution::ALL.iter().map(|r| r.title()).collect();
+        let titles = crate::i18n::labels(&Resolution::ALL.map(|r| r.title()));
+        let titles: Vec<&str> = titles.iter().map(String::as_str).collect();
         let resolution = popup(&titles, sel!(resolutionChanged:));
         row(&resolution, 380.0, 126.0, top);
         let format = popup(&["MP4", "GIF"], sel!(formatChanged:));
@@ -429,7 +430,7 @@ impl VideoEditor {
         row(&watermark, 598.0, 104.0, top);
 
         // Bottom row: quality, what comes out, saving.
-        let quality_label = NSTextField::labelWithString(ns_string!("Quality"), mtm);
+        let quality_label = NSTextField::labelWithString(&NSString::from_str(&t!("Quality")), mtm);
         row(&quality_label, 14.0, 52.0, y - 6.0);
         // SAFETY: the action exists on VideoEditor.
         let quality = unsafe {
@@ -442,9 +443,9 @@ impl VideoEditor {
                 mtm,
             )
         };
-        quality.setToolTip(Some(ns_string!(
+        quality.setToolTip(Some(&NSString::from_str(&t!(
             "Moving this re-encodes the video at that quality; otherwise unchanged parts are copied"
-        )));
+        ))));
         row(&quality, 68.0, 130.0, y + 2.0);
         let estimate = NSTextField::labelWithString(&NSString::from_str(""), mtm);
         estimate.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
@@ -452,9 +453,9 @@ impl VideoEditor {
         let length = NSTextField::labelWithString(&NSString::from_str(""), mtm);
         length.setTextColor(Some(&objc2_app_kit::NSColor::secondaryLabelColor()));
         row(&length, 312.0, 248.0, y - 6.0);
-        let save = button("Save", sel!(save:));
+        let save = button(&t!("Save"), sel!(save:));
         place(&save, width - 92.0, 80.0, right);
-        let save_as = button("Save As…", sel!(saveAs:));
+        let save_as = button(&t!("Save As…"), sel!(saveAs:));
         place(&save_as, width - 194.0, 96.0, right);
         let _ = self.ivars().length.set(length);
         let _ = self.ivars().estimate.set(estimate);
@@ -579,7 +580,7 @@ impl VideoEditor {
 
     pub(super) fn end_cropping(&self) {
         if let Some(button) = self.ivars().crop_button.get() {
-            button.setTitle(ns_string!("Crop…"));
+            button.setTitle(&NSString::from_str(&t!("Crop…")));
         }
         if let Some(view) = self.ivars().crop_view.get() {
             view.set_editing(false);
@@ -702,7 +703,8 @@ impl VideoEditor {
                     Err(e) => {
                         tracing::error!(error = %e, "video export failed");
                         let alert = NSAlert::new(mtm);
-                        alert.setMessageText(&NSString::from_str("Could not export the video"));
+                        alert
+                            .setMessageText(&NSString::from_str(&t!("Could not export the video")));
                         alert.setInformativeText(&NSString::from_str(&e));
                         alert.runModal();
                     }

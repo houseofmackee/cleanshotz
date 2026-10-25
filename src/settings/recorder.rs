@@ -85,7 +85,7 @@ define_class!(
                     self.ivars().hinting.set(false);
                     self.set_title(&format!("{held}…"));
                 } else if !self.ivars().hinting.get() {
-                    self.set_title("Type shortcut…");
+                    self.set_title(&t!("Type shortcut…"));
                 }
             }
         }
@@ -139,7 +139,7 @@ impl ShortcutRecorder {
         self.ivars().recording.set(true);
         self.ivars().hinting.set(false);
         super::recording_changed(self.mtm(), true);
-        self.set_title("Type shortcut…");
+        self.set_title(&t!("Type shortcut…"));
         if let Some(window) = self.window() {
             window.makeFirstResponder(Some(self));
         }
@@ -163,7 +163,7 @@ impl ShortcutRecorder {
             return;
         }
         let Some(key) = key_name(u32::from(code)) else {
-            self.hint("That key can't be used");
+            self.hint(&t!("That key can't be used"));
             return;
         };
         let mut parts = Vec::new();
@@ -182,7 +182,7 @@ impl ShortcutRecorder {
         let shortcut = match Shortcut::parse(&text) {
             Ok(s) => s,
             Err(_) => {
-                self.hint("Add ⌘, ⌥ or ⌃");
+                self.hint(&t!("Add ⌘, ⌥ or ⌃"));
                 return;
             }
         };
@@ -192,7 +192,7 @@ impl ShortcutRecorder {
             && !shortcut.modifiers.option
             && !shortcut.modifiers.control;
         if only_shift && !key.starts_with('f') {
-            self.hint("Add ⌘, ⌥ or ⌃");
+            self.hint(&t!("Add ⌘, ⌥ or ⌃"));
             return;
         }
         self.finish(Outcome::Set(text));

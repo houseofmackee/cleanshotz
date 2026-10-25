@@ -662,7 +662,7 @@ impl AppDelegate {
         menu.addItem(&NSMenuItem::separatorItem(mtm));
         let record = self.menu_item(Action::RecordScreen);
         if crate::record::is_recording() {
-            record.setTitle(ns_string!("Stop Recording"));
+            record.setTitle(&NSString::from_str(&t!("Stop Recording")));
         }
         menu.addItem(&record);
         if !crate::record::is_recording() {
@@ -704,10 +704,10 @@ impl AppDelegate {
             let item = self.menu_item(action);
             let granted = permission.status() == Status::Granted;
             item.setState(state(granted));
-            item.setToolTip(Some(&NSString::from_str(if granted {
-                "Granted"
+            item.setToolTip(Some(&NSString::from_str(&if granted {
+                t!("Granted")
             } else {
-                "Not granted: click to request or open System Settings"
+                t!("Not granted: click to request or open System Settings")
             })));
             permissions.addItem(&item);
         }
@@ -878,7 +878,7 @@ fn main_menu(mtm: MainThreadMarker) -> Retained<NSMenu> {
         item
     };
     let edit = NSMenu::new(mtm);
-    edit.setTitle(ns_string!("Edit"));
+    edit.setTitle(&NSString::from_str(&t!("Edit")));
     edit.addItem(&item("Undo", sel!(undo:), "z", false));
     edit.addItem(&item("Redo", sel!(redo:), "z", true));
     edit.addItem(&NSMenuItem::separatorItem(mtm));

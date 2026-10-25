@@ -358,7 +358,7 @@ fn toggle_auto(mtm: MainThreadMarker) {
                 }
                 active
                     .auto_button
-                    .setTitle(&NSString::from_str("Auto-scroll"));
+                    .setTitle(&NSString::from_str(&t!("Auto-scroll")));
             }
         });
         return;
@@ -415,7 +415,9 @@ fn toggle_auto(mtm: MainThreadMarker) {
         if let State::Active(active) = &mut *s.borrow_mut() {
             active.last_added = Instant::now();
             active.auto_timer = Some(timer);
-            active.auto_button.setTitle(&NSString::from_str("Stop"));
+            active
+                .auto_button
+                .setTitle(&NSString::from_str(&t!("Stop")));
         }
     });
 }
@@ -508,7 +510,7 @@ fn control_bar(
     panel.setContentView(Some(&background));
 
     let status = NSTextField::labelWithString(
-        &NSString::from_str("Scroll down or sideways slowly, then click Done"),
+        &NSString::from_str(&t!("Scroll down or sideways slowly, then click Done")),
         mtm,
     );
     status.setTextColor(Some(&NSColor::whiteColor()));
@@ -536,9 +538,9 @@ fn control_bar(
         background.addSubview(&b);
         b
     };
-    let auto = button("Auto-scroll", sel!(autoScroll:), 334.0, 96.0);
-    button("Done", sel!(done:), 434.0, 64.0);
-    button("Cancel", sel!(cancel:), 502.0, 66.0);
+    let auto = button(&t!("Auto-scroll"), sel!(autoScroll:), 334.0, 96.0);
+    button(&t!("Done"), sel!(done:), 434.0, 64.0);
+    button(&t!("Cancel"), sel!(cancel:), 502.0, 66.0);
     panel.orderFrontRegardless();
     (panel, status, auto)
 }

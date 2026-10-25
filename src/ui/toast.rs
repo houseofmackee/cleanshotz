@@ -176,7 +176,7 @@ fn present(
             super::access::actions(
                 &view,
                 vec![(
-                    &name,
+                    name.clone(),
                     Box::new(move || {
                         hide();
                         if let Some(view) = run.load() {

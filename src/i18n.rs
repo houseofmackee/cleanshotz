@@ -94,6 +94,17 @@ pub fn labels(items: &[&str]) -> Vec<String> {
     items.iter().map(|item| tr(item)).collect()
 }
 
+/// Marks a string literal for translation without translating it: for
+/// names that also serve as identifiers (built-in background names), which
+/// are translated with [`tr`] where they are shown. `cargo xtask strings`
+/// lists them.
+#[macro_export]
+macro_rules! n {
+    ($text:literal) => {
+        $text
+    };
+}
+
 /// Marks a user-facing string literal for translation and translates it.
 /// Named placeholders take values after the template: `t!("{n} items", n)`
 /// uses the variable `n`, `t!("{n} items", n = list.len())` an expression.

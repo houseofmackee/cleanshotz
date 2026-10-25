@@ -442,10 +442,9 @@ impl KeyDisplay {
         } else {
             if Permission::InputMonitoring.status() != Status::Granted {
                 Permission::InputMonitoring.request();
-                return Err(
+                return Err(t!(
                     "Allow Input Monitoring for CleanShotZ, then record again to show keystrokes"
-                        .into(),
-                );
+                ));
             }
             let tap = event_tap()?;
             let source = CFMachPort::new_run_loop_source(None, Some(&tap), 0)

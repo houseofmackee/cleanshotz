@@ -23,6 +23,12 @@ All notable changes to CleanShotZ. The format follows
 - The Studio editor's sidebar, captions window, and zoom track, and the
   names of watermark positions, camera corners, and export sizes, are
   now listed in `Localizable.strings` for translators.
+- Text that was always shown in English is now translated: the pin
+  window's menu and actions, the recording controls, the scrolling and
+  step capture bars, the video editor's buttons, crop hint, and size
+  menu, the image editor's buttons, background menu, size dialog, and
+  alerts, the shortcut recorder's hints, Quick Access actions, and a few
+  Settings and menu bar texts.
 
 ## [0.9.0] - 2026-10-25
 

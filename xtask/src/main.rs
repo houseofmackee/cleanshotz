@@ -65,9 +65,9 @@ fn main() -> Result<()> {
         Some("dist") => dist()?,
         Some("create-dev-cert") => create_dev_cert()?,
         Some("create-release-cert") => create_release_cert()?,
-        Some("strings") => strings()?,
+        Some("strings") => strings(args.iter().any(|a| a == "--check"))?,
         _ => bail!(
-            "usage: cargo xtask <bundle|run> [--release] [--test] | dist | strings | create-dev-cert | create-release-cert"
+            "usage: cargo xtask <bundle|run> [--release] [--test] | dist | strings [--check] | create-dev-cert | create-release-cert"
         ),
     }
     Ok(())
@@ -895,9 +895,12 @@ fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
 /// translated where they are shown (see src/i18n.rs).
 const STRING_SINKS: &[&str] = &[
     "t!(",
+    "n!(",
     "labels(",
     "toast::show(",
+    "show_with_action(",
     "alert::show(",
+    "show_error(",
     "titled_item(",
     "push_button(",
     "checkbox(",
@@ -913,6 +916,8 @@ const FORM_METHODS: &[&str] = &[
     "number",
     "secret",
     "folder",
+    "image_file",
+    "updates",
     "button",
     "note",
     "row",
@@ -928,8 +933,10 @@ const TITLE_FILES: &[&str] = &[
     "src/watermark.rs",
 ];
 
-/// Writes `resources/en.lproj/Localizable.strings` from the source.
-fn strings() -> Result<()> {
+/// Writes `resources/en.lproj/Localizable.strings` from the source. With
+/// `check`, writes nothing and fails instead when the file is out of date
+/// or text reaches AppKit without being translated (see [`untranslated`]).
+fn strings(check: bool) -> Result<()> {
     let root = workspace_root();
     let mut found: std::collections::BTreeMap<String, std::collections::BTreeSet<String>> =
         Default::default();
@@ -962,6 +969,36 @@ fn strings() -> Result<()> {
         ));
     }
     let dir = root.join("resources/en.lproj");
+    if check {
+        let mut problems = Vec::new();
+        if fs::read_to_string(dir.join("Localizable.strings"))
+            .ok()
+            .as_deref()
+            != Some(&out)
+        {
+            problems.push(
+                "resources/en.lproj/Localizable.strings is out of date: run cargo xtask strings"
+                    .to_string(),
+            );
+        }
+        for file in &files {
+            let name = file
+                .strip_prefix(&root)
+                .unwrap_or(file)
+                .display()
+                .to_string();
+            for (line, text) in untranslated(&fs::read_to_string(file)?) {
+                problems.push(format!(
+                    "{name}:{line}: \"{text}\" is shown untranslated; use t!(\"{text}\")"
+                ));
+            }
+        }
+        if !problems.is_empty() {
+            bail!("{}", problems.join("\n"));
+        }
+        println!("{} strings, all listed and translated", found.len());
+        return Ok(());
+    }
     fs::create_dir_all(&dir)?;
     fs::write(dir.join("Localizable.strings"), out)?;
     println!(
@@ -1085,6 +1122,119 @@ fn literal_end(s: &str) -> Option<usize> {
     None
 }
 
+/// AppKit methods that show their text argument as is.
+const TEXT_SETTERS: &[&str] = &[
+    "setTitle(",
+    "setToolTip(",
+    "setStringValue(",
+    "labelWithString(",
+    "wrappingLabelWithString(",
+    "setPlaceholderString(",
+    "addItemWithTitle(",
+    "setMessageText(",
+    "setInformativeText(",
+    "addButtonWithTitle(",
+    "buttonWithTitle_target_action(",
+    "checkboxWithTitle_target_action(",
+    "setLabel_forSegment(",
+    "setAccessibilityLabel(",
+    "setAccessibilityHelp(",
+    "initWithTitle_action_keyEquivalent(",
+    "imageWithSystemSymbolName_accessibilityDescription(",
+    "initWithName_handler(",
+    "setPrompt(",
+    "setMessage(",
+    "setLabel(",
+];
+/// Names that are the same in every language.
+const UNTRANSLATED_NAMES: &[&str] = &["CleanShotZ", "CSZ"];
+
+/// Literals passed straight to a [`TEXT_SETTERS`] method (as
+/// `ns_string!("...")` or `NSString::from_str("...")`), which the user
+/// would see in English whatever the language: their line numbers and
+/// text. Symbol names and identifiers (lowercase, no spaces) are fine.
+fn untranslated(source: &str) -> Vec<(usize, String)> {
+    let source = source.split("#[cfg(test)]").next().unwrap_or(source);
+    // Comments hold examples; blank them, keeping the line numbers.
+    let source: String = source
+        .lines()
+        .map(|line| {
+            if line.trim_start().starts_with("//") {
+                ""
+            } else {
+                line
+            }
+        })
+        .collect::<Vec<_>>()
+        .join("\n");
+    let mut out = Vec::new();
+    for setter in TEXT_SETTERS {
+        for (at, _) in source.match_indices(setter) {
+            if source[..at]
+                .chars()
+                .next_back()
+                .is_some_and(|c| c.is_alphanumeric() || c == '_')
+            {
+                continue;
+            }
+            let args = &source[at + setter.len()..];
+            let args = &args[..call_end(args)];
+            for wrapper in ["ns_string!(", "NSString::from_str("] {
+                for (i, _) in args.match_indices(wrapper) {
+                    // The literal may start on the next line.
+                    let rest = args[i + wrapper.len()..].trim_start();
+                    let Some(rest) = rest.strip_prefix('"') else {
+                        continue;
+                    };
+                    let Some(end) = literal_end(rest) else {
+                        continue;
+                    };
+                    let text = &rest[..end];
+                    if text.chars().any(char::is_alphabetic)
+                        && !is_identifier_like(text)
+                        && !UNTRANSLATED_NAMES.contains(&text)
+                    {
+                        let line = source[..at + setter.len() + i + wrapper.len()]
+                            .lines()
+                            .count()
+                            .max(1);
+                        out.push((line, text.to_string()));
+                    }
+                }
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Where the call whose arguments `args` starts with ends: the index of
+/// its closing parenthesis (string literals skipped), or the end.
+fn call_end(args: &str) -> usize {
+    let mut depth = 0usize;
+    let mut chars = args.char_indices();
+    while let Some((i, c)) = chars.next() {
+        match c {
+            '"' => {
+                let rest = &args[i + 1..];
+                let Some(end) = literal_end(rest) else {
+                    return args.len();
+                };
+                // Skip to the closing quote.
+                for _ in 0..rest[..end].chars().count() + 1 {
+                    chars.next();
+                }
+            }
+            '(' | '[' | '{' => depth += 1,
+            ')' | ']' | '}' if depth == 0 => return i,
+            ')' | ']' | '}' => depth -= 1,
+            _ => {}
+        }
+    }
+    args.len()
+}
+
 /// Lowercase words such as tab ids and setting values, which are not
 /// shown as text.
 fn is_identifier_like(s: &str) -> bool {
@@ -1105,6 +1255,37 @@ fn run(command: &mut Command) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_text_shown_untranslated() {
+        let source = r#"
+fn build() {
+    window.setTitle(ns_string!("Capture History"));
+    label.setStringValue(&NSString::from_str(&t!("Fine")));
+    // button.setTitle(ns_string!("Just a comment"));
+    let image = NSImage::imageWithSystemSymbolName_accessibilityDescription(
+        &NSString::from_str("play.fill"),
+        Some(&NSString::from_str("Play from here")),
+    );
+    item.setTitle(ns_string!("CleanShotZ"));
+    tip.setToolTip(Some(&NSString::from_str(if on { "On" } else { "Off" })));
+    quality.setToolTip(Some(ns_string!(
+        "Moving this re-encodes the video"
+    )));
+    alert.setMessageText(&NSString::from_str(title));
+}
+#[cfg(test)]
+mod tests { fn t() { x.setTitle(ns_string!("In a test")); } }
+"#;
+        assert_eq!(
+            untranslated(source),
+            vec![
+                (3, "Capture History".to_string()),
+                (8, "Play from here".to_string()),
+                (12, "Moving this re-encodes the video".to_string()),
+            ]
+        );
+    }
 
     #[test]
     fn writes_release_notes_from_the_changelog() {

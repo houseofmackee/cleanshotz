@@ -373,31 +373,35 @@ fn describe_card(view: &CardView, id: u64, item: &Item) {
         )),
     );
     let video = item.is_video();
-    let mut list: Vec<(&str, Button)> = vec![
-        ("Copy", Button::Copy),
+    let mut list: Vec<(String, Button)> = vec![
+        (t!("Copy"), Button::Copy),
         (
             if item.is_saved() {
-                "Show in Finder"
+                t!("Show in Finder")
             } else {
-                "Save"
+                t!("Save")
             },
             Button::Save,
         ),
         (
-            if video { "Edit Video" } else { "Annotate" },
+            if video {
+                t!("Edit Video")
+            } else {
+                t!("Annotate")
+            },
             Button::Annotate,
         ),
     ];
     if !video {
-        list.push(("Pin to Screen", Button::Pin));
+        list.push((t!("Pin to Screen"), Button::Pin));
     }
     if item.is_window_capture() {
-        list.push(("Add Background", Button::Background));
+        list.push((t!("Add Background"), Button::Background));
     }
     if crate::upload::enabled() {
-        list.push(("Upload", Button::Upload));
+        list.push((t!("Upload"), Button::Upload));
     }
-    list.push(("Close", Button::Close));
+    list.push((t!("Close"), Button::Close));
     access::actions(
         view,
         list.into_iter()

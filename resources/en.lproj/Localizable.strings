@@ -69,6 +69,12 @@
 /* src/action.rs */
 "Accessibility" = "Accessibility";
 
+/* src/pin.rs */
+"Actual Size" = "Actual Size";
+
+/* src/quick_access.rs */
+"Add Background" = "Add Background";
+
 /* src/editor/window.rs */
 "Add Image Below…" = "Add Image Below…";
 
@@ -80,6 +86,9 @@
 
 /* src/settings/mod.rs */
 "Add to new:" = "Add to new:";
+
+/* src/settings/recorder.rs */
+"Add ⌘, ⌥ or ⌃" = "Add ⌘, ⌥ or ⌃";
 
 /* src/settings/mod.rs */
 "After capture:" = "After capture:";
@@ -99,6 +108,9 @@
              Recording, then try again. macOS may ask you to reopen the app.";
 
 /* src/record/overlays.rs */
+"Allow Input Monitoring for CleanShotZ, then record again to show keystrokes" = "Allow Input Monitoring for CleanShotZ, then record again to show keystrokes";
+
+/* src/record/overlays.rs */
 "Allow camera access, then record again to include the camera" = "Allow camera access, then record again to include the camera";
 
 /* src/record/session.rs */
@@ -110,7 +122,7 @@
 /* src/app/mod.rs */
 "An editor window has changes that were not saved or copied." = "An editor window has changes that were not saved or copied.";
 
-/* src/history/window.rs */
+/* src/history/window.rs, src/quick_access.rs */
 "Annotate" = "Annotate";
 
 /* src/action.rs */
@@ -121,6 +133,9 @@
 
 /* src/studio/window.rs */
 "Any changes you made to the captions are replaced." = "Any changes you made to the captions are replaced.";
+
+/* src/pin.rs */
+"Arrange All Pins" = "Arrange All Pins";
 
 /* src/action.rs */
 "Arrange Pinned Screenshots" = "Arrange Pinned Screenshots";
@@ -137,6 +152,9 @@
 /* src/editor/model.rs */
 "Auto" = "Auto";
 
+/* src/scroll/session.rs */
+"Auto-scroll" = "Auto-scroll";
+
 /* src/settings/mod.rs */
 "Automatic" = "Automatic";
 
@@ -148,6 +166,9 @@
 
 /* src/editor/window.rs */
 "Before and After.gif" = "Before and After.gif";
+
+/* src/editor/presets.rs */
+"Black" = "Black";
 
 /* src/editor/tools.rs */
 "Blur" = "Blur";
@@ -185,7 +206,7 @@
 /* src/settings/mod.rs */
 "Camera:" = "Camera:";
 
-/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/steps/window.rs, src/studio/window.rs, src/video_editor/window.rs */
+/* src/app/mod.rs, src/editor/window.rs, src/history/window.rs, src/record/ready.rs, src/scroll/session.rs, src/steps/session.rs, src/steps/window.rs, src/studio/window.rs, src/video_editor/window.rs */
 "Cancel" = "Cancel";
 
 /* src/studio/window.rs */
@@ -211,6 +232,9 @@
 
 /* src/action.rs */
 "Capture Fullscreen" = "Capture Fullscreen";
+
+/* src/history/window.rs */
+"Capture History" = "Capture History";
 
 /* src/action.rs */
 "Capture History…" = "Capture History…";
@@ -244,6 +268,12 @@
 
 /* src/settings/mod.rs */
 "Check for updates automatically" = "Check for updates automatically";
+
+/* src/settings/mod.rs */
+"Choose" = "Choose";
+
+/* src/editor/window.rs */
+"Choose Image…" = "Choose Image…";
 
 /* src/studio/window.rs */
 "Choose Point in Preview" = "Choose Point in Preview";
@@ -299,6 +329,9 @@
 /* src/capture/flow.rs */
 "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel" = "Click to copy a color · Drag for the average of an area · Shift for rgb() · Esc to cancel";
 
+/* src/ocr/mod.rs */
+"Click to open" = "Click to open";
+
 /* src/studio/pick.rs */
 "Click where the zoom should stay" = "Click where the zoom should stay";
 
@@ -319,6 +352,12 @@
 
 /* src/settings/mod.rs */
 "Client ID:" = "Client ID:";
+
+/* src/editor/mod.rs */
+"Clipboard Image" = "Clipboard Image";
+
+/* src/pin.rs, src/quick_access.rs */
+"Close" = "Close";
 
 /* src/action.rs */
 "Close All Pinned Screenshots" = "Close All Pinned Screenshots";
@@ -353,14 +392,20 @@
 /* src/ocr/mod.rs */
 "Copied: {text}" = "Copied: {text}";
 
-/* src/history/window.rs */
+/* src/editor/window.rs, src/history/window.rs, src/pin.rs, src/quick_access.rs */
 "Copy" = "Copy";
+
+/* src/editor/window.rs */
+"Copy Image" = "Copy Image";
 
 /* src/history/window.rs */
 "Copy Link" = "Copy Link";
 
 /* src/editor/window.rs */
 "Copy Text" = "Copy Text";
+
+/* src/editor/mod.rs */
+"Copy an image first, then try again." = "Copy an image first, then try again.";
 
 /* src/settings/mod.rs */
 "Copy to the clipboard" = "Copy to the clipboard";
@@ -383,6 +428,9 @@
 /* src/record/session.rs */
 "Could not create the GIF" = "Could not create the GIF";
 
+/* src/editor/window.rs */
+"Could not delete the preset" = "Could not delete the preset";
+
 /* src/watermark.rs */
 "Could not draw the preview" = "Could not draw the preview";
 
@@ -392,11 +440,32 @@
 /* src/steps/export.rs */
 "Could not export the guide" = "Could not export the guide";
 
+/* src/video_editor/window.rs */
+"Could not export the video" = "Could not export the video";
+
+/* src/editor/mod.rs */
+"Could not open the file" = "Could not open the file";
+
 /* src/studio/mod.rs */
 "Could not open the recording" = "Could not open the recording";
 
+/* src/editor/mod.rs */
+"Could not read the clipboard image" = "Could not read the clipboard image";
+
+/* src/editor/window.rs */
+"Could not read the desktop picture" = "Could not read the desktop picture";
+
+/* src/editor/window.rs */
+"Could not save" = "Could not save";
+
 /* src/editor/window.rs */
 "Could not save the GIF" = "Could not save the GIF";
+
+/* src/editor/window.rs */
+"Could not save the preset" = "Could not save the preset";
+
+/* src/editor/window.rs */
+"Could not save the project" = "Could not save the project";
 
 /* src/studio/window.rs */
 "Could not save the subtitles" = "Could not save the subtitles";
@@ -407,6 +476,9 @@
 /* src/record/session.rs */
 "Could not start recording" = "Could not start recording";
 
+/* src/editor/window.rs */
+"Could not use the preset" = "Could not use the preset";
+
 /* src/settings/mod.rs */
 "Countdown:" = "Countdown:";
 
@@ -416,8 +488,14 @@
 /* src/editor/tools.rs */
 "Crop" = "Crop";
 
+/* src/video_editor/crop.rs */
+"Crop area" = "Crop area";
+
 /* src/settings/mod.rs */
 "Crop the notch from full-screen apps" = "Crop the notch from full-screen apps";
+
+/* src/video_editor/window.rs */
+"Crop…" = "Crop…";
 
 /* src/studio/window.rs */
 "Cursor" = "Cursor";
@@ -443,14 +521,20 @@
 /* src/editor/window.rs */
 "Delete “{name}”" = "Delete “{name}”";
 
-/* src/studio/window.rs */
+/* src/editor/window.rs, src/studio/window.rs */
 "Desktop Wallpaper" = "Desktop Wallpaper";
 
-/* src/steps/window.rs */
+/* src/editor/window.rs, src/steps/window.rs */
 "Discard" = "Discard";
 
 /* src/steps/window.rs */
 "Discard this guide?" = "Discard this guide?";
+
+/* src/editor/window.rs */
+"Discard your changes?" = "Discard your changes?";
+
+/* src/scroll/session.rs, src/steps/session.rs, src/video_editor/window.rs */
+"Done" = "Done";
 
 /* src/editor/window.rs */
 "Double Arrow" = "Double Arrow";
@@ -464,6 +548,9 @@
 /* src/video_editor/crop.rs */
 "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop." = "Drag over the video to choose the area to keep. Return when done, Escape to remove the crop.";
 
+/* src/video_editor/crop.rs */
+"Drag to choose the area to keep · Return when done · Escape to clear" = "Drag to choose the area to keep · Return when done · Escape to clear";
+
 /* src/record/session.rs */
 "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel" = "Drag to record an area · Click to record the screen · Space for a window · Esc to cancel";
 
@@ -476,10 +563,13 @@
 /* src/history/window.rs */
 "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating." = "Each capture has actions to open, copy, tag, show in Finder and more. Press 1 to 5 to rate the selected capture, 0 to remove its rating.";
 
+/* src/app/mod.rs */
+"Edit" = "Edit";
+
 /* src/studio/window.rs */
 "Edit Captions…" = "Edit Captions…";
 
-/* src/history/window.rs */
+/* src/history/window.rs, src/quick_access.rs */
 "Edit Video" = "Edit Video";
 
 /* src/history/window.rs */
@@ -557,6 +647,9 @@
 /* src/settings/mod.rs */
 "For a single capture, use Add Watermark in the editor or the Watermark checkbox in the video editor." = "For a single capture, use Add Watermark in the editor or the Watermark checkbox in the video editor.";
 
+/* src/editor/presets.rs */
+"Forest" = "Forest";
+
 /* src/settings/mod.rs */
 "Format:" = "Format:";
 
@@ -593,6 +686,9 @@
 /* src/app/mod.rs */
 "Grant Access" = "Grant Access";
 
+/* src/app/mod.rs */
+"Granted" = "Granted";
+
 /* src/steps/export.rs */
 "Guide" = "Guide";
 
@@ -613,6 +709,9 @@
 
 /* src/editor/window.rs */
 "Hand-drawn" = "Hand-drawn";
+
+/* src/editor/window.rs */
+"Height:" = "Height:";
 
 /* src/settings/mod.rs */
 "Hide desktop icons and widgets" = "Hide desktop icons and widgets";
@@ -635,11 +734,14 @@
 /* src/steps/window.rs */
 "How to …" = "How to …";
 
-/* src/settings/mod.rs */
+/* src/editor/window.rs, src/settings/mod.rs */
 "Image" = "Image";
 
 /* src/editor/window.rs */
 "Image, {width} by {height} points, {annotations}. Tool: {tool}" = "Image, {width} by {height} points, {annotations}. Tool: {tool}";
+
+/* src/settings/mod.rs */
+"Image:" = "Image:";
 
 /* src/settings/mod.rs */
 "Imgur" = "Imgur";
@@ -707,6 +809,9 @@
 /* src/studio/window.rs */
 "Level:" = "Level:";
 
+/* src/editor/presets.rs */
+"Light Gray" = "Light Gray";
+
 /* src/editor/tools.rs */
 "Line" = "Line";
 
@@ -718,6 +823,9 @@
 
 /* src/studio/window.rs */
 "Loading…" = "Loading…";
+
+/* src/pin.rs */
+"Lock (Click Through)" = "Lock (Click Through)";
 
 /* src/editor/window.rs */
 "Looking for sensitive info…" = "Looking for sensitive info…";
@@ -779,6 +887,9 @@
 /* src/record/session.rs */
 "Microphone level" = "Microphone level";
 
+/* src/editor/presets.rs */
+"Midnight" = "Midnight";
+
 /* src/studio/window.rs */
 "Motion blur" = "Motion blur";
 
@@ -791,7 +902,16 @@
 /* src/capture/overlay.rs */
 "Move the pointer over a window and click to capture it. Escape cancels." = "Move the pointer over a window and click to capture it. Escape cancels.";
 
-/* src/studio/window.rs */
+/* src/video_editor/window.rs */
+"Moving this re-encodes the video at that quality; otherwise unchanged parts are copied" = "Moving this re-encodes the video at that quality; otherwise unchanged parts are copied";
+
+/* src/video_editor/window.rs */
+"Mute" = "Mute";
+
+/* src/editor/window.rs */
+"Name" = "Name";
+
+/* src/editor/window.rs, src/studio/window.rs */
 "No Background" = "No Background";
 
 /* src/record/ready.rs */
@@ -808,6 +928,9 @@
 
 /* src/studio/window.rs */
 "No filler words were found." = "No filler words were found.";
+
+/* src/editor/mod.rs */
+"No image on the clipboard" = "No image on the clipboard";
 
 /* src/editor/window.rs */
 "No sensitive info found" = "No sensitive info found";
@@ -833,6 +956,12 @@
 /* src/studio/window.rs */
 "Not available" = "Not available";
 
+/* src/app/mod.rs */
+"Not granted: click to request or open System Settings" = "Not granted: click to request or open System Settings";
+
+/* src/settings/mod.rs */
+"Not set" = "Not set";
+
 /* src/history/window.rs */
 "Note" = "Note";
 
@@ -848,8 +977,14 @@
 /* src/app/mod.rs, src/pipeline.rs, src/record/session.rs, src/settings/mod.rs, src/steps/export.rs, src/studio/mod.rs, src/studio/window.rs, src/upload/mod.rs */
 "OK" = "OK";
 
+/* src/editor/presets.rs */
+"Ocean" = "Ocean";
+
 /* src/settings/mod.rs */
 "Off" = "Off";
+
+/* src/pin.rs */
+"Opacity" = "Opacity";
 
 /* src/editor/window.rs */
 "Opacity {percent}%" = "Opacity {percent}%";
@@ -865,6 +1000,9 @@
 
 /* src/settings/mod.rs */
 "Open History…" = "Open History…";
+
+/* src/ocr/mod.rs */
+"Open Link" = "Open Link";
 
 /* src/editor/window.rs, src/video_editor/window.rs */
 "Open Settings" = "Open Settings";
@@ -917,6 +1055,15 @@
 /* src/editor/window.rs */
 "Paste or add a second image first, to compare with" = "Paste or add a second image first, to compare with";
 
+/* src/record/session.rs */
+"Pause or resume" = "Pause or resume";
+
+/* src/record/session.rs */
+"Pause recording" = "Pause recording";
+
+/* src/editor/presets.rs */
+"Peach" = "Peach";
+
 /* src/editor/tools.rs */
 "Pen" = "Pen";
 
@@ -929,7 +1076,7 @@
 /* src/editor/window.rs */
 "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions." = "Pick tools in the toolbar above. Undo, Redo, Copy and Save are in the actions.";
 
-/* src/editor/window.rs, src/history/window.rs */
+/* src/editor/window.rs, src/history/window.rs, src/quick_access.rs */
 "Pin to Screen" = "Pin to Screen";
 
 /* src/pin.rs */
@@ -968,6 +1115,9 @@
 /* src/video_editor/window.rs */
 "Puts the watermark from Settings > Watermark on the video (re-encodes it)" = "Puts the watermark from Settings > Watermark on the video (re-encodes it)";
 
+/* src/video_editor/window.rs */
+"Quality" = "Quality";
+
 /* src/settings/mod.rs */
 "Quality:" = "Quality:";
 
@@ -998,6 +1148,9 @@
 /* src/settings/mod.rs */
 "Recognize text so it can be searched" = "Recognize text so it can be searched";
 
+/* src/record/ready.rs */
+"Record" = "Record";
+
 /* src/settings/mod.rs */
 "Record Retina screens at 1x" = "Record Retina screens at 1x";
 
@@ -1015,6 +1168,12 @@
 
 /* src/history/window.rs, src/settings/mod.rs */
 "Recording" = "Recording";
+
+/* src/record/session.rs */
+"Recording paused" = "Recording paused";
+
+/* src/record/session.rs */
+"Recording resumed" = "Recording resumed";
 
 /* src/record/session.rs */
 "Recording saved" = "Recording saved";
@@ -1040,6 +1199,12 @@
 /* src/editor/window.rs */
 "Redacted {n} items" = "Redacted {n} items";
 
+/* src/editor/window.rs */
+"Redo" = "Redo";
+
+/* src/editor/window.rs */
+"Redo (Shift-Command-Z)" = "Redo (Shift-Command-Z)";
+
 /* src/settings/mod.rs */
 "Region:" = "Region:";
 
@@ -1055,6 +1220,9 @@
 /* src/editor/window.rs */
 "Remove Watermark" = "Remove Watermark";
 
+/* src/settings/mod.rs */
+"Remove shortcut" = "Remove shortcut";
+
 /* src/studio/captions.rs */
 "Remove this caption" = "Remove this caption";
 
@@ -1069,6 +1237,9 @@
 
 /* src/action.rs */
 "Restore Recently Closed" = "Restore Recently Closed";
+
+/* src/record/session.rs */
+"Resume recording" = "Resume recording";
 
 /* src/watermark.rs */
 "Right" = "Right";
@@ -1097,17 +1268,23 @@
 /* src/settings/mod.rs */
 "S3-compatible storage" = "S3-compatible storage";
 
-/* src/history/window.rs */
+/* src/editor/window.rs, src/history/window.rs, src/quick_access.rs, src/video_editor/window.rs */
 "Save" = "Save";
 
-/* src/editor/window.rs */
+/* src/editor/window.rs, src/pin.rs, src/video_editor/window.rs */
 "Save As…" = "Save As…";
+
+/* src/editor/window.rs */
+"Save Background as Preset" = "Save Background as Preset";
 
 /* src/editor/window.rs */
 "Save Project…" = "Save Project…";
 
 /* src/settings/mod.rs */
 "Save Retina screenshots at 1x" = "Save Retina screenshots at 1x";
+
+/* src/editor/window.rs */
+"Save as Preset…" = "Save as Preset…";
 
 /* src/settings/mod.rs */
 "Save to a file" = "Save to a file";
@@ -1121,11 +1298,17 @@
 /* src/studio/window.rs */
 "Saved as SRT, or as WebVTT when the name ends in .vtt." = "Saved as SRT, or as WebVTT when the name ends in .vtt.";
 
+/* src/settings/mod.rs */
+"Saved in the Keychain" = "Saved in the Keychain";
+
 /* src/action.rs */
 "Screen Recording" = "Screen Recording";
 
 /* src/app/mod.rs */
 "Screen Recording permission is needed" = "Screen Recording permission is needed";
+
+/* src/capture/overlay.rs */
+"Screen selection" = "Screen selection";
 
 /* src/steps/window.rs */
 "Screenshot of {label}" = "Screenshot of {label}";
@@ -1205,7 +1388,7 @@
 /* src/studio/window.rs */
 "Show captions" = "Show captions";
 
-/* src/history/window.rs */
+/* src/history/window.rs, src/pin.rs, src/quick_access.rs */
 "Show in Finder" = "Show in Finder";
 
 /* src/studio/window.rs */
@@ -1244,6 +1427,9 @@
 /* src/app/mod.rs */
 "Some shortcuts could not be registered" = "Some shortcuts could not be registered";
 
+/* src/record/keys.rs */
+"Space" = "Space";
+
 /* src/editor/tools.rs */
 "Spotlight" = "Spotlight";
 
@@ -1271,11 +1457,26 @@
 /* src/steps/export.rs, src/steps/mod.rs, src/steps/window.rs */
 "Step {n}" = "Step {n}";
 
+/* src/scroll/session.rs */
+"Stop" = "Stop";
+
+/* src/app/mod.rs */
+"Stop Recording" = "Stop Recording";
+
+/* src/record/session.rs */
+"Stop and discard" = "Stop and discard";
+
+/* src/record/session.rs */
+"Stop and save" = "Stop and save";
+
 /* src/settings/mod.rs */
 "Studio:" = "Studio:";
 
 /* src/studio/window.rs */
 "Subtitles saved" = "Subtitles saved";
+
+/* src/editor/presets.rs */
+"Sunset" = "Sunset";
 
 /* src/settings/mod.rs */
 "System audio" = "System audio";
@@ -1301,7 +1502,7 @@
 /* src/editor/window.rs */
 "Text on Color" = "Text on Color";
 
-/* src/ocr/mod.rs */
+/* src/editor/window.rs, src/ocr/mod.rs */
 "Text recognition failed" = "Text recognition failed";
 
 /* src/settings/mod.rs */
@@ -1309,6 +1510,12 @@
 
 /* src/settings/mod.rs */
 "Text:" = "Text:";
+
+/* src/settings/recorder.rs */
+"That key can't be used" = "That key can't be used";
+
+/* src/editor/window.rs */
+"The annotations have not been saved or copied." = "The annotations have not been saved or copied.";
 
 /* src/settings/mod.rs */
 "The bucket's URL" = "The bucket's URL";
@@ -1364,11 +1571,23 @@
 /* src/editor/window.rs */
 "Trim plain margins so the capture sits in the middle" = "Trim plain margins so the capture sits in the middle";
 
+/* src/video_editor/window.rs */
+"Trim…" = "Trim…";
+
 /* src/editor/window.rs */
 "Type a size in pixels or a percentage, such as 1280 or 50%" = "Type a size in pixels or a percentage, such as 1280 or 50%";
 
+/* src/settings/recorder.rs */
+"Type shortcut…" = "Type shortcut…";
+
 /* src/settings/mod.rs */
 "URL:" = "URL:";
+
+/* src/editor/window.rs */
+"Undo" = "Undo";
+
+/* src/editor/window.rs */
+"Undo (Command-Z)" = "Undo (Command-Z)";
 
 /* src/action.rs */
 "Unlock Pinned Screenshots" = "Unlock Pinned Screenshots";
@@ -1376,7 +1595,10 @@
 /* src/app/mod.rs */
 "Update to CleanShotZ {version}…" = "Update to CleanShotZ {version}…";
 
-/* src/history/window.rs */
+/* src/settings/mod.rs */
+"Updates:" = "Updates:";
+
+/* src/history/window.rs, src/quick_access.rs */
 "Upload" = "Upload";
 
 /* src/settings/mod.rs */
@@ -1415,11 +1637,23 @@
 /* src/app/mod.rs */
 "Welcome to CleanShotZ" = "Welcome to CleanShotZ";
 
+/* src/editor/presets.rs */
+"White" = "White";
+
+/* src/editor/window.rs */
+"Width:" = "Width:";
+
 /* src/record/ready.rs */
 "Window recordings leave the camera out" = "Window recordings leave the camera out";
 
 /* src/studio/window.rs */
 "Zoom" = "Zoom";
+
+/* src/pin.rs */
+"Zoom In" = "Zoom In";
+
+/* src/pin.rs */
+"Zoom Out" = "Zoom Out";
 
 /* src/studio/track.rs */
 "Zooms" = "Zooms";
@@ -1483,6 +1717,9 @@
 
 /* src/scroll/session.rs */
 "{length} px wide · keep scrolling sideways, then click Done" = "{length} px wide · keep scrolling sideways, then click Done";
+
+/* src/studio/package.rs */
+"{name} was made by a newer version of CleanShotZ" = "{name} was made by a newer version of CleanShotZ";
 
 /* src/editor/window.rs */
 "{n} annotations" = "{n} annotations";

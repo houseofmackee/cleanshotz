@@ -37,9 +37,9 @@ pub fn load_events(package: &Path) -> Result<Events, String> {
     let events: Events = serde_json::from_slice(&bytes)
         .map_err(|e| format!("{} is damaged: {e}", package.display()))?;
     if events.version > super::events::VERSION {
-        return Err(format!(
-            "{} was made by a newer version of CleanShotZ",
-            package.display()
+        return Err(t!(
+            "{name} was made by a newer version of CleanShotZ",
+            name = package.display()
         ));
     }
     Ok(events)

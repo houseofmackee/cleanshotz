@@ -34,7 +34,7 @@ pub fn label(code: u32, modifiers: Modifiers, mode: KeystrokeMode) -> Option<Str
     let function_key = name.is_some_and(|n| n.starts_with('f') && n.len() > 1);
     let key = match (special, name) {
         (Some(s), _) => s.to_string(),
-        (None, Some("space")) => "Space".to_string(),
+        (None, Some("space")) => t!("Space"),
         (None, Some(n)) => n.to_uppercase(),
         (None, None) => return None,
     };

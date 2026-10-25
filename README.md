@@ -851,8 +851,15 @@ Settings > General > Language & Region (or per app, under Applications).
 Menus, alerts, notifications, the Settings window, tool names, status text
 and VoiceOver descriptions are covered, and dates and file sizes follow the
 system's format for the language. Error details from the command line, the
-URL scheme, pipelines and uploads stay in English. Plurals have one form for
-2 and more (`{n} captures`), which fits most but not all languages.
+URL scheme, pipelines and uploads stay in English, and so do default file
+names. Plurals have one form for 2 and more (`{n} captures`), which fits most
+but not all languages.
+
+In code, mark shown text with `t!("...")`, or with `n!("...")` for names
+that also serve as identifiers and are translated where they are shown.
+`cargo xtask strings --check` (run in CI) fails when the strings file is out
+of date or a literal reaches an AppKit text method (`setTitle`,
+`setToolTip`, `labelWithString`, and the like) without `t!`.
 
 ## License
 

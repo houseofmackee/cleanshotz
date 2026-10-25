@@ -296,7 +296,7 @@ pub fn open_clipboard(mtm: MainThreadMarker) {
         BaseImage::new(picture.cg().retain(), picture.scale()),
         Document::default(),
         Source::Clipboard,
-        "Clipboard Image",
+        &t!("Clipboard Image"),
     );
 }
 
@@ -410,11 +410,12 @@ pub fn pictures_from(pasteboard: &NSPasteboard) -> Vec<Picture> {
         .collect()
 }
 
+/// An alert; `title` and `message` are translated.
 fn show_error(mtm: MainThreadMarker, title: &str, message: &str) {
     tracing::error!(error = message, "{title}");
     let alert = NSAlert::new(mtm);
-    alert.setMessageText(&NSString::from_str(title));
-    alert.setInformativeText(&NSString::from_str(message));
+    alert.setMessageText(&NSString::from_str(&crate::i18n::tr(title)));
+    alert.setInformativeText(&NSString::from_str(&crate::i18n::tr(message)));
     NSApplication::sharedApplication(mtm).activate();
     alert.runModal();
 }

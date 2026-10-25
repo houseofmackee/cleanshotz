@@ -148,30 +148,31 @@ fn describe_pin(view: &PinView, id: u64, size: NSSize) {
             "Floats above other windows. Drag to move; use the actions to copy, zoom or close."
         )),
     );
-    let action =
-        |name: &'static str, f: fn(MainThreadMarker, &Pin)| -> (&'static str, Box<dyn Fn()>) {
-            (
-                name,
-                Box::new(move || {
-                    defer(move |mtm| {
-                        if let Some(pin) = find(id) {
-                            f(mtm, &pin);
-                        }
-                    })
-                }),
-            )
-        };
+    let action = |name: String, f: fn(MainThreadMarker, &Pin)| -> (String, Box<dyn Fn()>) {
+        (
+            name,
+            Box::new(move || {
+                defer(move |mtm| {
+                    if let Some(pin) = find(id) {
+                        f(mtm, &pin);
+                    }
+                })
+            }),
+        )
+    };
     access::actions(
         view,
         vec![
-            action("Copy", |_, pin| copy(pin)),
-            action("Save As…", save_as),
-            action("Zoom In", |_, pin| set_zoom(pin, pin.zoom.get() * 1.25)),
-            action("Zoom Out", |_, pin| set_zoom(pin, pin.zoom.get() / 1.25)),
-            action("Actual Size", |_, pin| set_zoom(pin, 1.0)),
-            action("Arrange All Pins", |mtm, _| arrange(mtm)),
-            action("Lock (Click Through)", |_, pin| set_locked(pin, true)),
-            action("Close", |_, pin| close(pin.id)),
+            action(t!("Copy"), |_, pin| copy(pin)),
+            action(t!("Save As…"), save_as),
+            action(t!("Zoom In"), |_, pin| set_zoom(pin, pin.zoom.get() * 1.25)),
+            action(t!("Zoom Out"), |_, pin| {
+                set_zoom(pin, pin.zoom.get() / 1.25)
+            }),
+            action(t!("Actual Size"), |_, pin| set_zoom(pin, 1.0)),
+            action(t!("Arrange All Pins"), |mtm, _| arrange(mtm)),
+            action(t!("Lock (Click Through)"), |_, pin| set_locked(pin, true)),
+            action(t!("Close"), |_, pin| close(pin.id)),
         ],
     );
 }
@@ -675,13 +676,13 @@ impl PinView {
             menu.addItem(&item);
             item
         };
-        add(&menu, "Copy", tag::COPY);
-        add(&menu, "Save As…", tag::SAVE_AS);
+        add(&menu, &t!("Copy"), tag::COPY);
+        add(&menu, &t!("Save As…"), tag::SAVE_AS);
         if pin.saved {
-            add(&menu, "Show in Finder", tag::SHOW_IN_FINDER);
+            add(&menu, &t!("Show in Finder"), tag::SHOW_IN_FINDER);
         }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
-        add(&menu, "Actual Size", tag::ACTUAL_SIZE);
+        add(&menu, &t!("Actual Size"), tag::ACTUAL_SIZE);
         let opacity = NSMenu::new(mtm);
         let current = (pin.panel.alphaValue() * 100.0).round() as isize;
         for percent in [100, 75, 50, 25] {
@@ -693,15 +694,15 @@ impl PinView {
             });
         }
         let opacity_item = NSMenuItem::new(mtm);
-        opacity_item.setTitle(ns_string!("Opacity"));
+        opacity_item.setTitle(&NSString::from_str(&t!("Opacity")));
         opacity_item.setSubmenu(Some(&opacity));
         menu.addItem(&opacity_item);
-        add(&menu, "Lock (Click Through)", tag::LOCK);
+        add(&menu, &t!("Lock (Click Through)"), tag::LOCK);
         if count() > 1 {
-            add(&menu, "Arrange All Pins", tag::ARRANGE);
+            add(&menu, &t!("Arrange All Pins"), tag::ARRANGE);
         }
         menu.addItem(&NSMenuItem::separatorItem(mtm));
-        add(&menu, "Close", tag::CLOSE);
+        add(&menu, &t!("Close"), tag::CLOSE);
         menu
     }
 

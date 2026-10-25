@@ -25,6 +25,8 @@ jobs:
       # Debug-only code paths can leave release builds with dead code.
       - run: cargo clippy --workspace --all-targets --release -- -D warnings
       - run: cargo test --workspace
+      # Every text the app shows is translated and listed for translators.
+      - run: cargo xtask strings --check
       - run: cargo xtask bundle --release
 
   deny:

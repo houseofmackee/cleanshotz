@@ -18,44 +18,45 @@ use crate::config::ImageFormat;
 /// Background images are kept at most this many pixels on a side.
 const MAX_IMAGE: usize = 3840;
 
-/// The built-in fills, in menu order.
+/// The built-in fills, in menu order; their names are translated where
+/// they are shown.
 pub fn builtin() -> Vec<(&'static str, Fill)> {
     let gradient = |from: Color, to: Color| Fill::Gradient { from, to };
     vec![
         (
-            "Sunset",
+            n!("Sunset"),
             gradient(Color::rgb(0.98, 0.45, 0.42), Color::rgb(0.55, 0.36, 0.96)),
         ),
         (
-            "Ocean",
+            n!("Ocean"),
             gradient(Color::rgb(0.15, 0.55, 0.95), Color::rgb(0.2, 0.85, 0.75)),
         ),
         (
-            "Forest",
+            n!("Forest"),
             gradient(Color::rgb(0.18, 0.55, 0.33), Color::rgb(0.75, 0.85, 0.3)),
         ),
         (
-            "Peach",
+            n!("Peach"),
             gradient(Color::rgb(1.0, 0.78, 0.55), Color::rgb(0.98, 0.45, 0.55)),
         ),
         (
-            "Midnight",
+            n!("Midnight"),
             gradient(Color::rgb(0.1, 0.1, 0.25), Color::rgb(0.32, 0.16, 0.46)),
         ),
         (
-            "White",
+            n!("White"),
             Fill::Solid {
                 color: Color::WHITE,
             },
         ),
         (
-            "Light Gray",
+            n!("Light Gray"),
             Fill::Solid {
                 color: Color::rgb(0.92, 0.92, 0.93),
             },
         ),
         (
-            "Black",
+            n!("Black"),
             Fill::Solid {
                 color: Color::BLACK,
             },

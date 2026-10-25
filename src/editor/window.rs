@@ -366,10 +366,12 @@ impl EditorController {
             return true;
         }
         let alert = NSAlert::new(self.mtm());
-        alert.setMessageText(ns_string!("Discard your changes?"));
-        alert.setInformativeText(ns_string!("The annotations have not been saved or copied."));
-        alert.addButtonWithTitle(ns_string!("Discard"));
-        alert.addButtonWithTitle(ns_string!("Cancel"));
+        alert.setMessageText(&NSString::from_str(&t!("Discard your changes?")));
+        alert.setInformativeText(&NSString::from_str(&t!(
+            "The annotations have not been saved or copied."
+        )));
+        alert.addButtonWithTitle(&NSString::from_str(&t!("Discard")));
+        alert.addButtonWithTitle(&NSString::from_str(&t!("Cancel")));
         alert.runModal() == objc2_app_kit::NSAlertFirstButtonReturn
     }
 
@@ -439,26 +441,25 @@ impl EditorController {
         );
         content.addSubview(&canvas);
         let id = self.ivars().id;
-        let editor_action =
-            |name: &'static str, f: fn(&EditorController)| -> (&'static str, Box<dyn Fn()>) {
-                (
-                    name,
-                    Box::new(move || {
-                        if let Some(editor) = registry::get(id) {
-                            f(&editor);
-                        }
-                    }),
-                )
-            };
+        let editor_action = |name: String, f: fn(&EditorController)| -> (String, Box<dyn Fn()>) {
+            (
+                name,
+                Box::new(move || {
+                    if let Some(editor) = registry::get(id) {
+                        f(&editor);
+                    }
+                }),
+            )
+        };
         crate::ui::access::actions(
             &canvas,
             vec![
-                editor_action("Undo", |e| e.undo()),
-                editor_action("Redo", |e| e.redo()),
-                editor_action("Rotate Right", |e| e.turn(Turn::Right)),
-                editor_action("Rotate Left", |e| e.turn(Turn::Left)),
-                editor_action("Copy Image", |e| e.copy_to_clipboard()),
-                editor_action("Save", |e| e.save()),
+                editor_action(t!("Undo"), |e| e.undo()),
+                editor_action(t!("Redo"), |e| e.redo()),
+                editor_action(t!("Rotate Right"), |e| e.turn(Turn::Right)),
+                editor_action(t!("Rotate Left"), |e| e.turn(Turn::Left)),
+                editor_action(t!("Copy Image"), |e| e.copy_to_clipboard()),
+                editor_action(t!("Save"), |e| e.save()),
             ],
         );
 
@@ -549,7 +550,7 @@ impl EditorController {
             b.setToolTip(Some(&NSString::from_str(label)));
             b
         };
-        let save = button("Save", sel!(saveImage:));
+        let save = button(&t!("Save"), sel!(saveImage:));
         add(
             &save,
             NSRect::new(
@@ -558,7 +559,7 @@ impl EditorController {
             ),
             right,
         );
-        let copy = button("Copy", sel!(copyImage:));
+        let copy = button(&t!("Copy"), sel!(copyImage:));
         add(
             &copy,
             NSRect::new(
@@ -607,7 +608,7 @@ impl EditorController {
         );
         let redo = symbol_button(
             "arrow.uturn.forward",
-            "Redo (Shift-Command-Z)",
+            &t!("Redo (Shift-Command-Z)"),
             sel!(redoEdit:),
         );
         add(
@@ -618,7 +619,11 @@ impl EditorController {
             ),
             right,
         );
-        let undo = symbol_button("arrow.uturn.backward", "Undo (Command-Z)", sel!(undoEdit:));
+        let undo = symbol_button(
+            "arrow.uturn.backward",
+            &t!("Undo (Command-Z)"),
+            sel!(undoEdit:),
+        );
         add(
             &undo,
             NSRect::new(
@@ -1059,9 +1064,9 @@ impl EditorController {
             }
         };
         let separator = || menu.addItem(&objc2_app_kit::NSMenuItem::separatorItem(mtm));
-        item("No Background", BG_NONE);
+        item(&t!("No Background"), BG_NONE);
         for (i, (name, _)) in builtin.iter().enumerate() {
-            item(name, BG_BUILTIN + i as isize);
+            item(&crate::i18n::tr(name), BG_BUILTIN + i as isize);
         }
         if !presets.is_empty() {
             separator();
@@ -1070,14 +1075,14 @@ impl EditorController {
             }
         }
         separator();
-        item("Desktop Wallpaper", BG_WALLPAPER);
+        item(&t!("Desktop Wallpaper"), BG_WALLPAPER);
         if selected == BG_IMAGE {
-            item("Image", BG_IMAGE);
+            item(&t!("Image"), BG_IMAGE);
         }
-        item("Choose Image…", BG_CHOOSE);
+        item(&t!("Choose Image…"), BG_CHOOSE);
         if background.is_some() {
             separator();
-            item("Save as Preset…", BG_SAVE);
+            item(&t!("Save as Preset…"), BG_SAVE);
             if let Some(i) = saved_index {
                 item(&t!("Delete “{name}”", name = presets[i].name), BG_DELETE);
             }
@@ -1146,7 +1151,7 @@ impl EditorController {
                 },
                 BG_SAVE => {
                     if let Some(background) = &current
-                        && let Some(name) = ask_name(mtm, "Save Background as Preset")
+                        && let Some(name) = ask_name(mtm, &t!("Save Background as Preset"))
                     {
                         match presets::add(&name, background) {
                             Ok(()) => *self.ivars().presets.borrow_mut() = presets::saved(),
@@ -1875,11 +1880,12 @@ impl EditorController {
         });
     }
 
+    /// An alert; `title` and `message` are translated.
     fn show_error(&self, title: &str, message: &str) {
         tracing::error!(error = message, "{title}");
         let alert = NSAlert::new(self.mtm());
-        alert.setMessageText(&NSString::from_str(title));
-        alert.setInformativeText(&NSString::from_str(message));
+        alert.setMessageText(&NSString::from_str(&crate::i18n::tr(title)));
+        alert.setInformativeText(&NSString::from_str(&crate::i18n::tr(message)));
         alert.runModal();
     }
 }
@@ -1925,7 +1931,7 @@ fn ask_size(mtm: MainThreadMarker, shown: (usize, usize), retina: bool) -> Optio
         NSRect::new(NSPoint::ZERO, NSSize::new(240.0, 58.0)),
     );
     let row = |label: &str, value: usize, y: f64| {
-        let text = NSTextField::labelWithString(&NSString::from_str(&crate::i18n::tr(label)), mtm);
+        let text = NSTextField::labelWithString(&NSString::from_str(label), mtm);
         text.setFrame(NSRect::new(
             NSPoint::new(0.0, y + 3.0),
             NSSize::new(64.0, 18.0),
@@ -1945,8 +1951,8 @@ fn ask_size(mtm: MainThreadMarker, shown: (usize, usize), retina: bool) -> Optio
         view.addSubview(&unit);
         field
     };
-    let width = row("Width:", shown.0, 32.0);
-    let height = row("Height:", shown.1, 0.0);
+    let width = row(&t!("Width:"), shown.0, 32.0);
+    let height = row(&t!("Height:"), shown.1, 0.0);
     // SAFETY: both fields live in the alert for as long as it runs.
     unsafe { width.setNextKeyView(Some(&height)) };
     alert.setAccessoryView(Some(&view));
@@ -1970,13 +1976,13 @@ fn ask_size(mtm: MainThreadMarker, shown: (usize, usize), retina: bool) -> Optio
 fn ask_name(mtm: MainThreadMarker, title: &str) -> Option<String> {
     let alert = NSAlert::new(mtm);
     alert.setMessageText(&NSString::from_str(title));
-    alert.addButtonWithTitle(ns_string!("Save"));
-    alert.addButtonWithTitle(ns_string!("Cancel"));
+    alert.addButtonWithTitle(&NSString::from_str(&t!("Save")));
+    alert.addButtonWithTitle(&NSString::from_str(&t!("Cancel")));
     let field = NSTextField::initWithFrame(
         NSTextField::alloc(mtm),
         NSRect::new(NSPoint::ZERO, NSSize::new(240.0, 24.0)),
     );
-    field.setPlaceholderString(Some(ns_string!("Name")));
+    field.setPlaceholderString(Some(&NSString::from_str(&t!("Name"))));
     alert.setAccessoryView(Some(&field));
     alert.window().setInitialFirstResponder(Some(&field));
     if alert.runModal() != objc2_app_kit::NSAlertFirstButtonReturn {

@@ -120,6 +120,11 @@ impl CropView {
         registry::get(self.ivars().editor)
     }
 
+    /// The crop area is being chosen.
+    pub fn is_editing(&self) -> bool {
+        self.ivars().editing.get()
+    }
+
     pub fn set_editing(&self, editing: bool) {
         self.ivars().editing.set(editing);
         if editing && let Some(window) = self.window() {
@@ -136,7 +141,7 @@ impl CropView {
                 self,
                 // SAFETY: reading an AppKit constant.
                 unsafe { objc2_app_kit::NSAccessibilityGroupRole },
-                "Crop area",
+                &t!("Crop area"),
                 Some(text),
             );
             crate::ui::access::announce(self.mtm(), text);
@@ -234,7 +239,7 @@ impl CropView {
             if editing {
                 draw::fill_rect(video, &NSColor::colorWithWhite_alpha(0.0, 0.25));
                 draw::draw_label(
-                    "Drag to choose the area to keep · Return when done · Escape to clear",
+                    &t!("Drag to choose the area to keep · Return when done · Escape to clear"),
                     Point::new(video.x + 12.0, video.y + 12.0),
                     12.0,
                 );

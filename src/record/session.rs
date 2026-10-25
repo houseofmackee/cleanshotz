@@ -877,22 +877,22 @@ pub fn toggle_pause() {
         active.recorder.set_paused(paused);
         crate::studio::capture::set_paused(paused);
         let (symbol, label) = if paused {
-            ("play.fill", "Resume recording")
+            ("play.fill", t!("Resume recording"))
         } else {
-            ("pause.fill", "Pause recording")
+            ("pause.fill", t!("Pause recording"))
         };
         active
             .pause_button
             .setImage(symbol_image(symbol).as_deref());
         active
             .pause_button
-            .setAccessibilityLabel(Some(&NSString::from_str(label)));
+            .setAccessibilityLabel(Some(&NSString::from_str(&label)));
         crate::ui::access::announce(
             MainThreadMarker::new().expect("runs on the main thread"),
-            if paused {
-                "Recording paused"
+            &if paused {
+                t!("Recording paused")
             } else {
-                "Recording resumed"
+                t!("Recording resumed")
             },
         );
         update_time(active);
@@ -1071,19 +1071,19 @@ fn control_panel(mtm: MainThreadMarker, area: NSRect, microphone: bool) -> Contr
     });
     let pause = button(
         "pause.fill",
-        "Pause or resume",
+        &t!("Pause or resume"),
         sel!(togglePause:),
         104.0 + extra,
     );
     button(
         "stop.fill",
-        "Stop and save",
+        &t!("Stop and save"),
         sel!(stopRecording:),
         140.0 + extra,
     );
     button(
         "trash",
-        "Stop and discard",
+        &t!("Stop and discard"),
         sel!(discardRecording:),
         176.0 + extra,
     );

@@ -219,7 +219,7 @@ pub fn begin(
             &surface.view,
             // SAFETY: reading an AppKit constant.
             unsafe { objc2_app_kit::NSAccessibilityGroupRole },
-            "Screen selection",
+            &t!("Screen selection"),
             Some(&instructions),
         );
     }

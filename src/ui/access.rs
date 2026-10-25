@@ -23,12 +23,12 @@ pub fn describe(view: &NSView, role: &NSAccessibilityRole, label: &str, help: Op
     view.setAccessibilityHelp(help.map(NSString::from_str).as_deref());
 }
 
-/// A named action and what it does.
-pub type Action<'a> = (&'a str, Box<dyn Fn()>);
+/// A named action (translated: `t!`) and what it does.
+pub type Action = (String, Box<dyn Fn()>);
 
 /// Named actions VoiceOver offers for `view`, each running `f` on the main
 /// thread (where accessibility requests arrive).
-pub fn actions(view: &NSView, actions: Vec<Action<'_>>) {
+pub fn actions(view: &NSView, actions: Vec<Action>) {
     let list: Vec<Retained<NSAccessibilityCustomAction>> = actions
         .into_iter()
         .map(|(name, f)| {
@@ -38,7 +38,7 @@ pub fn actions(view: &NSView, actions: Vec<Action<'_>>) {
             });
             NSAccessibilityCustomAction::initWithName_handler(
                 NSAccessibilityCustomAction::alloc(),
-                &NSString::from_str(name),
+                &NSString::from_str(&name),
                 Some(&block),
             )
         })

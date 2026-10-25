@@ -195,7 +195,7 @@ impl HistoryWindow {
         };
         // SAFETY: the WINDOW thread-local keeps the controller and window.
         unsafe { window.setReleasedWhenClosed(false) };
-        window.setTitle(ns_string!("Capture History"));
+        window.setTitle(&NSString::from_str(&t!("Capture History")));
         window.setContentMinSize(NSSize::new(CELL.width + 2.0 * PADDING + 16.0, 300.0));
         window.setDelegate(Some(ProtocolObject::from_ref(self)));
         let content = window.contentView().expect("windows have a content view");

@@ -244,7 +244,7 @@ pub fn show(
         // SAFETY: the action exists on the target.
         let b = unsafe {
             NSButton::buttonWithTitle_target_action(
-                &NSString::from_str(&crate::i18n::tr(title)),
+                &NSString::from_str(title),
                 Some(target),
                 Some(action),
                 mtm,
@@ -256,8 +256,8 @@ pub fn show(
         background.addSubview(&b);
         b
     };
-    button("Cancel", 424.0, 60.0, sel!(cancel:), "\u{1b}");
-    let record = button("Record", 488.0, 64.0, sel!(record:), "\r");
+    button(&t!("Cancel"), 424.0, 60.0, sel!(cancel:), "\u{1b}");
+    let record = button(&t!("Record"), 488.0, 64.0, sel!(record:), "\r");
     record.setBezelColor(Some(&NSColor::systemRedColor()));
 
     // The previous choice, or the system defaults.
