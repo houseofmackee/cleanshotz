@@ -41,7 +41,7 @@ objc2-screen-capture-kit = "0.3"
 objc2-security = "0.3"
 objc2-vision = "0.3"
 regex = "1"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 objc2-service-management = "0.3"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 serde = { version = "1", features = ["derive"] }
