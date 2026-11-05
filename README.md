@@ -398,7 +398,10 @@ Monitoring; macOS asks the first time. `"shortcuts"` only shows presses with
 Command, Control or Option and keys that never type text (arrows, Return,
 Escape, function keys), so typed text such as passwords never appears in a
 recording. Both are shown in area and full-screen recordings, not in window
-recordings, and so is the cursor highlight.
+recordings, and so is the cursor highlight. Studio recordings are the
+exception for the camera: they record it apart from the screen, so a
+window recording in Studio mode can include it too (its bubble shows
+beside the window while recording).
 
 With both system audio and the microphone on, the two are mixed into one
 track after recording (many players and websites only play the first

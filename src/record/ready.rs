@@ -112,8 +112,8 @@ pub fn is_showing() -> bool {
 }
 
 /// Shows the panel below (or above) `area` (Cocoa screen coordinates).
-/// `camera_allowed`: false for window recordings, which leave the camera
-/// out.
+/// `camera_allowed`: false for window recordings outside Studio mode,
+/// which leave the camera out.
 pub fn show(
     mtm: MainThreadMarker,
     area: NSRect,
@@ -230,7 +230,7 @@ pub fn show(
     camera_menu.setEnabled(camera_allowed && !cameras.is_empty());
     if !camera_allowed {
         camera_menu.setToolTip(Some(&NSString::from_str(&t!(
-            "Window recordings leave the camera out"
+            "Window recordings leave the camera out, except in Studio mode"
         ))));
     }
     icon("mic.fill", 220.0);

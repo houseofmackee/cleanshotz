@@ -6,6 +6,14 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Added
+
+- Studio window recordings can include the camera: Studio records it apart
+  from the screen, so the panel before recording now offers it for window
+  recordings in Studio mode too, and its bubble shows beside the window
+  while recording. Plain window recordings still leave it out (the panel
+  says so).
+
 ## [0.10.2] - 2026-11-01
 
 ### Fixed

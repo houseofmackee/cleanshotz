@@ -235,21 +235,16 @@ fn choose_devices(
                 NSSize::new(rect.width, rect.height),
             )
         }),
-        Target::Window { window_id } => windows.iter().find(|w| w.id == window_id).map(|w| {
-            let primary_height = NSScreen::screens(mtm)
-                .firstObject()
-                .map_or(0.0, |s| s.frame().size.height);
-            NSRect::new(
-                NSPoint::new(w.frame.x, primary_height - w.frame.y - w.frame.height),
-                NSSize::new(w.frame.width, w.frame.height),
-            )
-        }),
+        Target::Window { window_id } => window_area(mtm, windows, window_id),
     };
     let Some(area) = area.filter(|_| recording.choose_devices) else {
         start_target(mtm, target, capture, recording, None);
         return;
     };
-    let camera_allowed = matches!(target, Target::Area { .. });
+    // A window recording captures only the window, so the camera bubble
+    // can't be in it; Studio records the camera separately and adds it
+    // when editing.
+    let camera_allowed = matches!(target, Target::Area { .. }) || recording.studio;
     let pick = |on: bool, id: &str, default: Option<String>| {
         on.then(|| {
             if id.is_empty() {
@@ -302,6 +297,23 @@ fn choose_devices(
             start_target(mtm, target, capture, recording, preview);
         }),
     );
+}
+
+/// Where window `window_id` is, in Cocoa screen coordinates.
+fn window_area(
+    mtm: MainThreadMarker,
+    windows: &[sck::WindowInfo],
+    window_id: u32,
+) -> Option<NSRect> {
+    windows.iter().find(|w| w.id == window_id).map(|w| {
+        let primary_height = NSScreen::screens(mtm)
+            .firstObject()
+            .map_or(0.0, |s| s.frame().size.height);
+        NSRect::new(
+            NSPoint::new(w.frame.x, primary_height - w.frame.y - w.frame.height),
+            NSSize::new(w.frame.width, w.frame.height),
+        )
+    })
 }
 
 /// Counts down if set to, then starts recording `target`.
@@ -365,20 +377,41 @@ fn begin(
             );
             start_overlays(mtm, area, settings, camera)
         }
-        Target::Window { .. } => {
-            if let Some(camera) = camera {
-                camera.stop();
+        Target::Window { window_id } => {
+            // Studio records the camera separately (its bubble shows beside
+            // the window); plain window recordings can't show it.
+            let camera = if settings.studio {
+                Content::fetch()
+                    .ok()
+                    .and_then(|c| window_area(mtm, &c.pickable_windows(), window_id))
+                    .and_then(|area| start_camera(mtm, area, settings, camera))
+            } else {
+                if let Some(camera) = camera {
+                    camera.stop();
+                }
+                None
+            };
+            let highlight = settings.highlight_cursor && !settings.studio;
+            let left_out = match (
+                settings.camera && !settings.studio,
+                settings.keystrokes != KeystrokeMode::Off || highlight,
+            ) {
+                (true, _) => Some(n!(
+                    "The camera, keystrokes and cursor highlight are not shown in window recordings"
+                )),
+                (false, true) => Some(n!(
+                    "Keystrokes and the cursor highlight are not shown in window recordings"
+                )),
+                (false, false) => None,
+            };
+            // `toast::show` translates them.
+            if let Some(message) = left_out {
+                toast::show(mtm, message);
             }
-            if settings.camera
-                || settings.keystrokes != KeystrokeMode::Off
-                || settings.highlight_cursor
-            {
-                toast::show(
-                    mtm,
-                    "The camera, keystrokes and cursor highlight are not shown in window recordings",
-                );
+            Overlays {
+                camera,
+                ..Overlays::default()
             }
-            Overlays::default()
         }
     };
     // On failure `begin_recording` stops the overlays itself.
@@ -394,30 +427,7 @@ fn start_overlays(
     settings: &RecordingSettings,
     preview: Option<Camera>,
 ) -> Overlays {
-    let camera = match preview {
-        Some(camera) if settings.camera => Some(Some(camera)),
-        Some(camera) => {
-            camera.stop();
-            None
-        }
-        None => None,
-    };
-    let camera = camera.or_else(|| {
-        settings.camera.then(|| {
-            Camera::start(
-                mtm,
-                area,
-                settings.camera_size as f64,
-                settings.camera_shape,
-                &settings.camera_device,
-            )
-            .inspect_err(|e| {
-                tracing::warn!(error = %e, "camera not shown");
-                toast::show(mtm, e);
-            })
-            .ok()
-        })
-    });
+    let camera = start_camera(mtm, area, settings, preview);
     let keys = (settings.keystrokes != KeystrokeMode::Off).then(|| {
         KeyDisplay::start(mtm, area, settings.keystrokes)
             .inspect_err(|e| {
@@ -433,10 +443,41 @@ fn start_overlays(
     let cursor = (!settings.studio && (settings.highlight_cursor || clicks))
         .then(|| CursorHighlight::start(mtm, settings.highlight_cursor, clicks));
     Overlays {
-        camera: camera.flatten(),
+        camera,
         keys: keys.flatten(),
         cursor,
     }
+}
+
+/// The camera bubble at `area`'s corner when the settings ask for it:
+/// `preview` (already showing from the device panel) or a new one.
+/// Problems are shown and the recording goes ahead without it.
+fn start_camera(
+    mtm: MainThreadMarker,
+    area: NSRect,
+    settings: &RecordingSettings,
+    preview: Option<Camera>,
+) -> Option<Camera> {
+    if !settings.camera {
+        if let Some(camera) = preview {
+            camera.stop();
+        }
+        return None;
+    }
+    preview.or_else(|| {
+        Camera::start(
+            mtm,
+            area,
+            settings.camera_size as f64,
+            settings.camera_shape,
+            &settings.camera_device,
+        )
+        .inspect_err(|e| {
+            tracing::warn!(error = %e, "camera not shown");
+            toast::show(mtm, e);
+        })
+        .ok()
+    })
 }
 
 fn begin_recording(

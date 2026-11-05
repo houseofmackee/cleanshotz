@@ -785,6 +785,9 @@
 /* src/studio/window.rs */
 "Keys" = "Keys";
 
+/* src/record/session.rs */
+"Keystrokes and the cursor highlight are not shown in window recordings" = "Keystrokes and the cursor highlight are not shown in window recordings";
+
 /* src/settings/mod.rs */
 "Keystrokes:" = "Keystrokes:";
 
@@ -1644,7 +1647,7 @@
 "Width:" = "Width:";
 
 /* src/record/ready.rs */
-"Window recordings leave the camera out" = "Window recordings leave the camera out";
+"Window recordings leave the camera out, except in Studio mode" = "Window recordings leave the camera out, except in Studio mode";
 
 /* src/studio/window.rs */
 "Zoom" = "Zoom";
