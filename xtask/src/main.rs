@@ -28,7 +28,7 @@
 
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, Stdio};
 
 use anyhow::{Context, Result, bail};
 
@@ -78,13 +78,26 @@ fn main() -> Result<()> {
 fn bundle(release: bool, test: bool, updates: bool) -> Result<PathBuf> {
     let root = workspace_root();
     let mut build = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
-    build
-        .current_dir(&root)
-        .args(["build", "--package", BINARY]);
+    // JSON messages on stdout (diagnostics still print as usual), to learn
+    // the app's OUT_DIR, where build.rs leaves the App Intents' constant
+    // values.
+    build.current_dir(&root).args([
+        "build",
+        "--package",
+        BINARY,
+        "--message-format=json-render-diagnostics",
+    ]);
     if release {
         build.arg("--release");
     }
-    run(&mut build)?;
+    let output = build
+        .stderr(Stdio::inherit())
+        .output()
+        .with_context(|| format!("running {build:?}"))?;
+    if !output.status.success() {
+        bail!("{build:?} failed with {}", output.status);
+    }
+    let out_dir = build_script_out_dir(&String::from_utf8_lossy(&output.stdout), &root);
 
     let profile_dir = root
         .join("target")
@@ -174,7 +187,9 @@ fn bundle(release: bool, test: bool, updates: bool) -> Result<PathBuf> {
     // (registered with macOS too) would list every action a second time.
     // CI and releases set CLEANSHOTZ_REQUIRE_INTENTS, so a build without
     // them fails instead of shipping without Shortcuts actions.
-    if !test && let Err(e) = app_intents_metadata(&profile_dir, &contents.join("Resources")) {
+    if !test
+        && let Err(e) = app_intents_metadata(&root, out_dir.as_deref(), &contents.join("Resources"))
+    {
         if std::env::var_os("CLEANSHOTZ_REQUIRE_INTENTS").is_some() {
             bail!("{e}");
         }
@@ -837,12 +852,26 @@ fn workspace_root() -> PathBuf {
 /// from what `build.rs` left in `<profile>/intents`. Needs Xcode's
 /// `appintentsmetadataprocessor`; without it the app works, minus its
 /// Shortcuts actions.
-fn app_intents_metadata(profile_dir: &Path, resources: &Path) -> Result<(), String> {
-    let intents = profile_dir.join("intents");
-    let (sources, const_values) = (intents.join("sources.txt"), intents.join("constvalues.txt"));
-    if !sources.exists() || !const_values.exists() {
+fn app_intents_metadata(
+    root: &Path,
+    out_dir: Option<&Path>,
+    resources: &Path,
+) -> Result<(), String> {
+    let values = out_dir.map(|d| d.join("CleanShotZIntents.swiftconstvalues"));
+    let Some((out_dir, values)) = out_dir.zip(values).filter(|(_, v)| v.exists()) else {
         return Err("note: no App Intents were compiled; skipping their metadata".into());
-    }
+    };
+    // The processor takes files listing the sources and the constant values.
+    let (sources, const_values) = (
+        out_dir.join("intents-sources.txt"),
+        out_dir.join("intents-constvalues.txt"),
+    );
+    fs::write(
+        &sources,
+        format!("{}\n", root.join("swift/Intents.swift").display()),
+    )
+    .map_err(|e| e.to_string())?;
+    fs::write(&const_values, format!("{}\n", values.display())).map_err(|e| e.to_string())?;
     let tool = |args: &[&str]| -> Option<String> {
         let out = Command::new(args[0]).args(&args[1..]).output().ok()?;
         out.status
@@ -896,6 +925,20 @@ fn app_intents_metadata(profile_dir: &Path, resources: &Path) -> Result<(), Stri
             "warning: could not run appintentsmetadataprocessor: {e}"
         )),
     }
+}
+
+/// The OUT_DIR of the app's build script (in the workspace at `root`),
+/// from Cargo's JSON messages (`--message-format=json…`). Cargo reports it
+/// even when nothing was rebuilt.
+fn build_script_out_dir(messages: &str, root: &Path) -> Option<PathBuf> {
+    let package = format!("\"package_id\":\"path+file://{}#", root.display());
+    messages
+        .lines()
+        .filter(|l| l.contains("\"reason\":\"build-script-executed\"") && l.contains(&package))
+        .find_map(|l| {
+            let rest = &l[l.find("\"out_dir\":\"")? + 11..];
+            Some(PathBuf::from(&rest[..rest.find('"')?]))
+        })
 }
 
 /// Calls whose string literal arguments are shown to the user, and
@@ -1262,6 +1305,22 @@ fn run(command: &mut Command) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn finds_the_apps_build_script_out_dir() {
+        let messages = concat!(
+            r#"{"reason":"build-script-executed","package_id":"registry+https://github.com/rust-lang/crates.io-index#libc@0.2.190","out_dir":"/w/target/release/build/libc-1/out"}"#,
+            "\n",
+            r#"{"reason":"compiler-artifact","package_id":"path+file:///w#0.11.1"}"#,
+            "\n",
+            r#"{"reason":"build-script-executed","package_id":"path+file:///w#0.11.1","linked_libs":[],"out_dir":"/w/target/release/build/cleanshotz/abc/out"}"#,
+        );
+        assert_eq!(
+            build_script_out_dir(messages, Path::new("/w")),
+            Some(PathBuf::from("/w/target/release/build/cleanshotz/abc/out"))
+        );
+        assert_eq!(build_script_out_dir(messages, Path::new("/other")), None);
+    }
 
     #[test]
     fn finds_text_shown_untranslated() {

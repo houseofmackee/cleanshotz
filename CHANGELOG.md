@@ -25,8 +25,10 @@ All notable changes to CleanShotZ. The format follows
 
 - The Shortcuts actions are back: releases since 0.9.0 shipped without the
   App Intents metadata macOS needs to list them, because the compiler's
-  constant values file was looked for under the wrong name. CI and
-  releases now fail when that metadata is missing.
+  constant values file was looked for under the wrong name, and Rust
+  1.100's new build folder layout hid it from the bundling step too (it now
+  asks Cargo where the file is). CI and releases now fail when that
+  metadata is missing.
 - The scrolling capture bar's Auto-scroll, Done, and Cancel buttons were
   nearly invisible in light mode on macOS 26 (dark text on the dark bar,
   since 0.9.0 is built for macOS 26). The bar now uses the dark appearance,

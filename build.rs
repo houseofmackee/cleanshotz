@@ -1,8 +1,8 @@
 //! Compiles the Swift parts into a static library linked into the app:
 //!
-//! - `swift/Intents.swift`: the App Intents (Shortcuts actions), and the
-//!   files `cargo xtask bundle` needs to generate their metadata in
-//!   `target/<profile>/intents`. `CLEANSHOTZ_NO_INTENTS` leaves them out.
+//! - `swift/Intents.swift`: the App Intents (Shortcuts actions); their
+//!   constant values stay in OUT_DIR for `cargo xtask bundle`, which
+//!   generates the metadata. `CLEANSHOTZ_NO_INTENTS` leaves them out.
 //! - `swift/Captions.swift`: speech to text for captions. When it builds,
 //!   Rust sees `cfg(captions)`.
 //!
@@ -144,7 +144,8 @@ fn build_intents(swift: &Swift) -> Result<PathBuf, String> {
     std::fs::write(&protocols, PROTOCOLS).map_err(|e| e.to_string())?;
     // Named like the object file (`<module>.o`): the compiler writes the
     // constant values next to it under that name, whatever path is asked
-    // for, and the metadata step reads the path recorded below.
+    // for. `cargo xtask bundle` reads them from OUT_DIR (which Cargo tells
+    // it) to generate the metadata.
     let const_values = swift.out.join("CleanShotZIntents.swiftconstvalues");
     let object = swift.compile(
         INTENTS,
@@ -158,24 +159,5 @@ fn build_intents(swift: &Swift) -> Result<PathBuf, String> {
             protocols.display().to_string(),
         ],
     )?;
-
-    // For `cargo xtask bundle`: target/<profile>/intents.
-    let profile_dir = swift
-        .out
-        .ancestors()
-        .nth(3)
-        .ok_or("unexpected OUT_DIR layout")?;
-    let intents = profile_dir.join("intents");
-    std::fs::create_dir_all(&intents).map_err(|e| e.to_string())?;
-    std::fs::write(
-        intents.join("sources.txt"),
-        format!("{}\n", swift.root.join(INTENTS).display()),
-    )
-    .map_err(|e| e.to_string())?;
-    std::fs::write(
-        intents.join("constvalues.txt"),
-        format!("{}\n", const_values.display()),
-    )
-    .map_err(|e| e.to_string())?;
     Ok(object)
 }
