@@ -1658,7 +1658,7 @@ impl EditorController {
                 let settings = crate::quick_access::capture_settings();
                 crate::capture::naming::file_stem(
                     &settings.file_name,
-                    &chrono::Local::now(),
+                    &jiff::ZonedDateTime::now(),
                     self.ivars().base.borrow().scale > 1.0,
                 )
             }

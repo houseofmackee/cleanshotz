@@ -90,10 +90,7 @@ fn http(settings: &HttpUpload, path: &Path, name: &str) -> Result<String, String
         headers.push(("Content-Type".into(), content_type.into()));
         data
     } else {
-        let boundary = format!(
-            "CleanShotZ{}",
-            chrono::Utc::now().timestamp_nanos_opt().unwrap_or(0)
-        );
+        let boundary = format!("CleanShotZ{}", jiff::Timestamp::now().as_nanosecond());
         let form: Vec<(String, String)> = settings
             .form
             .iter()
@@ -161,7 +158,9 @@ fn imgur_url() -> String {
 fn s3(settings: &S3Upload, path: &Path, name: &str) -> Result<String, String> {
     let data = std::fs::read(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let secret = keychain::resolve(&settings.secret_access_key)?;
-    let amz_date = chrono::Utc::now().format("%Y%m%dT%H%M%SZ").to_string();
+    let amz_date = jiff::Timestamp::now()
+        .strftime("%Y%m%dT%H%M%SZ")
+        .to_string();
     let put = request::s3_put(
         settings,
         &secret,

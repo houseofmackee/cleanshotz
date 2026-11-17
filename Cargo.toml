@@ -24,7 +24,6 @@ anyhow = "1"
 block2 = "0.6"
 dispatch2 = "0.3"
 base64 = "0.23"
-chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
 objc2 = "0.6"
 objc2-app-kit = "0.3"
 objc2-av-kit = "0.3"
@@ -41,7 +40,7 @@ objc2-screen-capture-kit = "0.3"
 objc2-security = "0.3"
 objc2-vision = "0.3"
 regex = "1"
-rusqlite = { version = "0.40", features = ["bundled"] }
+rusqlite = { version = "0.41", features = ["bundled"] }
 objc2-service-management = "0.3"
 serde_json = { version = "1", features = ["float_roundtrip"] }
 serde = { version = "1", features = ["derive"] }
@@ -51,3 +50,4 @@ tracing = "0.1"
 tracing-appender = "0.2"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 libwebp-sys = { version = "0.14", default-features = false, features = ["std", "parallel", "neon"] }
+jiff = "1.0.0"

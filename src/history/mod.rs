@@ -45,7 +45,7 @@ pub fn open_store() -> Option<Store> {
 }
 
 fn now() -> i64 {
-    chrono::Utc::now().timestamp()
+    jiff::Timestamp::now().as_second()
 }
 
 /// A small PNG preview, at most 400 x 300 pixels.

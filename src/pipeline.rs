@@ -402,7 +402,7 @@ impl Job {
                     (None, Some(name)) => name.clone(),
                     (None, None) => naming::file_stem(
                         &self.settings.file_name,
-                        &chrono::Local::now(),
+                        &jiff::ZonedDateTime::now(),
                         self.scale > 1.0,
                     ),
                 };
@@ -536,7 +536,7 @@ impl Job {
         std::fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
         let stem = naming::file_stem(
             &self.settings.file_name,
-            &chrono::Local::now(),
+            &jiff::ZonedDateTime::now(),
             self.scale > 1.0,
         );
         let path = naming::unique_path(&dir, &stem, self.format.extension());

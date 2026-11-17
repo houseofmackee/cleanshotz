@@ -130,7 +130,7 @@ fn process(captured: Captured, settings: &CaptureSettings) -> Option<Delivered> 
         None => {
             let stem = naming::file_stem(
                 &settings.file_name,
-                &chrono::Local::now(),
+                &jiff::ZonedDateTime::now(),
                 captured.scale > 1.0,
             );
             let dir = unsaved_dir();
@@ -177,7 +177,11 @@ pub fn save_to_directory(
     fs::create_dir_all(&dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let stem = match stem {
         Some(stem) => stem.to_string(),
-        None => naming::file_stem(&settings.file_name, &chrono::Local::now(), scale > 1.0),
+        None => naming::file_stem(
+            &settings.file_name,
+            &jiff::ZonedDateTime::now(),
+            scale > 1.0,
+        ),
     };
     let path = naming::unique_path(&dir, &stem, settings.format.extension());
     let bytes = save_to(

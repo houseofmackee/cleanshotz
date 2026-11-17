@@ -8,6 +8,19 @@ All notable changes to CleanShotZ. The format follows
 
 ## [0.11.1] - 2026-11-17
 
+### Security
+
+- The bundled SQLite (used for Capture History) is updated to 3.54.1
+  through rusqlite 0.41, for RUSTSEC-2026-0459. CleanShotZ only opens its
+  own history database, which the advisory's attack needs a less trusted
+  party to have written, so the exposure was low.
+
+### Changed
+
+- Dates and times (file names, history, S3 upload signatures) now come
+  from the jiff crate instead of chrono, which is no longer maintained
+  (RUSTSEC-2026-0543). File names are unchanged.
+
 ### Fixed
 
 - The scrolling capture bar's Auto-scroll, Done, and Cancel buttons were

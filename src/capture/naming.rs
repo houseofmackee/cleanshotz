@@ -2,18 +2,13 @@
 
 use std::path::{Path, PathBuf};
 
-use chrono::{DateTime, TimeZone};
-
 /// Expands the file name template. Tokens: `{date}` (2026-10-10) and
 /// `{time}` (11.03.16, dots because macOS shows `:` as `/` in Finder).
 /// Path separators and colons in the result are replaced with `-`.
-pub fn file_stem<Tz: TimeZone>(template: &str, now: &DateTime<Tz>, retina: bool) -> String
-where
-    Tz::Offset: std::fmt::Display,
-{
+pub fn file_stem(template: &str, now: &jiff::ZonedDateTime, retina: bool) -> String {
     let mut stem = template
-        .replace("{date}", &now.format("%Y-%m-%d").to_string())
-        .replace("{time}", &now.format("%H.%M.%S").to_string())
+        .replace("{date}", &now.strftime("%Y-%m-%d").to_string())
+        .replace("{time}", &now.strftime("%H.%M.%S").to_string())
         .replace(['/', ':'], "-")
         .trim()
         .to_string();
@@ -59,13 +54,12 @@ pub fn expand_home(path: &str) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use chrono::{FixedOffset, TimeZone};
     use std::fs;
 
-    fn at() -> DateTime<FixedOffset> {
-        FixedOffset::east_opt(0)
-            .unwrap()
-            .with_ymd_and_hms(2026, 10, 10, 9, 5, 7)
+    fn at() -> jiff::ZonedDateTime {
+        jiff::civil::date(2026, 10, 10)
+            .at(9, 5, 7, 0)
+            .to_zoned_datetime(jiff::tz::TimeZone::UTC)
             .unwrap()
     }
 

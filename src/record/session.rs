@@ -572,7 +572,7 @@ fn begin_recording(
     let microphone = settings.microphone && microphone_ready(mtm);
 
     // Name and place the output like a capture.
-    let stem = naming::file_stem(&capture.file_name, &chrono::Local::now(), false);
+    let stem = naming::file_stem(&capture.file_name, &jiff::ZonedDateTime::now(), false);
     let temp = output::temp_dir();
     let save_dir = naming::expand_home(&capture.save_directory);
     let saved = capture.save_to_file;
