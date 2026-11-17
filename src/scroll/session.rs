@@ -14,8 +14,9 @@ use objc2::rc::Retained;
 use objc2::runtime::{AnyObject, NSObject};
 use objc2::{AllocAnyThread, MainThreadMarker, MainThreadOnly, define_class, msg_send, sel};
 use objc2_app_kit::{
-    NSBox, NSBoxType, NSButton, NSColor, NSFont, NSImage, NSImageAlignment, NSImageScaling,
-    NSImageView, NSPanel, NSScreen, NSTextField, NSTitlePosition,
+    NSAppearance, NSAppearanceCustomization, NSAppearanceNameDarkAqua, NSBox, NSBoxType, NSButton,
+    NSColor, NSFont, NSImage, NSImageAlignment, NSImageScaling, NSImageView, NSPanel, NSScreen,
+    NSTextField, NSTitlePosition,
 };
 use objc2_core_foundation::CGPoint;
 use objc2_core_graphics::{CGEvent, CGEventTapLocation, CGScrollEventUnit};
@@ -500,6 +501,13 @@ fn control_bar(
     let origin = panels::control_origin(area, screen.visibleFrame(), BAR);
     let panel = panels::floating_panel(mtm, NSRect::new(origin, BAR));
     panel.setHasShadow(true);
+    // The bar is dark in light mode too, so its buttons need the dark
+    // appearance (on macOS 26 they are see-through and take their text
+    // color from it).
+    // SAFETY: reading an AppKit constant.
+    if let Some(dark) = NSAppearance::appearanceNamed(unsafe { NSAppearanceNameDarkAqua }) {
+        panel.setAppearance(Some(&dark));
+    }
     let background = NSBox::new(mtm);
     background.setBoxType(NSBoxType::Custom);
     background.setTitlePosition(NSTitlePosition::NoTitle);

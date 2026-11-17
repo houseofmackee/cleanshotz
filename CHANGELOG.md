@@ -6,6 +6,13 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- The scrolling capture bar's Auto-scroll, Done, and Cancel buttons were
+  nearly invisible in light mode on macOS 26 (dark text on the dark bar,
+  since 0.9.0 is built for macOS 26). The bar now uses the dark appearance,
+  like the other capture bars.
+
 ## [0.11.0] - 2026-11-05
 
 ### Added
