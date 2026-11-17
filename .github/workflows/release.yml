@@ -27,6 +27,8 @@ env:
   # Captions need the macOS 26 SDK (Xcode 26); fail rather than release
   # without them.
   CLEANSHOTZ_REQUIRE_CAPTIONS: 1
+  # Likewise for the Shortcuts actions (App Intents metadata).
+  CLEANSHOTZ_REQUIRE_INTENTS: 1
 
 jobs:
   release:

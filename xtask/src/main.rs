@@ -172,8 +172,13 @@ fn bundle(release: bool, test: bool, updates: bool) -> Result<PathBuf> {
     .context("copying the app binary")?;
     // Only the real app offers Shortcuts actions; otherwise the Test build
     // (registered with macOS too) would list every action a second time.
-    if !test {
-        app_intents_metadata(&profile_dir, &contents.join("Resources"));
+    // CI and releases set CLEANSHOTZ_REQUIRE_INTENTS, so a build without
+    // them fails instead of shipping without Shortcuts actions.
+    if !test && let Err(e) = app_intents_metadata(&profile_dir, &contents.join("Resources")) {
+        if std::env::var_os("CLEANSHOTZ_REQUIRE_INTENTS").is_some() {
+            bail!("{e}");
+        }
+        eprintln!("{e}");
     }
 
     sign(
@@ -827,16 +832,16 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// Generates `Metadata.appintents` (how macOS finds the App Intents)
+/// Generates `Metadata.appintents` (how macOS finds the App Intents);
+/// `Err` says why there is none.
 /// from what `build.rs` left in `<profile>/intents`. Needs Xcode's
 /// `appintentsmetadataprocessor`; without it the app works, minus its
 /// Shortcuts actions.
-fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
+fn app_intents_metadata(profile_dir: &Path, resources: &Path) -> Result<(), String> {
     let intents = profile_dir.join("intents");
     let (sources, const_values) = (intents.join("sources.txt"), intents.join("constvalues.txt"));
     if !sources.exists() || !const_values.exists() {
-        eprintln!("note: no App Intents were compiled; skipping their metadata");
-        return;
+        return Err("note: no App Intents were compiled; skipping their metadata".into());
     }
     let tool = |args: &[&str]| -> Option<String> {
         let out = Command::new(args[0]).args(&args[1..]).output().ok()?;
@@ -850,10 +855,10 @@ fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
         tool(&["xcrun", "--find", "swiftc"]),
         tool(&["xcodebuild", "-version"]),
     ) else {
-        eprintln!(
+        return Err(
             "note: Xcode's appintentsmetadataprocessor is not available; the app will have no Shortcuts actions"
+                .into(),
         );
-        return;
     };
     let toolchain = Path::new(&swiftc)
         .ancestors()
@@ -882,12 +887,14 @@ fn app_intents_metadata(profile_dir: &Path, resources: &Path) {
         .arg("--quiet-warnings")
         .output();
     match status {
-        Ok(out) if out.status.success() && resources.join("Metadata.appintents").exists() => {}
-        Ok(out) => eprintln!(
+        Ok(out) if out.status.success() && resources.join("Metadata.appintents").exists() => Ok(()),
+        Ok(out) => Err(format!(
             "warning: App Intents metadata was not generated:\n{}",
             String::from_utf8_lossy(&out.stderr).trim()
-        ),
-        Err(e) => eprintln!("warning: could not run appintentsmetadataprocessor: {e}"),
+        )),
+        Err(e) => Err(format!(
+            "warning: could not run appintentsmetadataprocessor: {e}"
+        )),
     }
 }
 

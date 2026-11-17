@@ -142,7 +142,10 @@ fn build_swift() -> Result<bool, String> {
 fn build_intents(swift: &Swift) -> Result<PathBuf, String> {
     let protocols = swift.out.join("protocols.json");
     std::fs::write(&protocols, PROTOCOLS).map_err(|e| e.to_string())?;
-    let const_values = swift.out.join("Intents.swiftconstvalues");
+    // Named like the object file (`<module>.o`): the compiler writes the
+    // constant values next to it under that name, whatever path is asked
+    // for, and the metadata step reads the path recorded below.
+    let const_values = swift.out.join("CleanShotZIntents.swiftconstvalues");
     let object = swift.compile(
         INTENTS,
         "CleanShotZIntents",
