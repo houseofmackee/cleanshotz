@@ -371,7 +371,11 @@ Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
   pull request to Raycast's extensions repository (`npm run publish` in
   `raycast/`, run from a terminal: it signs in to GitHub interactively),
   with the maintainer's Raycast username (`houseofmackee`) as `author`.
-  Submitted on 2026-10-25 as raycast/extensions#32766.
+  Submitted on 2026-10-25 as raycast/extensions#32766. The publish command
+  opens the pull request as a draft, which reviewers skip: mark it ready for
+  review. Raycast's stale bot labels a pull request after 25 days without
+  activity and closes it 7 days later; a comment or push removes the label.
+  This one sat as a draft until 2026-11-19.
 
 ### M12: Editor tools from other capture apps (done)
 Group 2 of the October 2026 comparison, plus CleanShot X's arrow. Each item
