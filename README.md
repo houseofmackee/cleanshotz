@@ -846,9 +846,22 @@ only the Command Line Tools the app builds without them.
 
 The [`raycast`](raycast) folder holds a Raycast extension with commands for
 every capture mode, recording, Pick Color, Step Capture, Capture History, and annotating,
-pinning or running a pipeline on the image selected in Finder. It uses the
-URL scheme, so it needs nothing beyond CleanShotZ. To try it: `cd raycast &&
-npm install && npm run dev`.
+pinning, or running a pipeline on the image selected in Finder. It uses the
+URL scheme, so it needs nothing beyond CleanShotZ. Its README is the Store
+page, so the development notes live here:
+
+```sh
+cd raycast
+npm install
+npm run dev       # loads the extension into Raycast
+npm run build
+npm run lint
+npm run publish   # from a terminal; opens or updates the Store pull request
+```
+
+Store screenshots go in `raycast/metadata/` (2000 by 1250 PNG, taken with
+Raycast's Window Capture and "Save to Metadata" ticked). The publish command
+opens a new Store pull request as a draft; mark it ready for review.
 
 ## Translating
 
