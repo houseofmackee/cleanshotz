@@ -6,6 +6,8 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+## [0.11.2] - 2026-11-25
+
 ### Fixed
 
 - Starting a capture with an editor window open in the background no
@@ -317,7 +319,8 @@ screenshots, screen recordings and annotations on macOS 14 and later
   AppleScript and Shortcuts actions.
 - Settings window with a shortcut recorder; everything also in a TOML file.
 
-[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.11.1...HEAD
+[Unreleased]: https://github.com/houseofmackee/cleanshotz/compare/v0.11.2...HEAD
+[0.11.2]: https://github.com/houseofmackee/cleanshotz/compare/v0.11.1...v0.11.2
 [0.11.1]: https://github.com/houseofmackee/cleanshotz/compare/v0.11.0...v0.11.1
 [0.11.0]: https://github.com/houseofmackee/cleanshotz/compare/v0.10.2...v0.11.0
 [0.10.2]: https://github.com/houseofmackee/cleanshotz/compare/v0.10.1...v0.10.2
