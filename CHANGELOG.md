@@ -6,6 +6,12 @@ All notable changes to CleanShotZ. The format follows
 
 ## [Unreleased]
 
+### Fixed
+
+- Starting a capture with an editor window open in the background no
+  longer brings that window to the front (into the capture): the selection
+  overlay takes keys without activating CleanShotZ.
+
 ## [0.11.1] - 2026-11-17
 
 ### Security

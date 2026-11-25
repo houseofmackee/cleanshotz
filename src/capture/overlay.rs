@@ -24,11 +24,11 @@ use objc2::{
     AllocAnyThread, DefinedClass, MainThreadMarker, MainThreadOnly, define_class, msg_send,
 };
 use objc2_app_kit::{
-    NSApplication, NSApplicationActivationOptions, NSBackingStoreType, NSBezierPath, NSColor,
+    NSApplicationActivationOptions, NSBackingStoreType, NSBezierPath, NSColor,
     NSCompositingOperation, NSCursor, NSEvent, NSEventModifierFlags, NSGraphicsContext, NSImage,
-    NSImageInterpolation, NSResponder, NSRunningApplication, NSScreen, NSScreenSaverWindowLevel,
-    NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindow, NSWindowCollectionBehavior,
-    NSWindowStyleMask, NSWorkspace,
+    NSImageInterpolation, NSPanel, NSResponder, NSRunningApplication, NSScreen,
+    NSScreenSaverWindowLevel, NSTrackingArea, NSTrackingAreaOptions, NSView, NSWindow,
+    NSWindowCollectionBehavior, NSWindowStyleMask, NSWorkspace,
 };
 use objc2_core_foundation::{CFRetained, CGPoint};
 use objc2_core_graphics::{CGImage, CGWarpMouseCursorPosition};
@@ -191,8 +191,9 @@ pub fn begin(
         session.hovered = session.window_at(surface, p);
     }
 
-    let app = NSApplication::sharedApplication(mtm);
-    app.activate();
+    // The overlays are non-activating panels: they take keys without
+    // activating the app, which would bring its other windows (an open
+    // editor) in front of what is being captured.
     let key = session.cursor.map_or(0, |(s, _)| s);
     for (i, surface) in session.surfaces.iter().enumerate() {
         if i == key {
@@ -240,7 +241,7 @@ fn make_surface(
         msg_send![
             OverlayWindow::alloc(mtm),
             initWithContentRect: frame,
-            styleMask: NSWindowStyleMask::Borderless,
+            styleMask: NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel,
             backing: NSBackingStoreType::Buffered,
             defer: false
         ]
@@ -792,10 +793,11 @@ fn label_origin(rect: Rect, bounds: Rect) -> Point {
 }
 
 define_class!(
-    /// Borderless windows cannot become key by default; overlays must, to
-    /// receive key events.
-    // SAFETY: NSWindow can be subclassed; no Drop implementation.
-    #[unsafe(super(NSWindow, NSResponder, objc2_foundation::NSObject))]
+    /// A non-activating panel, so it can take key events without
+    /// activating the app. Borderless windows cannot become key by default;
+    /// overlays must, to receive key events.
+    // SAFETY: NSPanel can be subclassed; no Drop implementation.
+    #[unsafe(super(NSPanel, NSWindow, NSResponder, objc2_foundation::NSObject))]
     #[thread_kind = MainThreadOnly]
     struct OverlayWindow;
 
