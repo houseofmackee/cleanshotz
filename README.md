@@ -123,6 +123,16 @@ To use a different identity, set `CLEANSHOTZ_SIGN_IDENTITY` to its name or
 SHA-1. Without any identity, builds fall back to ad-hoc signing. The
 certificate is not marked as trusted and does not need to be.
 
+### Website
+
+The website is in [`site/cleanshotz`](site/cleanshotz): plain HTML, CSS, and a
+small theme script, with no build step and nothing to install. It follows the
+shared web design system (light, dark, and high-contrast themes), and its
+screenshots come from `docs/screenshots`, made with demo content. To try it,
+serve the folder, for example with `python3 -m http.server`, and open it in
+a browser. It's uploaded by hand to a folder on the web server; nothing in
+CI publishes it.
+
 ### Releases
 
 Releases are signed with a Developer ID Application certificate and

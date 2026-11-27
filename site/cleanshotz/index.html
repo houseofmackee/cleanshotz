@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CleanShotZ: screenshots and screen recordings for macOS</title>
+  <meta name="description" content="CleanShotZ is a free, open source menu bar app for macOS for screenshots, screen recordings, and annotations.">
+  <script src="theme.js"></script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header>
+    <div class="bar">
+      <a class="brand" href="./"><img src="favicon.svg" alt=""><span>CleanShotZ</span></a>
+      <nav aria-label="Pages">
+        <a href="./" aria-current="page">Home</a>
+        <a href="privacy.html">Privacy</a>
+      </nav>
+      <div class="theme">
+        <label for="theme">Theme</label>
+        <select id="theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="high-contrast">High contrast</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero">
+      <div>
+        <h1>CleanShotZ</h1>
+        <p class="lead">Screenshots, screen recordings, and annotations for macOS, from the menu bar: capture any part of the screen, mark it up, record it, and share it.</p>
+        <div class="actions">
+          <a class="button" href="https://github.com/houseofmackee/cleanshotz/releases/latest">Download CleanShotZ</a>
+          <a class="button secondary" href="https://github.com/houseofmackee/cleanshotz">Source code on GitHub</a>
+        </div>
+        <p class="note">Free and open source. For Macs with Apple silicon, macOS 14 or later. Or install it with Homebrew: <code>brew install --cask houseofmackee/tap/cleanshotz</code></p>
+      </div>
+      <img class="icon" src="icon-256.png" alt="The CleanShotZ app icon: a white Z inside the corners of a capture frame">
+    </section>
+
+    <figure class="shot wide">
+      <img src="screens/editor.webp" width="1200" height="917" alt="The annotation editor with a curved arrow, a magnified detail, a measurement, highlighted text, and numbered steps on a gradient background">
+    </figure>
+
+    <section class="cards" aria-label="What CleanShotZ does">
+      <div class="card">
+        <h3>Capture</h3>
+        <p>An area, a window, the full screen, the previous area, or content that scrolls. Copy the text in an area, pick a color, or capture with a timer.</p>
+      </div>
+      <div class="card">
+        <h3>Annotate</h3>
+        <p>Arrows, shapes, text, numbered steps, highlights, a magnifier, and measurements. Blur or pixelate what's private, and add a background.</p>
+      </div>
+      <div class="card">
+        <h3>Record</h3>
+        <p>Record the screen as MP4 or GIF, with your microphone, system audio, camera, and keystrokes. Studio mode adds zooms, captions, and more.</p>
+      </div>
+    </section>
+
+    <section class="tour" aria-labelledby="tour">
+      <h2 id="tour">A closer look</h2>
+      <div class="row">
+        <div class="text">
+          <h3>Studio recordings</h3>
+          <p>Record now, polish later: a background, a smoothed cursor, zooms that follow your clicks, and the camera, all changeable after recording.</p>
+        </div>
+        <figure class="shot">
+          <img src="screens/studio-editor.webp" width="1200" height="644" loading="lazy" alt="The Studio editor zoomed in on a report with a caption, the Captions settings with Cut filler words on, and the zoom track with the cut filler words shaded">
+        </figure>
+      </div>
+      <div class="row">
+        <div class="text">
+          <h3>Captions, and no more &#8220;um&#8221;</h3>
+          <p>Make captions on your Mac, in your language, and cut filler words like &#8220;um&#8221; and &#8220;uh&#8221; from the recording with one checkbox. Export subtitles as SRT or WebVTT.</p>
+        </div>
+        <figure class="shot">
+          <video controls preload="none" width="1280" height="780" poster="screens/filler-words-poster.webp" aria-label="The same recording with its filler words, then with Cut filler words on">
+            <source src="screens/filler-words.mp4" type="video/mp4">
+          </video>
+          <figcaption>The same recording before and after, with sound. The voice is synthesized.</figcaption>
+        </figure>
+      </div>
+      <div class="row">
+        <div class="text">
+          <h3>A video editor</h3>
+          <p>Trim, crop, speed up, mute, or shrink a recording, and save it as MP4 or GIF. Trims that need no re-encoding save in a moment.</p>
+        </div>
+        <figure class="shot">
+          <img src="screens/video-editor.webp" width="1200" height="936" loading="lazy" alt="The video editor trimming a recording, with crop, speed, size, format, and quality controls">
+        </figure>
+      </div>
+      <div class="row">
+        <div class="text">
+          <h3>Capture History</h3>
+          <p>Every capture and recording, searchable by its text, name, notes, and tags. Rate them with stars and open, copy, or upload any of them again.</p>
+        </div>
+        <figure class="shot">
+          <img src="screens/history.webp" width="1200" height="677" loading="lazy" alt="The capture history window with star ratings, tags, and notes">
+        </figure>
+      </div>
+      <div class="row">
+        <div class="text">
+          <h3>Step-by-step guides</h3>
+          <p>Step Capture takes a picture at every click and writes the steps for you, ready to edit and export as Markdown, HTML, or PDF.</p>
+        </div>
+        <figure class="shot">
+          <img src="screens/step-guide.webp" width="1200" height="1095" loading="lazy" alt="A step guide with three captured clicks and their captions">
+        </figure>
+      </div>
+      <div class="row">
+        <div class="text">
+          <h3>Your logo on every capture</h3>
+          <p>Add a watermark of an image or text to screenshots and recordings, with its own position, size, and opacity.</p>
+        </div>
+        <figure class="shot">
+          <img src="screens/watermark-editor.webp" width="1200" height="917" loading="lazy" alt="A capture with a selected watermark in its bottom-right corner, with the opacity and position menus">
+        </figure>
+      </div>
+    </section>
+
+    <section class="panel prose" aria-labelledby="automation">
+      <h2 id="automation">Works with your other tools</h2>
+      <p>Every capture mode can start from Shortcuts, AppleScript, a <code>cleanshotz://</code> link, or the <code>cleanshotz</code> command line tool. Pipelines run your own steps after each capture, such as resizing, uploading, and copying the link. Uploads go to your own server, S3-compatible storage, or Imgur, and the <a href="https://raycast.com/houseofmackee/cleanshotz">Raycast extension</a> puts every command in Raycast.</p>
+    </section>
+  </main>
+
+  <footer>
+    <div class="bar">
+      <span>CleanShotZ by houseofmackee</span>
+      <a href="privacy.html">Privacy policy</a>
+      <a href="https://github.com/houseofmackee/cleanshotz/issues">Support</a>
+      <a href="https://github.com/houseofmackee/cleanshotz#license">License (MIT or Apache 2.0)</a>
+      <p class="notice">CleanShotZ is an independent project. It is not affiliated with, endorsed by, or connected to CleanShot X or MakeTheWeb.</p>
+    </div>
+  </footer>
+</body>
+</html>

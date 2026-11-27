@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy policy: CleanShotZ</title>
+  <meta name="description" content="How CleanShotZ, a screenshot and screen recording app for macOS, handles your data: it stays on your Mac unless you upload it.">
+  <script src="theme.js"></script>
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="icon" href="favicon-32.png" type="image/png" sizes="32x32">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700&display=swap">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Skip to the content</a>
+  <header>
+    <div class="bar">
+      <a class="brand" href="./"><img src="favicon.svg" alt=""><span>CleanShotZ</span></a>
+      <nav aria-label="Pages">
+        <a href="./">Home</a>
+        <a href="privacy.html" aria-current="page">Privacy</a>
+      </nav>
+      <div class="theme">
+        <label for="theme">Theme</label>
+        <select id="theme">
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+          <option value="high-contrast">High contrast</option>
+        </select>
+      </div>
+    </div>
+  </header>
+
+  <main id="main" class="prose">
+    <h1>Privacy policy</h1>
+    <p class="updated">Last updated November 27, 2026</p>
+
+    <p>CleanShotZ is a screenshot and screen recording app for macOS. It runs on your Mac, and your captures and recordings stay there unless you choose to upload them. CleanShotZ has no servers, no accounts, no analytics, no crash reporting, and no advertising, and the developer of CleanShotZ never receives your captures or anything else from your Mac.</p>
+
+    <h2>What stays on your Mac</h2>
+    <ul>
+      <li><strong>Captures and recordings:</strong> saved to the folder you choose in Settings. Captures you don't save are kept in <code>~/Library/Application Support/CleanShotZ/History</code> while Capture History is on, and otherwise in <code>~/Library/Caches/CleanShotZ</code>.</li>
+      <li><strong>Settings and history:</strong> your settings, the Capture History database (with ratings, tags, notes, and the text found in your captures), and a few remembered choices are kept in <code>~/Library/Application Support/CleanShotZ</code>.</li>
+      <li><strong>Secrets for uploads:</strong> passwords and keys for your upload destinations are kept in your Mac&#8217;s login Keychain, not in the settings file.</li>
+      <li><strong>Logs:</strong> a log of what the app did (such as the names and folders of saved captures, but not their contents) is kept in <code>~/Library/Logs/CleanShotZ</code>.</li>
+      <li><strong>Text recognition and captions:</strong> finding the text in a capture, and making captions from what&#8217;s said in a recording, both run on your Mac with Apple&#8217;s built-in frameworks. Nothing is sent anywhere for them.</li>
+    </ul>
+
+    <h2>What CleanShotZ sends, and where</h2>
+    <ul>
+      <li><strong>Uploads you set up:</strong> nothing is uploaded until you choose a destination (your own web server, S3-compatible storage, Imgur, or a script of your own). Then a capture is uploaded when you ask for it, or after every capture if you turn that on. It goes straight from your Mac to that destination, which handles it under its own privacy policy.</li>
+      <li><strong>Update checks:</strong> if you allow it, CleanShotZ checks GitHub for new versions once a day. This fetches a list of releases and sends nothing about your Mac; GitHub sees your Mac&#8217;s IP address, as with any download. You can turn this off in Settings.</li>
+      <li><strong>Speech models for captions:</strong> the first time you make captions in a language, macOS downloads that language&#8217;s speech model from Apple. Your recording is not sent.</li>
+    </ul>
+    <p>CleanShotZ sends nothing else. There is no tracking and no data collection of any kind.</p>
+
+    <h2>macOS permissions</h2>
+    <p>macOS asks you before CleanShotZ can use each of these, and CleanShotZ uses them only for the features that need them:</p>
+    <ul>
+      <li><strong>Screen Recording:</strong> to take screenshots and record the screen.</li>
+      <li><strong>Accessibility:</strong> to snap a selection to buttons and panels, name the controls you click in Step Capture, and scroll in Scrolling Capture.</li>
+      <li><strong>Microphone and Camera:</strong> only when you record with them.</li>
+      <li><strong>Input Monitoring:</strong> only to show the keys you press in a recording, when you turn that on.</li>
+    </ul>
+
+    <h2>Removing your data</h2>
+    <ul>
+      <li>To remove everything CleanShotZ keeps, delete the app and the <code>~/Library/Application Support/CleanShotZ</code>, <code>~/Library/Caches/CleanShotZ</code>, and <code>~/Library/Logs/CleanShotZ</code> folders. Captures you saved stay in the folders you chose.</li>
+      <li>To remove a saved upload secret, run <code>cleanshotz secret delete NAME</code>, or remove its entry in the Keychain Access app.</li>
+      <li>Files you uploaded are removed at the destination you uploaded them to.</li>
+    </ul>
+    <p>Because the developer of CleanShotZ never receives your data, there is nothing to delete on their side.</p>
+
+    <h2>Children</h2>
+    <p>CleanShotZ is a general-purpose tool and does not knowingly collect any information from anyone, including children.</p>
+
+    <h2>Changes</h2>
+    <p>If this policy changes, the new version will be posted on this page with a new date. The history of changes is public in CleanShotZ&#8217;s <a href="https://github.com/houseofmackee/cleanshotz">source code repository</a>.</p>
+
+    <h2>Contact</h2>
+    <p>Questions about privacy in CleanShotZ are welcome as an <a href="https://github.com/houseofmackee/cleanshotz/issues">issue on GitHub</a>.</p>
+  </main>
+
+  <footer>
+    <div class="bar">
+      <span>CleanShotZ by houseofmackee</span>
+      <a href="./">Home</a>
+      <a href="https://github.com/houseofmackee/cleanshotz/issues">Support</a>
+      <a href="https://github.com/houseofmackee/cleanshotz#license">License (MIT or Apache 2.0)</a>
+      <p class="notice">CleanShotZ is an independent project. It is not affiliated with, endorsed by, or connected to CleanShot X or MakeTheWeb.</p>
+    </div>
+  </footer>
+</body>
+</html>
