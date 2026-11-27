@@ -132,8 +132,19 @@ small theme script, with no build step and nothing to install. It follows the
 shared web design system (light, dark, and high-contrast themes), and its
 screenshots come from `docs/screenshots`, made with demo content. To try it,
 serve the folder, for example with `python3 -m http.server`, and open it in
-a browser. It's uploaded by hand to the `cleanshotz` folder on the web server;
-nothing in CI publishes it.
+a browser. Nothing in CI publishes it. To update the live site, use the
+[forkz](https://github.com/houseofmackee/forkz) command line tool (0.25 or
+later) with the saved "mmg-staging.com" site, from the repository root:
+
+```sh
+forkz sync --dry-run site/cleanshotz mmg-staging.com:app/cleanshotz  # preview
+forkz sync site/cleanshotz mmg-staging.com:app/cleanshotz            # upload
+```
+
+Sync copies new and changed files (by size and date) to the server and
+deletes nothing; add `--delete`, after a dry run with it, to also remove
+files that are gone locally. The password comes from the Keychain. A
+nonzero exit or a "Failed:" line means something didn't upload.
 
 ### Releases
 
