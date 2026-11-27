@@ -371,7 +371,9 @@ Gaps found by comparing CleanShot X 5.0, Shottr, Snipaste and ShareX
   pull request to Raycast's extensions repository (`npm run publish` in
   `raycast/`, run from a terminal: it signs in to GitHub interactively),
   with the maintainer's Raycast username (`houseofmackee`) as `author`.
-  Submitted on 2026-10-25 as raycast/extensions#32766. The publish command
+  Submitted on 2026-10-25 as raycast/extensions#32766, approved and
+  published in the Store on 2026-11-27
+  (https://raycast.com/houseofmackee/cleanshotz). The publish command
   opens the pull request as a draft, which reviewers skip: mark it ready for
   review. Raycast's stale bot labels a pull request after 25 days without
   activity and closes it 7 days later; a comment or push removes the label.
@@ -660,7 +662,7 @@ Group 4 of the October 2026 comparison.
   certificate. Since 0.6.0 releases are signed with a Developer ID and
   notarized (the app and the DMG, both stapled), and the release workflow
   updates the Homebrew cask. Sparkle updates are in (released with 0.7.0).
-  The Raycast extension is in review (raycast/extensions#32766).
+  The Raycast extension is in the Raycast Store (since 2026-11-27).
 - **Release workflow** (GitHub Actions on tag `v*`): build for
   `aarch64-apple-darwin` on an Apple Silicon runner, bundle, sign, package as
   `CleanShotZ-<version>.zip` (and a DMG), attach to a GitHub Release with
@@ -735,10 +737,7 @@ Group 4 of the October 2026 comparison.
 
 ## 6. Next steps
 
-1. **Raycast Store:** the extension is submitted for review
-   ([raycast/extensions#32766](https://github.com/raycast/extensions/pull/32766));
-   it is published when Raycast merges it.
-2. **Not yet tested on real hardware:** Studio and the panel before
+1. **Not yet tested on real hardware:** Studio and the panel before
    recording with a real camera and microphone, the 1440p Studio preview on
    an M1, printing to a printer, captions and filler word cuts of real
    speech (tested with synthesized speech), and launching on macOS 14 and

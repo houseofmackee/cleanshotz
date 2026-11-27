@@ -844,10 +844,13 @@ only the Command Line Tools the app builds without them.
 
 ### Raycast
 
-The [`raycast`](raycast) folder holds a Raycast extension with commands for
-every capture mode, recording, Pick Color, Step Capture, Capture History, and annotating,
-pinning, or running a pipeline on the image selected in Finder. It uses the
-URL scheme, so it needs nothing beyond CleanShotZ. Its README is the Store
+Install the [CleanShotZ extension](https://raycast.com/houseofmackee/cleanshotz)
+from the Raycast Store. Its commands cover every capture mode, recording,
+Pick Color, Step Capture, Capture History, and annotating, pinning, or
+running a pipeline on the image selected in Finder. It uses the URL scheme,
+so it needs nothing beyond CleanShotZ.
+
+Its source is in the [`raycast`](raycast) folder. Its README is the Store
 page, so the development notes live here:
 
 ```sh
@@ -860,8 +863,12 @@ npm run publish   # from a terminal; opens or updates the Store pull request
 ```
 
 Store screenshots go in `raycast/metadata/` (2000 by 1250 PNG, taken with
-Raycast's Window Capture and "Save to Metadata" ticked). The publish command
-opens a new Store pull request as a draft; mark it ready for review.
+Raycast's Capture Window command and "Save to Metadata" ticked). The publish
+command opens a new Store pull request as a draft; mark it ready for review.
+If Raycast edited the extension when merging (they recompress images and
+date the changelog), copy their files from `extensions/cleanshotz` in
+raycast/extensions first, or the next publish fails. If publishing can't sync
+your fork, run `gh repo sync houseofmackee/raycast-extensions -b main`.
 
 ## Translating
 
