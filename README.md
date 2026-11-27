@@ -3,8 +3,9 @@
 <img src="resources/icon/AppIcon-1024.png" width="128" alt="CleanShotZ icon">
 
 A free and open source macOS menu bar app for screenshots, screen recordings
-and annotations, written in Rust. See [PLAN.md](PLAN.md) for the feature plan
-and milestones.
+and annotations, written in Rust. Website:
+[app.mmg-staging.com/cleanshotz](https://app.mmg-staging.com/cleanshotz/). See
+[PLAN.md](PLAN.md) for the feature plan and milestones.
 
 > CleanShotZ is an independent project. It is not affiliated with, endorsed
 > by or connected to CleanShot X or MakeTheWeb. "CleanShot" is a trademark of
@@ -125,13 +126,14 @@ certificate is not marked as trusted and does not need to be.
 
 ### Website
 
-The website is in [`site/cleanshotz`](site/cleanshotz): plain HTML, CSS, and a
+The website, [app.mmg-staging.com/cleanshotz](https://app.mmg-staging.com/cleanshotz/),
+is in [`site/cleanshotz`](site/cleanshotz): plain HTML, CSS, and a
 small theme script, with no build step and nothing to install. It follows the
 shared web design system (light, dark, and high-contrast themes), and its
 screenshots come from `docs/screenshots`, made with demo content. To try it,
 serve the folder, for example with `python3 -m http.server`, and open it in
-a browser. It's uploaded by hand to a folder on the web server; nothing in
-CI publishes it.
+a browser. It's uploaded by hand to the `cleanshotz` folder on the web server;
+nothing in CI publishes it.
 
 ### Releases
 
