@@ -464,7 +464,7 @@ footer .notice {
 }
 
 /* Narrow: the name shortens to the icon, and the theme label goes. */
-@media (max-width: 480px) {
+@media (max-width: 600px) {
   .brand span,
   .theme label {
     position: absolute;
@@ -479,6 +479,22 @@ footer .notice {
   }
   .theme select {
     max-width: 112px;
+  }
+}
+
+/* Very narrow: tighter tabs and a smaller theme menu. */
+@media (max-width: 360px) {
+  .bar {
+    padding: 0 12px;
+  }
+  nav {
+    margin-left: 4px;
+  }
+  nav a {
+    padding: 0 6px;
+  }
+  .theme select {
+    max-width: 80px;
   }
 }
 
